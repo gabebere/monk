@@ -6,16 +6,23 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var manager: FocusManager?
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            if let manager = manager {
+                HomeView()
+                    .environmentObject(manager)
+            } else {
+                ProgressView().task {
+                    await MainActor.run { self.manager = FocusManager(modelContext: modelContext) }
+                }
+            }
         }
-        .padding()
     }
 }
 
