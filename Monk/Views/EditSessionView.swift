@@ -6,8 +6,9 @@ struct EditSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var session: FocusSession
 
-    @State private var localNote: String = ""
+    @State private var selectedFeelings: Set<String> = []
     @State private var newTag: String = ""
+    @State private var allTags: [String] = []
 
     var body: some View {
         NavigationStack {
@@ -34,30 +35,59 @@ struct EditSessionView: View {
                     }
                 }
 
-                Section("Note") {
-                    TextField("Add a note…", text: $localNote, axis: .vertical)
-                        .lineLimit(3, reservesSpace: true)
-                }
-
-                Section("Tags") {
-                    HStack {
-                        TextField("Add tag (e.g., thesis)", text: $newTag)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                Section("What did you do?") {
+                    HStack(alignment: .firstTextBaseline) {
+                        ZStack(alignment: .leading) {
+                            TextField("Add tag (e.g., thesis)", text: $newTag)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .submitLabel(.done)
+                                .onSubmit { addFromSubmit() }
+                            if let suffix = autocompleteSuffix, !suffix.isEmpty {
+                                HStack(spacing: 0) {
+                                    Text(newTag).opacity(0)
+                                    Text(suffix).foregroundStyle(.secondary)
+                                }
+                                .allowsHitTesting(false)
+                            }
+                        }
                         Button("Add") { addTag() }
                             .disabled(newTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    if !matchingSuggestions.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(matchingSuggestions, id: \.self) { suggestion in
+                                    Button(action: { newTag = suggestion }) {
+                                        Text("#\(suggestion)")
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Color.accentColor.opacity(0.15))
+                                            .foregroundStyle(Color.accentColor)
+                                            .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Use tag \(suggestion)")
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
                     }
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(session.tags, id: \.self) { tag in
-                                TagChip(title: "#\(tag)") {
-                                    removeTag(tag)
-                                }
+                                TagChip(title: "#\(tag)") { removeTag(tag) }
                             }
                         }
                         .padding(.vertical, 4)
                     }
                 }
+
+                Section("How do you feel?") {
+                    FeelingsMultiSelectView(selected: $selectedFeelings)
+                }
+
+                
             }
             .navigationTitle("Edit Session")
             .toolbar {
@@ -68,34 +98,112 @@ struct EditSessionView: View {
                     Button("Save") { saveAndClose() }
                 }
             }
-            .onAppear { localNote = session.note ?? "" }
+            .onAppear {
+                selectedFeelings = Set(session.feelings)
+                loadAllTags()
+            }
         }
     }
 
     private func saveAndClose() {
-        session.note = localNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        session.feelings = Array(selectedFeelings).sorted()
         try? modelContext.save()
         dismiss()
     }
 
     private func addTag() {
-        let trimmed = newTag.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        if !session.tags.contains(trimmed) {
-            session.tags.append(trimmed)
+        let norm = normalizeTag(newTag)
+        guard !norm.isEmpty else { return }
+        if !session.tags.contains(where: { normalizeTag($0) == norm }) {
+            session.tags.append(norm)
             try? modelContext.save()
         }
         newTag = ""
     }
 
     private func removeTag(_ tag: String) {
-        session.tags.removeAll { $0 == tag }
+        let norm = normalizeTag(tag)
+        session.tags.removeAll { normalizeTag($0) == norm }
         try? modelContext.save()
+    }
+
+    // MARK: - Suggestions
+    private var matchingSuggestions: [String] {
+        let prefix = normalizeTag(newTag)
+        guard !prefix.isEmpty else { return [] }
+        let existing = Set(session.tags.map { normalizeTag($0) })
+        return allTags
+            .filter { $0.hasPrefix(prefix) && !existing.contains($0) }
+            .sorted()
+            .prefix(8)
+            .map { $0 }
+    }
+    private func loadAllTags() {
+        let all = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? []
+        let set = Set(all.flatMap { $0.tags.map(normalizeTag) })
+        allTags = Array(set).sorted()
+    }
+    private var autocompleteSuffix: String? {
+        let prefix = normalizeTag(newTag)
+        guard !prefix.isEmpty, let suggestion = matchingSuggestions.first else { return nil }
+        guard suggestion.hasPrefix(prefix) else { return nil }
+        let dropCount = prefix.count
+        if suggestion.count > dropCount { return String(suggestion.dropFirst(dropCount)) }
+        return nil
+    }
+    private func addFromSubmit() {
+        if let first = matchingSuggestions.first {
+            newTag = first
+        }
+        addTag()
+    }
+    private func normalizeTag(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
     }
 }
 
 #Preview {
     ContentView()
+}
+
+struct FeelingsMultiSelectView: View {
+    @Binding var selected: Set<String>
+    private let options = FeelingsCatalog.all
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(options.indices, id: \.self) { i in
+                let opt = options[i]
+                Button {
+                    if selected.contains(opt.id) { selected.remove(opt.id) } else { selected.insert(opt.id) }
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(opt.emoji)
+                            .frame(width: 24, alignment: .leading)
+                        Text(opt.title)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        Spacer()
+                        // Reserve space to avoid row height/width shift when selecting
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(.tint)
+                            .opacity(selected.contains(opt.id) ? 1 : 0)
+                            .frame(width: 18)
+                    }
+                    .contentShape(Rectangle())
+                    .padding(.vertical, 10)
+                    .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .overlay(
+                    Group {
+                        if i < options.count - 1 { Divider() }
+                    }, alignment: .bottom
+                )
+            }
+        }
+    }
 }
 
 private struct TagChip: View {

@@ -35,9 +35,9 @@ final class FocusManager: ObservableObject {
         }
     }
 
-    func start(note: String? = nil, tags: [String] = []) {
+    func start(tags: [String] = [], feelings: [String] = []) {
         guard currentSession == nil else { return }
-        let session = FocusSession(startedAt: Date(), endedAt: nil, note: note, tags: tags)
+        let session = FocusSession(startedAt: Date(), endedAt: nil, feelings: feelings, tags: tags)
         modelContext.insert(session)
         try? modelContext.save()
         currentSession = session

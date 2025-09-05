@@ -9,7 +9,7 @@ enum CSVExporter {
     }
 
     static func makeCSV(from sessions: [FocusSession]) -> String {
-        var rows: [String] = ["id,started_at_iso8601,ended_at_iso8601,duration_s,tags,note"]
+        var rows: [String] = ["id,started_at_iso8601,ended_at_iso8601,duration_s,tags,feelings"]
         let fmt = ISO8601DateFormatter()
         fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds, .withTimeZone]
         for s in sessions.sorted(by: { $0.startedAt < $1.startedAt }) {
@@ -18,8 +18,8 @@ enum CSVExporter {
             let ended = s.endedAt != nil ? fmt.string(from: s.endedAt!) : ""
             let duration = String(Int(max(0, (s.endedAt ?? Date()).timeIntervalSince(s.startedAt))))
             let tags = s.tags.joined(separator: ";")
-            let note = s.note ?? ""
-            rows.append([id, started, ended, duration, tags, note].map(csvEscape).joined(separator: ","))
+            let feelings = s.feelings.joined(separator: ";")
+            rows.append([id, started, ended, duration, tags, feelings].map(csvEscape).joined(separator: ","))
         }
         return rows.joined(separator: "\n") + "\n"
     }

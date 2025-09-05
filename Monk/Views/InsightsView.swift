@@ -325,9 +325,7 @@ private struct DayDetailView: View {
                                 .fontDesign(.monospaced)
                                 .foregroundStyle(.secondary)
                         }
-                        if let note = s.note, !note.isEmpty {
-                            Text(note).foregroundStyle(.secondary)
-                        }
+                        // Note removed from model; only show tags now
                         if !s.tags.isEmpty {
                             Text("#" + s.tags.joined(separator: " #"))
                                 .font(.caption)

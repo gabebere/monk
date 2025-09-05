@@ -20,10 +20,12 @@ struct HomeView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
                         TimerCard()
+                        RecentSessionsBubble()
+                            .padding(.top, 72)
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
                     .padding(.horizontal)
-                    .padding(.top, 100)
+                    .padding(.top, 64)
                 }
             }
             .navigationTitle("Welcome to Monk.")
@@ -69,6 +71,8 @@ struct HomeView: View {
 
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
+    @Environment(\.modelContext) private var modelContext
+    @Query private var prefsList: [Preferences]
     @State private var outerAngle: Double = -30
     @State private var innerAngle: Double = 30
     @State private var driftX: CGFloat = 0
@@ -79,6 +83,8 @@ private struct TimerCard: View {
     @State private var pressDown: Bool = false
     @State private var outerLoopTask: Task<Void, Never>? = nil
     @State private var innerLoopTask: Task<Void, Never>? = nil
+    @State private var showStopDetails: Bool = false
+    @State private var stoppedSession: FocusSession? = nil
 
     var body: some View {
         VStack(spacing: 20) {
@@ -134,15 +140,7 @@ private struct TimerCard: View {
                             .blendMode(.plusLighter)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
-                            .onAppear {
-                                withAnimation(.none) {
-                                    outerAngle = -30
-                                    driftX = 0
-                                    driftY = 0
-                                }
-                                startOuterLoop()
-                            }
-                            .onDisappear { outerLoopTask?.cancel(); outerLoopTask = nil }
+                            // Animation loops controlled centrally via onChange/task
 
                         // Inner elliptical glow (faster, tighter, counter-rotating)
                         Ellipse()
@@ -160,11 +158,7 @@ private struct TimerCard: View {
                             .blendMode(.plusLighter)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
-                            .onAppear {
-                                withAnimation(.none) { innerAngle = 30 }
-                                startInnerLoop()
-                            }
-                            .onDisappear { innerLoopTask?.cancel(); innerLoopTask = nil }
+                            // Animation loops controlled centrally via onChange/task
                         }
                 )
                 .padding(.top, 0)
@@ -179,9 +173,7 @@ private struct TimerCard: View {
                         .foregroundColor(Theme.textPrimary)
                         .accessibilityLabel("Elapsed time")
 
-                    Label("In session", systemImage: "smallcircle.fill.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    // Removed secondary status label as requested
 
                     ZStack {
                         // Outer glow
@@ -207,7 +199,6 @@ private struct TimerCard: View {
                     }
                     .padding(.bottom, 0)
                 }
-                .offset(y: -60)
                 .transition(.focusElegant)
             }
         }
@@ -215,11 +206,43 @@ private struct TimerCard: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.88), value: focus.currentSession != nil)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+        .sheet(isPresented: $showStopDetails) {
+            if let session = stoppedSession {
+                TagEntryView(session: session) {
+                    // No-op: stop already occurred
+                }
+            }
+        }
+        .task {
+            if focus.currentSession == nil { restartIdleAnimation() }
+        }
+        .onChange(of: focus.currentSession == nil) { isIdle in
+            if isIdle {
+                restartIdleAnimation()
+            } else {
+                outerLoopTask?.cancel(); outerLoopTask = nil
+                innerLoopTask?.cancel(); innerLoopTask = nil
+            }
+        }
     }
 
     private func startSession() { focus.start() }
     private func stopSession() {
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) { focus.stop() }
+        // Capture the session reference before it ends (and possibly gets deleted if too short)
+        let session = focus.currentSession
+        let startTime = session?.startedAt
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+            focus.stop()
+        }
+        if let s = session, let start = startTime {
+            let discardShort = prefsList.first?.discardShortSessions == true
+            let duration = Date().timeIntervalSince(start)
+            let willDiscard = discardShort && duration < 120
+            if !willDiscard {
+                stoppedSession = s
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showStopDetails = true }
+            }
+        }
     }
 
     private func animateStartAndBeginSession() {
@@ -255,6 +278,16 @@ private struct TimerCard: View {
     }
 
     // MARK: - Ellipse rotation loops
+    private func restartIdleAnimation() {
+        outerLoopTask?.cancel(); outerLoopTask = nil
+        innerLoopTask?.cancel(); innerLoopTask = nil
+        withAnimation(.none) {
+            outerAngle = -30
+            innerAngle = 30
+        }
+        startOuterLoop()
+        startInnerLoop()
+    }
     private func startOuterLoop() {
         outerLoopTask?.cancel()
         outerLoopTask = Task { @MainActor in
@@ -268,9 +301,7 @@ private struct TimerCard: View {
                 try? await Task.sleep(nanoseconds: seg)
                 withAnimation(.linear(duration: 1.2)) { outerAngle = -30 }
                 try? await Task.sleep(nanoseconds: seg)
-                // Return to rest near the button and pause, then continue smoothly (no snap reset)
-                withAnimation(.linear(duration: 0.9)) { outerAngle = 0 }
-                try? await Task.sleep(nanoseconds: 1_200_000_000) // 1.2s pause
+                // Continuous loop without rest
             }
         }
     }
@@ -289,9 +320,7 @@ private struct TimerCard: View {
                 try? await Task.sleep(nanoseconds: seg)
                 withAnimation(.linear(duration: 1.2)) { innerAngle = 30 }
                 try? await Task.sleep(nanoseconds: seg)
-                // Return to rest and pause, then continue smoothly (no snap reset)
-                withAnimation(.linear(duration: 0.9)) { innerAngle = 0 }
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                // Continuous loop without rest
             }
         }
     }
@@ -342,56 +371,39 @@ private struct TagChip: View {
 
 private struct TagEntryView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Bindable var session: FocusSession
     var onStop: () -> Void
     
     @State private var newTag: String = ""
-    @State private var localNote: String = ""
+    @State private var selectedFeelings: Set<String> = []
+    @State private var allTags: [String] = []
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 20) {
-                Text("Session Complete!")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                
-                Text("Add tags and notes to help categorize your focus session")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                Form {
-                    Section("Note") {
-                        TextField("What did you focus on?", text: $localNote, axis: .vertical)
-                            .lineLimit(3, reservesSpace: true)
+            ZStack {
+                VStack(spacing: 20) {
+                    Text("Session Complete!")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text(congratulationText())
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Form {
+                        tagSection
+                        feelingsSection
                     }
                     
-                    Section("Tags") {
-                        HStack {
-                            TextField("Add tag (e.g., work, study)", text: $newTag)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                            Button("Add") { addTag() }
-                                .disabled(newTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                        
-                        if !session.tags.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(session.tags, id: \.self) { tag in
-                                        TagChip(title: "#\(tag)") {
-                                            removeTag(tag)
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                    }
+                    Spacer()
                 }
-                
-                Spacer()
+                // Confetti overlay (fires on appear, then stops automatically)
+                ConfettiView(duration: 2.0)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
             .navigationTitle("Add Details")
             .navigationBarTitleDisplayMode(.inline)
@@ -406,32 +418,198 @@ private struct TagEntryView: View {
                     Button("Save") {
                         saveAndFinish()
                     }
-                    .disabled(session.tags.isEmpty && localNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(session.tags.isEmpty && selectedFeelings.isEmpty)
                 }
             }
         }
         .onAppear {
-            localNote = session.note ?? ""
+            selectedFeelings = Set(session.feelings)
+            loadAllTags()
+        }
+    }
+
+    // MARK: - Subviews (split to help type-checker)
+    @ViewBuilder
+    private var tagSection: some View {
+        Section("What did you do?") {
+            HStack(alignment: .firstTextBaseline) {
+                ZStack(alignment: .leading) {
+                    TextField("Add tag (e.g., work, study)", text: $newTag)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .onSubmit { addFromSubmit() }
+                    if let suffix = autocompleteSuffix, !suffix.isEmpty {
+                        HStack(spacing: 0) {
+                            Text(newTag).opacity(0)
+                            Text(suffix).foregroundStyle(.secondary)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
+                Button("Add") { addTag() }
+                    .disabled(newTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            tagsChipsView
+        }
+    }
+
+    @ViewBuilder
+    private var feelingsSection: some View {
+        Section("How do you feel?") { InlineFeelingsMultiSelectView(selected: $selectedFeelings) }
+    }
+
+    @ViewBuilder
+    private var suggestionsView: some View {
+        let suggestions = matchingSuggestions
+        if !suggestions.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        Button(action: { newTag = suggestion }) {
+                            Text("#\(suggestion)")
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.accentColor.opacity(0.15))
+                                .foregroundStyle(Color.accentColor)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Use tag \(suggestion)")
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tagsChipsView: some View {
+        let tags = session.tags
+        if !tags.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(tags, id: \.self) { tag in
+                        TagChip(title: "#\(tag)") { removeTag(tag) }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    // Inline autocomplete suffix for the first matching suggestion
+    private var autocompleteSuffix: String? {
+        let prefix = normalizeTag(newTag)
+        guard !prefix.isEmpty, let suggestion = matchingSuggestions.first else { return nil }
+        guard suggestion.hasPrefix(prefix) else { return nil }
+        let dropCount = prefix.count
+        if suggestion.count > dropCount {
+            return String(suggestion.dropFirst(dropCount))
+        }
+        return nil
+    }
+
+    // Local copy to avoid cross-file type resolution issues
+    private struct InlineFeelingsMultiSelectView: View {
+        @Binding var selected: Set<String>
+        private let options = FeelingsCatalog.all
+        var body: some View {
+            VStack(spacing: 0) {
+                ForEach(options.indices, id: \.self) { i in
+                    let opt = options[i]
+                    Button {
+                        if selected.contains(opt.id) { selected.remove(opt.id) } else { selected.insert(opt.id) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(opt.emoji)
+                                .frame(width: 24, alignment: .leading)
+                            Text(opt.title)
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                            Spacer()
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.tint)
+                                .opacity(selected.contains(opt.id) ? 1 : 0)
+                                .frame(width: 18)
+                        }
+                        .contentShape(Rectangle())
+                        .padding(.vertical, 10)
+                        .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .overlay(
+                        Group { if i < options.count - 1 { Divider() } }, alignment: .bottom
+                    )
+                }
+            }
         }
     }
 
     private func addTag() {
-        let trimmed = newTag.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        if !session.tags.contains(trimmed) {
-            session.tags.append(trimmed)
+        let norm = normalizeTag(newTag)
+        guard !norm.isEmpty else { return }
+        if !session.tags.contains(where: { normalizeTag($0) == norm }) {
+            session.tags.append(norm)
         }
         newTag = ""
     }
 
     private func removeTag(_ tag: String) {
-        session.tags.removeAll { $0 == tag }
+        let norm = normalizeTag(tag)
+        session.tags.removeAll { normalizeTag($0) == norm }
     }
 
     private func saveAndFinish() {
-        session.note = localNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        session.feelings = Array(selectedFeelings).sorted()
+        try? modelContext.save()
         onStop()
         dismiss()
+    }
+
+    // MARK: - Suggestions
+    private var matchingSuggestions: [String] {
+        let prefix = normalizeTag(newTag)
+        guard !prefix.isEmpty else { return [] }
+        let existing = Set(session.tags.map { normalizeTag($0) })
+        return allTags
+            .filter { $0.hasPrefix(prefix) && !existing.contains($0) }
+            .sorted()
+            .prefix(8)
+            .map { $0 }
+    }
+    private func loadAllTags() {
+        let all = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? []
+        let set = Set(all.flatMap { $0.tags.map(normalizeTag) })
+        allTags = Array(set).sorted()
+    }
+    private func addFromSubmit() {
+        if let first = matchingSuggestions.first {
+            newTag = first
+        }
+        addTag()
+    }
+    private func normalizeTag(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+    }
+
+    // MARK: - Congrats message
+    private func congratulationText(now: Date = .now) -> String {
+        let start = session.startedAt
+        let end = session.endedAt ?? now
+        let totalSeconds = max(0, Int(end.timeIntervalSince(start)))
+        let totalMinutes = totalSeconds / 60
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours >= 1 {
+            let hoursPart = hours == 1 ? "1 hour" : "\(hours) hours"
+            let minutesPart = minutes > 0 ? " and \(minutes) \(minutes == 1 ? "minute" : "minutes")" : ""
+            return "Well done! You have focused for \(hoursPart)\(minutesPart)."
+        } else {
+            return "Well done! You have focused for \(minutes) \(minutes == 1 ? "minute" : "minutes")."
+        }
     }
 }
 
