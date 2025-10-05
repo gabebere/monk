@@ -6,7 +6,7 @@ struct EditSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var session: FocusSession
 
-    @State private var selectedFeelings: Set<String> = []
+    @State private var moodValue: Int = 1
     @State private var newTag: String = ""
     @State private var allTags: [String] = []
 
@@ -83,8 +83,8 @@ struct EditSessionView: View {
                     }
                 }
 
-                Section("How do you feel?") {
-                    FeelingsMultiSelectView(selected: $selectedFeelings)
+                Section("How was this session?") {
+                    MoodSlider(value: $moodValue)
                 }
 
                 
@@ -99,14 +99,14 @@ struct EditSessionView: View {
                 }
             }
             .onAppear {
-                selectedFeelings = Set(session.feelings)
+                moodValue = session.moodScore ?? 1
                 loadAllTags()
             }
         }
     }
 
     private func saveAndClose() {
-        session.feelings = Array(selectedFeelings).sorted()
+        session.moodScore = moodValue
         try? modelContext.save()
         dismiss()
     }
@@ -166,44 +166,6 @@ struct EditSessionView: View {
 
 #Preview {
     ContentView()
-}
-
-struct FeelingsMultiSelectView: View {
-    @Binding var selected: Set<String>
-    private let options = FeelingsCatalog.all
-    var body: some View {
-        VStack(spacing: 0) {
-            ForEach(options.indices, id: \.self) { i in
-                let opt = options[i]
-                Button {
-                    if selected.contains(opt.id) { selected.remove(opt.id) } else { selected.insert(opt.id) }
-                } label: {
-                    HStack(spacing: 12) {
-                        Text(opt.emoji)
-                            .frame(width: 24, alignment: .leading)
-                        Text(opt.title)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                        Spacer()
-                        // Reserve space to avoid row height/width shift when selecting
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(.tint)
-                            .opacity(selected.contains(opt.id) ? 1 : 0)
-                            .frame(width: 18)
-                    }
-                    .contentShape(Rectangle())
-                    .padding(.vertical, 10)
-                    .frame(minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .overlay(
-                    Group {
-                        if i < options.count - 1 { Divider() }
-                    }, alignment: .bottom
-                )
-            }
-        }
-    }
 }
 
 private struct TagChip: View {

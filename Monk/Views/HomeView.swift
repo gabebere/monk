@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import UIKit
 
 struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
@@ -14,59 +13,22 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                AnimatingBackground()
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 12) {
-                        TimerCard()
-                        RecentSessionsBubble()
-                            .padding(.top, 72)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .top)
-                    .padding(.horizontal)
-                    .padding(.top, 64)
+        ZStack(alignment: .top) {
+            AnimatingBackground()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 12) {
+                    TimerCard()
                 }
-            }
-            .navigationTitle("Welcome to Monk.")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Toggle(isOn: Binding(
-                            get: { prefs.discardShortSessions ?? false },
-                            set: { newVal in
-                                prefs.discardShortSessions = newVal
-                                try? modelContext.save()
-                                if newVal { focus.purgeShortSessionsIfNeeded() }
-                            }
-                        )) {
-                            Label("Discard sessions under 2 min", systemImage: "scissors")
-                        }
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(.white)
-                    }
-                    .accessibilityLabel("Options")
-                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.horizontal)
+                .padding(.top, 64)
+                .padding(.bottom, 48)
             }
         }
+        .navigationTitle("Welcome to Monk.")
+        .navigationBarTitleDisplayMode(.large)
     }
   
-    private func firstName() -> String {
-        let raw = UIDevice.current.name
-        let normalized = raw.replacingOccurrences(of: "’", with: "'")
-        if let range = normalized.range(of: "'s ") {
-            let before = String(normalized[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if let first = before.split(separator: " ").first, !first.isEmpty {
-                return String(first)
-            }
-        }
-        if let first = normalized.split(separator: " ").first, !first.isEmpty {
-            return String(first)
-        }
-        return "there"
-    }
 }
 
 private struct TimerCard: View {
@@ -216,7 +178,7 @@ private struct TimerCard: View {
         .task {
             if focus.currentSession == nil { restartIdleAnimation() }
         }
-        .onChange(of: focus.currentSession == nil) { isIdle in
+        .onChange(of: focus.currentSession == nil) { _, isIdle in
             if isIdle {
                 restartIdleAnimation()
             } else {
@@ -376,7 +338,7 @@ private struct TagEntryView: View {
     var onStop: () -> Void
     
     @State private var newTag: String = ""
-    @State private var selectedFeelings: Set<String> = []
+    @State private var moodValue: Int = 1
     @State private var allTags: [String] = []
 
     var body: some View {
@@ -418,12 +380,11 @@ private struct TagEntryView: View {
                     Button("Save") {
                         saveAndFinish()
                     }
-                    .disabled(session.tags.isEmpty && selectedFeelings.isEmpty)
                 }
             }
         }
         .onAppear {
-            selectedFeelings = Set(session.feelings)
+            moodValue = session.moodScore ?? 1
             loadAllTags()
         }
     }
@@ -456,7 +417,9 @@ private struct TagEntryView: View {
 
     @ViewBuilder
     private var feelingsSection: some View {
-        Section("How do you feel?") { InlineFeelingsMultiSelectView(selected: $selectedFeelings) }
+        Section("How was this session?") {
+            MoodSlider(value: $moodValue)
+        }
     }
 
     @ViewBuilder
@@ -510,42 +473,6 @@ private struct TagEntryView: View {
         return nil
     }
 
-    // Local copy to avoid cross-file type resolution issues
-    private struct InlineFeelingsMultiSelectView: View {
-        @Binding var selected: Set<String>
-        private let options = FeelingsCatalog.all
-        var body: some View {
-            VStack(spacing: 0) {
-                ForEach(options.indices, id: \.self) { i in
-                    let opt = options[i]
-                    Button {
-                        if selected.contains(opt.id) { selected.remove(opt.id) } else { selected.insert(opt.id) }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Text(opt.emoji)
-                                .frame(width: 24, alignment: .leading)
-                            Text(opt.title)
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                            Spacer()
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.tint)
-                                .opacity(selected.contains(opt.id) ? 1 : 0)
-                                .frame(width: 18)
-                        }
-                        .contentShape(Rectangle())
-                        .padding(.vertical, 10)
-                        .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .overlay(
-                        Group { if i < options.count - 1 { Divider() } }, alignment: .bottom
-                    )
-                }
-            }
-        }
-    }
-
     private func addTag() {
         let norm = normalizeTag(newTag)
         guard !norm.isEmpty else { return }
@@ -561,7 +488,7 @@ private struct TagEntryView: View {
     }
 
     private func saveAndFinish() {
-        session.feelings = Array(selectedFeelings).sorted()
+        session.moodScore = moodValue
         try? modelContext.save()
         onStop()
         dismiss()

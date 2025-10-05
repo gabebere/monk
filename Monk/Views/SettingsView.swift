@@ -1,141 +1,183 @@
 import SwiftUI
 import SwiftData
-import WidgetKit
-
+import FamilyControls
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var focus: FocusManager
     @Query private var prefsList: [Preferences]
 
     private var prefs: Preferences {
-        if let p = prefsList.first { return p }
+        if let p = prefsList.first {
+            if p.weeklyGoalHours < 1 {
+                p.weeklyGoalHours = 40
+                try? modelContext.save()
+            } else if p.weeklyGoalHours <= 24 {
+                p.weeklyGoalHours = max(0, p.weeklyGoalHours * 7)
+                try? modelContext.save()
+            }
+            return p
+        }
         let p = Preferences()
         modelContext.insert(p)
         return p
     }
 
-    @State private var exportURL: URL?
-    @State private var isSharing: Bool = false
-    @State private var showingExportOptions: Bool = false
-    @State private var rangeSelection: RangeSelection = .all
+    @State private var showingSoftBlockPicker: Bool = false
+    @State private var softBlockSelection: FamilyActivitySelection = FamilyActivitySelection()
+    @State private var screenTimeDenied: Bool = false
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Goal") {
-                    Stepper(value: Binding(
-                        get: { prefs.dailyGoalHours },
-                        set: { prefs.dailyGoalHours = $0; try? modelContext.save() }
-                    ), in: 0...12, step: 0.5) {
-                        HStack {
-                            Text("Daily goal")
-                            Spacer()
-                            Text(String(format: "%.1f h", prefs.dailyGoalHours))
-                                .fontDesign(.monospaced)
-                                .foregroundStyle(.secondary)
+            ZStack {
+                AnimatingBackground(base: Theme.settingsBackground(), halo: Theme.settingsHaloGradient)
+                Form {
+                    Section("Goal") {
+                        NavigationLink {
+                            WeeklyGoalPicker(goal: Binding(
+                                get: { prefs.weeklyGoalHours },
+                                set: { prefs.weeklyGoalHours = $0; try? modelContext.save() }
+                            ))
+                        } label: {
+                            HStack {
+                                Text("Weekly goal")
+                                Spacer()
+                                Text("\(Int(prefs.weeklyGoalHours)) h")
+                                    .fontDesign(.monospaced)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    }
                 }
 
-                Section("Nudges") {
-                    Picker("Cadence", selection: Binding(
-                        get: { prefs.nudgeMinutes ?? 0 },
-                        set: { prefs.nudgeMinutes = $0 == 0 ? nil : $0; try? modelContext.save() }
-                    )) {
-                        Text("Off").tag(0)
-                        Text("25 minutes").tag(25)
-                        Text("50 minutes").tag(50)
-                        Text("90 minutes").tag(90)
-                    }
-                }
-
-                Section("Sync") {
-                    Toggle("iCloud sync (optional)", isOn: Binding(
-                        get: { prefs.iCloudSyncEnabled },
-                        set: { prefs.iCloudSyncEnabled = $0; try? modelContext.save() }
+                Section("Sessions") {
+                    Toggle("Discard sessions under 2 min", isOn: Binding(
+                        get: { prefs.discardShortSessions ?? false },
+                        set: { newValue in
+                            prefs.discardShortSessions = newValue
+                            try? modelContext.save()
+                            if newValue { focus.purgeShortSessionsIfNeeded() }
+                        }
                     ))
                 }
 
-                Section("Export") {
-                    Button("Export CSV…") { showingExportOptions = true }
-                }
-
-                Section("Debug") {
-                    Button("Reload Widgets") {
-                        WidgetCenter.shared.reloadAllTimelines()
-                    }
-                    Button("Write Widget Sample Data") {
-                        AppGroupBridge.writeSummary(todayHours: 2.5, last7: [1, 2, 0.5, 3, 2.5, 4, 1.5])
-                        WidgetCenter.shared.reloadTimelines(ofKind: "MonkSummaryWidget")
-                    }
-                }
-            }
-            .navigationTitle("Settings")
-            .sheet(isPresented: $isSharing) {
-                if let exportURL { ActivityView(activityItems: [exportURL]) }
-            }
-            .sheet(isPresented: $showingExportOptions) {
-                NavigationStack {
-                    Form {
-                        Picker("Range", selection: $rangeSelection) {
-                            Text("All time").tag(RangeSelection.all)
-                            Text("Last 7 days").tag(RangeSelection.lastDays(7))
-                            Text("Last 30 days").tag(RangeSelection.lastDays(30))
-                        }
-                        .pickerStyle(.inline)
-                    }
-                    .navigationTitle("Export Options")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") { showingExportOptions = false }
-                        }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Export") {
-                                showingExportOptions = false
-                                exportCSV()
+                Section("Soft Block") {
+                    Toggle("Enable soft blocking", isOn: Binding(
+                        get: { prefs.softBlockEnabled },
+                        set: { newValue in
+                            Task { @MainActor in
+                                if newValue {
+                                    let approved = await SoftBlockManager.shared.ensureAuthorization()
+                                    if approved {
+                                        prefs.softBlockEnabled = true
+                                        try? modelContext.save()
+                                        applySoftBlock()
+                                    } else {
+                                        prefs.softBlockEnabled = false
+                                        try? modelContext.save()
+                                        // Present alert letting user know authorization is required
+                                        showScreenTimeAlert()
+                                    }
+                                } else {
+                                    prefs.softBlockEnabled = false
+                                    try? modelContext.save()
+                                    applySoftBlock()
+                                }
                             }
                         }
+                    ))
+
+                    Button("Choose apps…") { showingSoftBlockPicker = true }
+                        .disabled(!prefs.softBlockEnabled)
+
+                    Text(softBlockSelection.applicationTokens.isEmpty ? "No apps selected" : "\(softBlockSelection.applicationTokens.count) app(s) selected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if screenTimeDenied {
+                        Text("Screen Time permission required. Open Settings → Screen Time to grant access.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(.top, 4)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
+            .formStyle(.grouped)
         }
+        .navigationTitle("Settings")
+        .onAppear {
+            if let restored = SoftBlockManager.shared.decodeSelection(from: prefs.softBlockSelectionData) {
+                softBlockSelection = restored
+            }
+            applySoftBlock()
+        }
+        .onChange(of: softBlockSelection) { _, newValue in
+            if newValue.applicationTokens.isEmpty {
+                prefs.softBlockSelectionData = nil
+            } else {
+                prefs.softBlockSelectionData = SoftBlockManager.shared.encodeSelection(newValue)
+            }
+            try? modelContext.save()
+            applySoftBlock()
+        }
+        .familyActivityPicker(isPresented: $showingSoftBlockPicker, selection: $softBlockSelection)
     }
+}
 }
 
 #Preview {
     SettingsView()
 }
 
-extension SettingsView {
-    private func exportCSV() {
-        var predicate: Predicate<FocusSession>? = nil
-        let cal = Calendar(identifier: .gregorian)
-        let now = Date()
-        switch rangeSelection {
-        case .all:
-            predicate = nil
-        case .lastDays(let n):
-            let start = cal.date(byAdding: .day, value: -n, to: now) ?? now
-            predicate = #Predicate { $0.startedAt >= start }
-        }
+private extension SettingsView {
+    func applySoftBlock() {
+        let hasTokens = softBlockSelection.includeEntireCategory ||
+            !(softBlockSelection.applicationTokens.isEmpty &&
+              softBlockSelection.categoryTokens.isEmpty &&
+              softBlockSelection.webDomainTokens.isEmpty)
+        let selection = hasTokens ? softBlockSelection : nil
+        SoftBlockManager.shared.apply(selection: selection, enabled: prefs.softBlockEnabled)
+    }
 
-        let descriptor: FetchDescriptor<FocusSession>
-        if let predicate { descriptor = FetchDescriptor(predicate: predicate, sortBy: [SortDescriptor(\.startedAt)]) }
-        else { descriptor = FetchDescriptor(sortBy: [SortDescriptor(\.startedAt)]) }
-
-        let sessions = (try? modelContext.fetch(descriptor)) ?? []
-        let csv = CSVExporter.makeCSV(from: sessions)
-        do {
-            let url = try CSVExporter.writeTemporaryCSV(csv)
-            exportURL = url
-            isSharing = true
-        } catch {
-            // In production, present an error toast
-            isSharing = false
+    func showScreenTimeAlert() {
+        screenTimeDenied = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            screenTimeDenied = false
         }
     }
 }
 
-enum RangeSelection: Hashable {
-    case all
-    case lastDays(Int)
+private struct WeeklyGoalPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var goal: Double
+    @State private var selection: Int
+
+    private let range = Array(stride(from: 0, through: 80, by: 1))
+
+    init(goal: Binding<Double>) {
+        _goal = goal
+        _selection = State(initialValue: Int(goal.wrappedValue.rounded()))
+    }
+
+    var body: some View {
+        Form {
+            Picker("Hours per week", selection: $selection) {
+                ForEach(range, id: \.self) { value in
+                    Text("\(value) h").tag(value)
+                }
+            }
+            .pickerStyle(.wheel)
+        }
+        .navigationTitle("Weekly Goal")
+        .onAppear { selection = Int(goal.rounded()) }
+        .onChange(of: selection) { _, newValue in
+            goal = Double(newValue)
+        }
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+            }
+        }
+    }
 }

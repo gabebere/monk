@@ -19,64 +19,73 @@ struct InsightsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                Picker("Mode", selection: $mode) {
-                    ForEach(Mode.allCases) { m in Text(m.rawValue).tag(m) }
-                }
-                .pickerStyle(.segmented)
+            ZStack {
+                AnimatingBackground(base: Theme.dataBackground(), halo: Theme.dataHaloGradient)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        Picker("Mode", selection: $mode) {
+                            ForEach(Mode.allCases) { m in Text(m.rawValue).tag(m) }
+                        }
+                        .pickerStyle(.segmented)
 
-                TagFilterView(available: availableTags, selected: $selectedTags)
-                    .onAppear { loadAvailableTags() }
-                    .onChange(of: windowDays) { _, _ in loadAvailableTags() }
-                if mode == .daily {
-                    HStack {
-                        DatePicker("Day", selection: $dailyDate, displayedComponents: [.date])
-                            .datePickerStyle(.compact)
-                        Spacer()
-                    }
-                    DailyTimelineBarView(day: dailyDate, selectedTags: selectedTags)
-                        .frame(height: 36)
-                        .padding(.top, 8)
-                } else {
-                    ChartView(windowDays: windowDays, goalHours: prefs?.dailyGoalHours, selectedTags: selectedTags, onSelectDay: { date in
-                        let dayStart = Calendar(identifier: .gregorian).startOfDay(for: date)
-                        daySheet = DaySelection(dayStart: dayStart)
-                    }) { totals in
-                        computeStreak(from: totals, goal: prefs?.dailyGoalHours ?? 0)
-                    }
-                    Picker("Range", selection: $windowDays) {
-                        Text("7 days").tag(7)
-                        Text("14 days").tag(14)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.top, 8)
-                }
+                        TagFilterView(available: availableTags, selected: $selectedTags)
+                            .onAppear { loadAvailableTags() }
+                            .onChange(of: windowDays) { _, _ in loadAvailableTags() }
 
-                if let goal = prefs?.dailyGoalHours, goal > 0 {
-                    HStack {
-                        Image(systemName: "flag")
-                        Text("Daily goal: ")
-                        Text(String(format: "%.1f h", goal))
-                            .fontDesign(.monospaced)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
+                        if mode == .daily {
+                            HStack {
+                                DatePicker("Day", selection: $dailyDate, displayedComponents: [.date])
+                                    .datePickerStyle(.compact)
+                                Spacer()
+                            }
+                            DailyTimelineBarView(day: dailyDate, selectedTags: selectedTags)
+                                .frame(height: 36)
+                                .padding(.top, 8)
+                        } else {
+                            ChartView(windowDays: windowDays, weeklyGoalHours: prefs?.weeklyGoalHours ?? 0, selectedTags: selectedTags, onSelectDay: { date in
+                                let dayStart = Calendar(identifier: .gregorian).startOfDay(for: date)
+                                daySheet = DaySelection(dayStart: dayStart)
+                            }) { totals in
+                                computeStreak(from: totals, weeklyGoal: prefs?.weeklyGoalHours ?? 0)
+                            }
+                            Picker("Range", selection: $windowDays) {
+                                Text("7 days").tag(7)
+                                Text("14 days").tag(14)
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.top, 8)
+                        }
 
-                if mode == .weekly {
-                    HStack {
-                        Image(systemName: "flame")
-                        Text("Streak: ")
-                        Text("\(streakCount) days")
-                            .bold()
-                        Spacer()
-                    }
-                }
+                        if let weeklyGoal = prefs?.weeklyGoalHours, weeklyGoal > 0 {
+                            HStack {
+                                Image(systemName: "flag")
+                                Text("Weekly goal: ")
+                                Text(String(format: "%.0f h", weeklyGoal))
+                                    .fontDesign(.monospaced)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                        }
 
-                Spacer()
+                        if mode == .weekly {
+                            HStack {
+                                Image(systemName: "flame")
+                                Text("Streak: ")
+                                Text("\(streakCount) weeks")
+                                    .bold()
+                                Spacer()
+                            }
+                        }
+                    }
+                    .padding(24)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 36)
+                    .padding(.bottom, 80)
+                }
+                .onAppear { loadAvailableTags() }
             }
-            .padding()
-            .navigationTitle("Insights")
+            .navigationTitle("Data")
             .sheet(item: $daySheet) { DayDetailView(dayStart: $0.dayStart) }
         }
     }
@@ -92,7 +101,7 @@ private struct ChartView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor<FocusSession>(\.startedAt)]) private var sessions: [FocusSession]
     let windowDays: Int
-    let goalHours: Double?
+    let weeklyGoalHours: Double
     let selectedTags: Set<String>
     var onSelectDay: (Date) -> Void = { _ in }
     var onData: (([DayTotal]) -> Void)? = nil
@@ -100,7 +109,7 @@ private struct ChartView: View {
     var body: some View {
         let rows = data
         VStack(alignment: .leading) {
-            WeeklyBars(rows: rows, goalHours: goalHours, onSelect: onSelectDay)
+            WeeklyBars(rows: rows, dailyGoalHours: weeklyGoalHours / 7.0, onSelect: onSelectDay)
                 .frame(height: 220)
         }
         .task { onData?(rows) }
@@ -147,7 +156,7 @@ private struct ChartView: View {
 
     private var changeSignature: String {
         let tagSig = selectedTags.sorted().joined(separator: ",")
-        return "\(sessionsSignature)|wd=\(windowDays)|tags=\(tagSig)"
+        return "\(sessionsSignature)|wd=\(windowDays)|tags=\(tagSig)|wg=\(weeklyGoalHours)"
     }
 }
 
@@ -193,7 +202,7 @@ private struct SelectionTapModifier: ViewModifier {
 
 private struct WeeklyBars: View {
     let rows: [DayTotal]
-    let goalHours: Double?
+    let dailyGoalHours: Double
     let onSelect: (Date) -> Void
 
     var body: some View {
@@ -204,8 +213,8 @@ private struct WeeklyBars: View {
                     y: .value("Day", item.dayStart, unit: .day)
                 )
             }
-            if let goalHours, goalHours > 0 {
-                RuleMark(x: .value("Goal", goalHours as Double))
+            if dailyGoalHours > 0 {
+                RuleMark(x: .value("Goal", dailyGoalHours as Double))
                     .foregroundStyle(.red)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
             }
@@ -524,12 +533,20 @@ private extension InsightsView {
         selectedTags = selectedTags.intersection(tags)
     }
 
-    func computeStreak(from totals: [DayTotal], goal: Double) {
-        guard goal > 0 else { streakCount = 0; return }
-        let sorted = totals.sorted { $0.dayStart > $1.dayStart }
+    func computeStreak(from totals: [DayTotal], weeklyGoal: Double) {
+        guard weeklyGoal > 0 else { streakCount = 0; return }
+        let sorted = totals.sorted { $0.dayStart < $1.dayStart }
         var count = 0
-        for day in sorted {
-            if day.hours + 1e-9 >= goal { count += 1 } else { break }
+        var index = sorted.count
+        while index >= 7 {
+            let chunk = sorted[index - 7..<index]
+            let totalHours = chunk.reduce(0) { $0 + $1.hours }
+            if totalHours + 1e-9 >= weeklyGoal {
+                count += 1
+                index -= 7
+            } else {
+                break
+            }
         }
         streakCount = count
     }

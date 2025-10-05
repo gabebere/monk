@@ -1,8 +1,6 @@
 import Foundation
 import SwiftData
 import Combine
-import UserNotifications
-import WidgetKit
 
 @MainActor
 final class FocusManager: ObservableObject {
@@ -11,40 +9,26 @@ final class FocusManager: ObservableObject {
 
     private var timer: AnyCancellable?
     private let modelContext: ModelContext
-    private let notificationCenter: UserNotificationCenterType
-    private let liveActivityController: LiveActivityControllerType?
     private let calendar: Calendar
 
     init(modelContext: ModelContext,
-         notificationCenter: UserNotificationCenterType = UNUserNotificationCenter.current(),
-         liveActivityController: LiveActivityControllerType? = SystemLiveActivityController(),
          calendar: Calendar = Calendar(identifier: .gregorian)) {
         self.modelContext = modelContext
-        self.notificationCenter = notificationCenter
-        self.liveActivityController = liveActivityController
         self.calendar = calendar
         self.currentSession = fetchInProgressSession()
         recalcTodayTotal()
         startTicking()
         // Optionally purge short sessions on launch if the preference is enabled
         purgeShortSessionsIfNeeded()
-        // If a session is active on launch, recreate Live Activity and nudge
-        if let s = currentSession {
-            liveActivityController?.start(startedAt: s.startedAt)
-            scheduleNudgeIfNeeded()
-        }
     }
 
-    func start(tags: [String] = [], feelings: [String] = []) {
+    func start(tags: [String] = [], mood: Int? = nil) {
         guard currentSession == nil else { return }
-        let session = FocusSession(startedAt: Date(), endedAt: nil, feelings: feelings, tags: tags)
+        let session = FocusSession(startedAt: Date(), endedAt: nil, moodScore: mood, feelings: [], tags: tags)
         modelContext.insert(session)
         try? modelContext.save()
         currentSession = session
-        scheduleNudgeIfNeeded()
         Haptics.light()
-        // Start Live Activity (if available)
-        liveActivityController?.start(startedAt: session.startedAt)
     }
 
     func stop() {
@@ -57,11 +41,8 @@ final class FocusManager: ObservableObject {
             try? modelContext.save()
         }
         currentSession = nil
-        cancelNudges()
         recalcTodayTotal()
         Haptics.success()
-        // End Live Activity (if available)
-        liveActivityController?.end()
     }
 
     func recalcTodayTotal(now: Date = .now) {
@@ -84,7 +65,6 @@ final class FocusManager: ObservableObject {
             if segEnd > segStart { total += segEnd.timeIntervalSince(segStart) }
         }
         todayTotalSeconds = total
-        publishAppGroupSummary(now: now)
     }
 
     private func fetchInProgressSession() -> FocusSession? {
@@ -104,61 +84,7 @@ final class FocusManager: ObservableObject {
             }
     }
 
-    // MARK: - Nudges
-    private func scheduleNudgeIfNeeded() {
-        guard let prefs = ensurePreferences(), let minutes = prefs.nudgeMinutes else { return }
-        notificationCenter.getAuthorizationStatus { status in
-            if status == .notDetermined {
-                self.notificationCenter.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
-            }
-            let content = UNMutableNotificationContent()
-            content.title = "Time for a quick break?"
-            content.body = "You’ve been in deep work for \(minutes) minutes."
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(minutes * 60), repeats: false)
-            let req = UNNotificationRequest(identifier: "nudge", content: content, trigger: trigger)
-            self.notificationCenter.add(req, withCompletionHandler: nil)
-        }
-    }
-
-    private func cancelNudges() {
-        notificationCenter.removePendingNotificationRequests(withIdentifiers: ["nudge"])
-    }
-
-    @discardableResult
-    private func ensurePreferences() -> Preferences? {
-        let descriptor = FetchDescriptor<Preferences>()
-        if let prefs = try? modelContext.fetch(descriptor).first { return prefs }
-        let prefs = Preferences()
-        modelContext.insert(prefs)
-        try? modelContext.save()
-        return prefs
-    }
 }
-
-// MARK: - App Group summary publishing
-extension FocusManager {
-    private func publishAppGroupSummary(now: Date = .now) {
-        let todayHours = todayTotalSeconds / 3600
-        let last7 = lastNDaysTotals(n: 7, now: now)
-        AppGroupBridge.writeSummary(todayHours: todayHours, last7: last7)
-        // Nudge the widget to refresh its timeline
-        WidgetCenter.shared.reloadTimelines(ofKind: "MonkSummaryWidget")
-    }
-
-    private func lastNDaysTotals(n: Int, now: Date = .now) -> [Double] {
-        guard n > 0 else { return [] }
-        let cal = calendar
-        let end = cal.startOfDay(for: now).addingTimeInterval(24 * 60 * 60)
-        guard let start = cal.date(byAdding: .day, value: -n, to: end) else { return [] }
-        let descriptor = FetchDescriptor<FocusSession>(
-            predicate: #Predicate { s in s.startedAt < end && (s.endedAt == nil || s.endedAt! >= start) },
-            sortBy: [SortDescriptor(\.startedAt)]
-        )
-        let sessions = (try? modelContext.fetch(descriptor)) ?? []
-        return InsightsAggregator.lastNDaysTotals(sessions: sessions, n: n, now: now, calendar: cal)
-    }
-}
-
 // MARK: - Short session handling
 extension FocusManager {
     private var shortThresholdSeconds: TimeInterval { 120 }
