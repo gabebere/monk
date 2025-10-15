@@ -12,6 +12,7 @@ import SwiftData
 @main
 struct MonkApp: App {
     init() {
+        SoftBlockUnlockStore.bootstrap()
         // Global UINavigationBar appearance: white titles and buttons, transparent background
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
@@ -27,7 +28,8 @@ struct MonkApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             FocusSession.self,
-            Preferences.self
+            Preferences.self,
+            Project.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: false)
         return try! ModelContainer(for: schema, configurations: [config])

@@ -6,8 +6,89 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		74F1E0602FFF5FE500784214 /* SoftBlockShieldDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F1E0002FFF5FE100784214 /* SoftBlockShieldDataSource.swift */; };
+		74F1E0612FFF5FE500784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
+		74F1E0622FFF5FE500784214 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */; };
+		74F1E0632FFF5FE500784214 /* SoftBlockShieldUIExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 74F1E0022FFF5FE100784214 /* SoftBlockShieldUIExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		74F5A1003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F5A0003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift */; };
+		74F5A1013000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F5A0003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift */; };
+		74F5A1023000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F5A0003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift */; };
+		74F5A1033000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F5A0003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift */; };
+		74F5A1103000C00000784214 /* SoftBlockShieldActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F5A0013000C00000784214 /* SoftBlockShieldActionExtension.swift */; };
+		74F5A1203000C00000784214 /* SoftBlockMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F5A0203000C00000784214 /* SoftBlockMonitorExtension.swift */; };
+		74F5A1303000C00000784214 /* FamilyControls.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0403000C00000784214 /* FamilyControls.framework */; };
+		74F5A1313000C00000784214 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0413000C00000784214 /* DeviceActivity.framework */; };
+		74F5A1323000C00000784214 /* FamilyControls.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0403000C00000784214 /* FamilyControls.framework */; };
+		74F5A1333000C00000784214 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0413000C00000784214 /* DeviceActivity.framework */; };
+		74F5A1343000C00000784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
+		74F5A1353000C00000784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
+		74F5A1363000C00000784214 /* FamilyControls.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0403000C00000784214 /* FamilyControls.framework */; };
+		74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0413000C00000784214 /* DeviceActivity.framework */; };
+		74F5A1383000C00000784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
+		74F5A2003000C00000784214 /* SoftBlockShieldActionExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 74F5A0043000C00000784214 /* SoftBlockShieldActionExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		74F5A2013000C00000784214 /* SoftBlockMonitorExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 74F5A0233000C00000784214 /* SoftBlockMonitorExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		74F1E0502FFF5FE300784214 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7420C23E2E5CE57200784214 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 74F1E0102FFF5FE100784214;
+			remoteInfo = SoftBlockShieldUIExtension;
+		};
+		74F5A3003000C00000784214 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7420C23E2E5CE57200784214 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 74F5A3043000C00000784214;
+			remoteInfo = SoftBlockShieldActionExtension;
+		};
+		74F5A3013000C00000784214 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7420C23E2E5CE57200784214 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 74F5A3143000C00000784214;
+			remoteInfo = SoftBlockMonitorExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		74F1E0522FFF5FE300784214 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				74F1E0632FFF5FE500784214 /* SoftBlockShieldUIExtension.appex in Embed App Extensions */,
+				74F5A2003000C00000784214 /* SoftBlockShieldActionExtension.appex in Embed App Extensions */,
+				74F5A2013000C00000784214 /* SoftBlockMonitorExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		7420C2462E5CE57200784214 /* Monk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		74F1E0002FFF5FE100784214 /* SoftBlockShieldDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftBlockShieldDataSource.swift; sourceTree = "<group>"; };
+		74F1E0012FFF5FE100784214 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		74F1E0022FFF5FE100784214 /* SoftBlockShieldUIExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SoftBlockShieldUIExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		74F1E0032FFF5FE100784214 /* ManagedSettings.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ManagedSettings.framework; path = System/Library/Frameworks/ManagedSettings.framework; sourceTree = SDKROOT; };
+		74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ManagedSettingsUI.framework; path = System/Library/Frameworks/ManagedSettingsUI.framework; sourceTree = SDKROOT; };
+		74F58FA03000B6DC00784214 /* SoftBlockShieldExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SoftBlockShieldExtension.entitlements; sourceTree = "<group>"; };
+		74F5A0003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/SoftBlockUnlockStore.swift; sourceTree = SOURCE_ROOT; };
+		74F5A0013000C00000784214 /* SoftBlockShieldActionExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftBlockShieldActionExtension.swift; sourceTree = "<group>"; };
+		74F5A0023000C00000784214 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		74F5A0033000C00000784214 /* SoftBlockShieldActionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SoftBlockShieldActionExtension.entitlements; sourceTree = "<group>"; };
+		74F5A0043000C00000784214 /* SoftBlockShieldActionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SoftBlockShieldActionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		74F5A0203000C00000784214 /* SoftBlockMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftBlockMonitorExtension.swift; sourceTree = "<group>"; };
+		74F5A0213000C00000784214 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		74F5A0223000C00000784214 /* SoftBlockMonitorExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SoftBlockMonitorExtension.entitlements; sourceTree = "<group>"; };
+		74F5A0233000C00000784214 /* SoftBlockMonitorExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SoftBlockMonitorExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		74F5A0403000C00000784214 /* FamilyControls.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FamilyControls.framework; path = System/Library/Frameworks/FamilyControls.framework; sourceTree = SDKROOT; };
+		74F5A0413000C00000784214 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +104,38 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				74F5A1383000C00000784214 /* ManagedSettings.framework in Frameworks */,
+				74F5A1363000C00000784214 /* FamilyControls.framework in Frameworks */,
+				74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F1E0122FFF5FE100784214 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74F1E0612FFF5FE500784214 /* ManagedSettings.framework in Frameworks */,
+				74F1E0622FFF5FE500784214 /* ManagedSettingsUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F5A3063000C00000784214 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74F5A1343000C00000784214 /* ManagedSettings.framework in Frameworks */,
+				74F5A1303000C00000784214 /* FamilyControls.framework in Frameworks */,
+				74F5A1313000C00000784214 /* DeviceActivity.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F5A3163000C00000784214 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74F5A1353000C00000784214 /* ManagedSettings.framework in Frameworks */,
+				74F5A1323000C00000784214 /* FamilyControls.framework in Frameworks */,
+				74F5A1333000C00000784214 /* DeviceActivity.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -34,6 +147,11 @@
 			children = (
 				7420C2482E5CE57200784214 /* Monk */,
 				7420C2472E5CE57200784214 /* Products */,
+				74F1E0202FFF5FE200784214 /* SoftBlockShieldExtension */,
+				74F5A0053000C00000784214 /* SoftBlockShieldActionExtension */,
+				74F5A0243000C00000784214 /* SoftBlockMonitorExtension */,
+				74F1E0212FFF5FE200784214 /* Frameworks */,
+				7428D41A2E9D5475007EEB9B /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -41,8 +159,60 @@
 			isa = PBXGroup;
 			children = (
 				7420C2462E5CE57200784214 /* Monk.app */,
+				74F1E0022FFF5FE100784214 /* SoftBlockShieldUIExtension.appex */,
+				74F5A0043000C00000784214 /* SoftBlockShieldActionExtension.appex */,
+				74F5A0233000C00000784214 /* SoftBlockMonitorExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7428D41A2E9D5475007EEB9B /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				74F5A0003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+		74F1E0202FFF5FE200784214 /* SoftBlockShieldExtension */ = {
+			isa = PBXGroup;
+			children = (
+				74F1E0002FFF5FE100784214 /* SoftBlockShieldDataSource.swift */,
+				74F1E0012FFF5FE100784214 /* Info.plist */,
+				74F58FA03000B6DC00784214 /* SoftBlockShieldExtension.entitlements */,
+			);
+			path = SoftBlockShieldExtension;
+			sourceTree = "<group>";
+		};
+		74F1E0212FFF5FE200784214 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				74F1E0032FFF5FE100784214 /* ManagedSettings.framework */,
+				74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */,
+				74F5A0403000C00000784214 /* FamilyControls.framework */,
+				74F5A0413000C00000784214 /* DeviceActivity.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		74F5A0053000C00000784214 /* SoftBlockShieldActionExtension */ = {
+			isa = PBXGroup;
+			children = (
+				74F5A0013000C00000784214 /* SoftBlockShieldActionExtension.swift */,
+				74F5A0023000C00000784214 /* Info.plist */,
+				74F5A0033000C00000784214 /* SoftBlockShieldActionExtension.entitlements */,
+			);
+			path = SoftBlockShieldActionExtension;
+			sourceTree = "<group>";
+		};
+		74F5A0243000C00000784214 /* SoftBlockMonitorExtension */ = {
+			isa = PBXGroup;
+			children = (
+				74F5A0203000C00000784214 /* SoftBlockMonitorExtension.swift */,
+				74F5A0213000C00000784214 /* Info.plist */,
+				74F5A0223000C00000784214 /* SoftBlockMonitorExtension.entitlements */,
+			);
+			path = SoftBlockMonitorExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,10 +225,14 @@
 				7420C2422E5CE57200784214 /* Sources */,
 				7420C2432E5CE57200784214 /* Frameworks */,
 				7420C2442E5CE57200784214 /* Resources */,
+				74F1E0522FFF5FE300784214 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				74F1E0512FFF5FE300784214 /* PBXTargetDependency */,
+				74F5A3023000C00000784214 /* PBXTargetDependency */,
+				74F5A3033000C00000784214 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				7420C2482E5CE57200784214 /* Monk */,
@@ -69,6 +243,72 @@
 			productName = Monk;
 			productReference = 7420C2462E5CE57200784214 /* Monk.app */;
 			productType = "com.apple.product-type.application";
+		};
+		74F1E0102FFF5FE100784214 /* SoftBlockShieldUIExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 74F1E0232FFF5FE200784214 /* Build configuration list for PBXNativeTarget "SoftBlockShieldUIExtension" */;
+			buildPhases = (
+				74F1E0112FFF5FE100784214 /* Sources */,
+				74F1E0122FFF5FE100784214 /* Frameworks */,
+				74F1E0132FFF5FE100784214 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				74F1E0202FFF5FE200784214 /* SoftBlockShieldExtension */,
+			);
+			name = SoftBlockShieldUIExtension;
+			packageProductDependencies = (
+			);
+			productName = SoftBlockShieldUIExtension;
+			productReference = 74F1E0022FFF5FE100784214 /* SoftBlockShieldUIExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		74F5A3043000C00000784214 /* SoftBlockShieldActionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 74F5A3083000C00000784214 /* Build configuration list for PBXNativeTarget "SoftBlockShieldActionExtension" */;
+			buildPhases = (
+				74F5A3053000C00000784214 /* Sources */,
+				74F5A3063000C00000784214 /* Frameworks */,
+				74F5A3073000C00000784214 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				74F5A0053000C00000784214 /* SoftBlockShieldActionExtension */,
+			);
+			name = SoftBlockShieldActionExtension;
+			packageProductDependencies = (
+			);
+			productName = SoftBlockShieldActionExtension;
+			productReference = 74F5A0043000C00000784214 /* SoftBlockShieldActionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		74F5A3143000C00000784214 /* SoftBlockMonitorExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 74F5A3183000C00000784214 /* Build configuration list for PBXNativeTarget "SoftBlockMonitorExtension" */;
+			buildPhases = (
+				74F5A3153000C00000784214 /* Sources */,
+				74F5A3163000C00000784214 /* Frameworks */,
+				74F5A3173000C00000784214 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				74F5A0243000C00000784214 /* SoftBlockMonitorExtension */,
+			);
+			name = SoftBlockMonitorExtension;
+			packageProductDependencies = (
+			);
+			productName = SoftBlockMonitorExtension;
+			productReference = 74F5A0233000C00000784214 /* SoftBlockMonitorExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +321,15 @@
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
 					7420C2452E5CE57200784214 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					74F1E0102FFF5FE100784214 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					74F5A3043000C00000784214 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					74F5A3143000C00000784214 = {
 						CreatedOnToolsVersion = 16.4;
 					};
 				};
@@ -100,12 +349,36 @@
 			projectRoot = "";
 			targets = (
 				7420C2452E5CE57200784214 /* Monk */,
+				74F1E0102FFF5FE100784214 /* SoftBlockShieldUIExtension */,
+				74F5A3043000C00000784214 /* SoftBlockShieldActionExtension */,
+				74F5A3143000C00000784214 /* SoftBlockMonitorExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		7420C2442E5CE57200784214 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F1E0132FFF5FE100784214 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F5A3073000C00000784214 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F5A3173000C00000784214 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -119,10 +392,56 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				74F5A1003000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F1E0112FFF5FE100784214 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74F1E0602FFF5FE500784214 /* SoftBlockShieldDataSource.swift in Sources */,
+				74F5A1013000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F5A3053000C00000784214 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74F5A1103000C00000784214 /* SoftBlockShieldActionExtension.swift in Sources */,
+				74F5A1023000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		74F5A3153000C00000784214 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74F5A1203000C00000784214 /* SoftBlockMonitorExtension.swift in Sources */,
+				74F5A1033000C00000784214 /* Monk/Shared/SoftBlockUnlockStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		74F1E0512FFF5FE300784214 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 74F1E0102FFF5FE100784214 /* SoftBlockShieldUIExtension */;
+			targetProxy = 74F1E0502FFF5FE300784214 /* PBXContainerItemProxy */;
+		};
+		74F5A3023000C00000784214 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 74F5A3043000C00000784214 /* SoftBlockShieldActionExtension */;
+			targetProxy = 74F5A3003000C00000784214 /* PBXContainerItemProxy */;
+		};
+		74F5A3033000C00000784214 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 74F5A3143000C00000784214 /* SoftBlockMonitorExtension */;
+			targetProxy = 74F5A3013000C00000784214 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		7420C2652E5CE57400784214 /* Debug */ = {
@@ -310,6 +629,162 @@
 			};
 			name = Release;
 		};
+		74F1E0312FFF5FE200784214 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SoftBlockShieldExtension/SoftBlockShieldExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SoftBlockShieldExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.SoftBlockShieldUIExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		74F1E0322FFF5FE200784214 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SoftBlockShieldExtension/SoftBlockShieldExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SoftBlockShieldExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.SoftBlockShieldUIExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		74F5A3093000C00000784214 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SoftBlockShieldActionExtension/SoftBlockShieldActionExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SoftBlockShieldActionExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.SoftBlockShieldActionExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		74F5A30A3000C00000784214 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SoftBlockShieldActionExtension/SoftBlockShieldActionExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SoftBlockShieldActionExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.SoftBlockShieldActionExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		74F5A3193000C00000784214 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SoftBlockMonitorExtension/SoftBlockMonitorExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SoftBlockMonitorExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.SoftBlockMonitorExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		74F5A31A3000C00000784214 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = SoftBlockMonitorExtension/SoftBlockMonitorExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SoftBlockMonitorExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.SoftBlockMonitorExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -327,6 +802,33 @@
 			buildConfigurations = (
 				7420C2682E5CE57400784214 /* Debug */,
 				7420C2692E5CE57400784214 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		74F1E0232FFF5FE200784214 /* Build configuration list for PBXNativeTarget "SoftBlockShieldUIExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				74F1E0312FFF5FE200784214 /* Debug */,
+				74F1E0322FFF5FE200784214 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		74F5A3083000C00000784214 /* Build configuration list for PBXNativeTarget "SoftBlockShieldActionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				74F5A3093000C00000784214 /* Debug */,
+				74F5A30A3000C00000784214 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		74F5A3183000C00000784214 /* Build configuration list for PBXNativeTarget "SoftBlockMonitorExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				74F5A3193000C00000784214 /* Debug */,
+				74F5A31A3000C00000784214 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

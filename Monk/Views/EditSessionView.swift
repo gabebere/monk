@@ -3,164 +3,123 @@ import SwiftData
 
 struct EditSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Bindable var session: FocusSession
 
     @State private var moodValue: Int = 1
-    @State private var newTag: String = ""
-    @State private var allTags: [String] = []
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Session") {
-                    HStack {
-                        Text("Started")
-                        Spacer()
-                        Text(session.startedAt, style: .date)
-                        Text(session.startedAt, style: .time)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let end = session.endedAt {
-                        HStack {
-                            Text("Ended")
-                            Spacer()
-                            Text(end, style: .date)
-                            Text(end, style: .time)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Label("In progress", systemImage: "record.circle")
-                            .foregroundStyle(.orange)
-                    }
-                }
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.06, green: 0.08, blue: 0.18),
+                        Color(red: 0.03, green: 0.04, blue: 0.11)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
 
-                Section("What did you do?") {
-                    HStack(alignment: .firstTextBaseline) {
-                        ZStack(alignment: .leading) {
-                            TextField("Add tag (e.g., thesis)", text: $newTag)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .submitLabel(.done)
-                                .onSubmit { addFromSubmit() }
-                            if let suffix = autocompleteSuffix, !suffix.isEmpty {
-                                HStack(spacing: 0) {
-                                    Text(newTag).opacity(0)
-                                    Text(suffix).foregroundStyle(.secondary)
-                                }
-                                .allowsHitTesting(false)
-                            }
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 28) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Session details")
+                                .font(.largeTitle.bold())
+                                .foregroundStyle(.white)
+                            Text("Review and update how this focus session felt.")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.7))
                         }
-                        Button("Add") { addTag() }
-                            .disabled(newTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                    if !matchingSuggestions.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(matchingSuggestions, id: \.self) { suggestion in
-                                    Button(action: { newTag = suggestion }) {
-                                        Text("#\(suggestion)")
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 6)
-                                            .background(Color.accentColor.opacity(0.15))
-                                            .foregroundStyle(Color.accentColor)
-                                            .clipShape(Capsule())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        DetailCard(icon: "clock.fill",
+                                   title: "Timing",
+                                   subtitle: "When this session started and ended.") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Label {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Started")
+                                                .font(.footnote)
+                                                .foregroundStyle(.white.opacity(0.65))
+                                            Text(session.startedAt, format: Date.FormatStyle().weekday(.wide).hour().minute())
+                                                .font(.headline.weight(.medium))
+                                                .foregroundStyle(.white)
+                                        }
+                                    } icon: {
+                                        Image(systemName: "play.fill")
+                                            .foregroundStyle(.white.opacity(0.8))
                                     }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("Use tag \(suggestion)")
+                                    Spacer()
+                                }
+
+                                if let end = session.endedAt {
+                                    HStack {
+                                        Label {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Ended")
+                                                    .font(.footnote)
+                                                    .foregroundStyle(.white.opacity(0.65))
+                                                Text(end, format: Date.FormatStyle().weekday(.wide).hour().minute())
+                                                    .font(.headline.weight(.medium))
+                                                    .foregroundStyle(.white)
+                                            }
+                                        } icon: {
+                                            Image(systemName: "stop.fill")
+                                                .foregroundStyle(.white.opacity(0.8))
+                                        }
+                                        Spacer()
+                                    }
+                                } else {
+                                    Label("In progress", systemImage: "record.circle.fill")
+                                        .foregroundStyle(.orange)
                                 }
                             }
-                            .padding(.vertical, 4)
                         }
-                    }
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(session.tags, id: \.self) { tag in
-                                TagChip(title: "#\(tag)") { removeTag(tag) }
+
+                        DetailCard(icon: "face.smiling.fill",
+                                   title: "Mood",
+                                   subtitle: "How did this session feel overall?") {
+                            MoodSlider(value: $moodValue)
+                        }
+
+                        if let project = session.project {
+                            DetailCard(icon: "target",
+                                       title: "Project",
+                                       subtitle: "This session contributed to \(project.title).") {
+                                Text(project.title)
+                                    .font(.headline.weight(.medium))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
-                        .padding(.vertical, 4)
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 32)
                 }
-
-                Section("How was this session?") {
-                    MoodSlider(value: $moodValue)
-                }
-
-                
             }
-            .navigationTitle("Edit Session")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(.white.opacity(0.8))
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { saveAndClose() }
+                        .fontWeight(.semibold)
                 }
             }
-            .onAppear {
-                moodValue = session.moodScore ?? 1
-                loadAllTags()
-            }
+        }
+        .tint(.white)
+        .onAppear {
+            moodValue = session.moodScore ?? 1
         }
     }
 
     private func saveAndClose() {
         session.moodScore = moodValue
-        try? modelContext.save()
+        try? session.modelContext?.save()
         dismiss()
-    }
-
-    private func addTag() {
-        let norm = normalizeTag(newTag)
-        guard !norm.isEmpty else { return }
-        if !session.tags.contains(where: { normalizeTag($0) == norm }) {
-            session.tags.append(norm)
-            try? modelContext.save()
-        }
-        newTag = ""
-    }
-
-    private func removeTag(_ tag: String) {
-        let norm = normalizeTag(tag)
-        session.tags.removeAll { normalizeTag($0) == norm }
-        try? modelContext.save()
-    }
-
-    // MARK: - Suggestions
-    private var matchingSuggestions: [String] {
-        let prefix = normalizeTag(newTag)
-        guard !prefix.isEmpty else { return [] }
-        let existing = Set(session.tags.map { normalizeTag($0) })
-        return allTags
-            .filter { $0.hasPrefix(prefix) && !existing.contains($0) }
-            .sorted()
-            .prefix(8)
-            .map { $0 }
-    }
-    private func loadAllTags() {
-        let all = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? []
-        let set = Set(all.flatMap { $0.tags.map(normalizeTag) })
-        allTags = Array(set).sorted()
-    }
-    private var autocompleteSuffix: String? {
-        let prefix = normalizeTag(newTag)
-        guard !prefix.isEmpty, let suggestion = matchingSuggestions.first else { return nil }
-        guard suggestion.hasPrefix(prefix) else { return nil }
-        let dropCount = prefix.count
-        if suggestion.count > dropCount { return String(suggestion.dropFirst(dropCount)) }
-        return nil
-    }
-    private func addFromSubmit() {
-        if let first = matchingSuggestions.first {
-            newTag = first
-        }
-        addTag()
-    }
-    private func normalizeTag(_ raw: String) -> String {
-        raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
     }
 }
 
@@ -168,18 +127,53 @@ struct EditSessionView: View {
     ContentView()
 }
 
-private struct TagChip: View {
+private struct DetailCard<Content: View>: View {
+    let icon: String
     let title: String
-    let onRemove: () -> Void
+    let subtitle: String
+    @ViewBuilder var content: Content
+
     var body: some View {
-        HStack(spacing: 6) {
-            Text(title)
-            Image(systemName: "xmark.circle.fill")
-                .onTapGesture { onRemove() }
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.18))
+                        .frame(width: 46, height: 46)
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.68))
+                }
+                Spacer()
+            }
+
+            content
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.15))
-        .clipShape(Capsule())
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.12),
+                    Color.white.opacity(0.05)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: Color.black.opacity(0.28), radius: 24, x: 0, y: 12)
     }
 }

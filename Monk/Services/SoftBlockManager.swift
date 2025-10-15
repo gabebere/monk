@@ -1,4 +1,5 @@
 import Foundation
+import DeviceActivity
 import FamilyControls
 import ManagedSettings
 
@@ -30,6 +31,8 @@ final class SoftBlockManager {
     }
 
     func apply(selection: FamilyActivitySelection?, enabled: Bool) {
+        SoftBlockUnlockStore.clearExpired()
+
         let hasTokens: Bool = {
             guard let selection else { return false }
             if selection.includeEntireCategory { return true }
@@ -42,13 +45,19 @@ final class SoftBlockManager {
             store.shield.applications = nil
             store.shield.applicationCategories = nil
             store.shield.webDomains = nil
+            clearTemporaryUnlocks()
             return
+        }
+
+        if !enabled {
+            clearTemporaryUnlocks()
         }
 
         guard AuthorizationCenter.shared.authorizationStatus == .approved else {
             store.shield.applications = nil
             store.shield.applicationCategories = nil
             store.shield.webDomains = nil
+            clearTemporaryUnlocks()
             return
         }
 
@@ -74,5 +83,18 @@ final class SoftBlockManager {
     func decodeSelection(from data: Data?) -> FamilyActivitySelection? {
         guard let data else { return nil }
         return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
+    }
+
+    func suspendForHardBlock() {
+        store.shield.applications = nil
+        store.shield.applicationCategories = nil
+        store.shield.webDomains = nil
+        clearTemporaryUnlocks()
+    }
+
+    func clearTemporaryUnlocks() {
+        let center = DeviceActivityCenter()
+        center.stopMonitoring()
+        SoftBlockUnlockStore.removeAll()
     }
 }

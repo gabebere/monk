@@ -6,9 +6,8 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 - Data & Persistence
   - `Monk/Models/FocusSession.swift` (SwiftData `@Model`):
-    - Fields: `id: UUID @unique`, `startedAt: Date`, `endedAt: Date?` (nil=in‑progress), `note: String?`, `tags: [String]`.
+    - Fields: `id: UUID @unique`, `startedAt: Date`, `endedAt: Date?` (nil=in‑progress), `moodScore: Int?`, `project: Project?`.
     - Computed: `isInProgress`, `duration` (uses `endedAt ?? Date()`).
-    - Mood: optional `moodScore` (0 = bad, 1 = neutral, 2 = good).
   - `Monk/Models/Preferences.swift` (SwiftData `@Model`):
     - Singleton: `id = "singleton"`.
     - Fields: `weeklyGoalHours: Double` (default 40.0), `discardShortSessions: Bool?`.
@@ -18,9 +17,12 @@ This document is a detailed handoff for future sessions with Codex or other agen
   - Start/Stop with SwiftData persistence; prevents overlapping sessions.
   - Haptics on start/stop (`Monk/Utilities/Haptics.swift`).
   - Today total: recalculates every second while active; correctly clamps sessions that span midnight.
-- Soft Blocking (`Monk/Services/SoftBlockManager.swift`)
+- Soft Blocking (`Monk/Services/SoftBlockManager.swift`, `SoftBlock*` extensions)
   - Manages Screen Time shields for the user-selected set of “soft blocked” apps using ManagedSettings.
   - Applies a custom shield configuration with the requested copy and actions when enabled.
+  - Shield UI now matches Monk’s brand palette and explains the quick-unlock flow; durations pulled from shared constants so UI and logic stay in sync.
+  - Shield Action and Monitor extensions bootstrap the shared app-group container and persist unlock requests via JSON (`Monk/Shared/SoftBlockUnlockStore.swift`) instead of `UserDefaults`, removing the sandbox warnings.
+  - Device Activity entitlements in app + extensions are required; `SoftBlockShieldActionExtension` uses the corrected `com.apple.familycontrols.shield-actions` identifier so the unlock handler can load.
 
 - Utilities
   - `Monk/Utilities/DateUtils.swift`: `splitByDay(start:end:)` segments time across day boundaries.
@@ -28,23 +30,15 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 - UI Shell
   - `Monk/ContentView.swift`: TabView with Home, Insights, Settings; lazily constructs `FocusManager` on main actor.
-  - Home (`Monk/Views/HomeView.swift`):
-    - TimerCard (monospaced ticking), Start/Stop, optional note on start.
-    - TodayTotal (monospaced hours), RecentSessions list (last 5).
-    - Edit Session sheet (`Monk/Views/EditSessionView.swift`):
-      - Edit note; add/remove tag chips; immediate persistence on changes.
-      - Session mood slider (Bad ↔ Neutral ↔ Good) stored per session.
-  - Insights (`Monk/Views/InsightsView.swift`):
+- Home (`Monk/Views/HomeView.swift`):
+    - TimerCard with animated CTA and stop button; starting now opens a project picker sheet (including “None”).
+    - Completed Session sheet (`CompletedSessionView`): celebrate, assign project, capture mood.
+    - Projects section: grid of project cards ordered by recent activity, quick create button, detail sheet with hard blocking + delete.
+- Insights (`Monk/Views/InsightsView.swift`):
     - Mode toggle: Daily | Weekly.
-    - Tag filter chips (left‑aligned, horizontal scroll).
-    - Daily view:
-      - Stacked per‑hour bars by tag; fixed y‑axis 0–60 minutes.
-      - 16‑hour carousel pages: 0–16 and 8–24 for smoother browsing.
-      - Minutes are apportioned evenly across tags if a session has multiple tags; untagged → “Untagged”.
-    - Weekly view:
-      - Total hours per day (7 or 14 days), with optional goal RuleMark derived from weekly goal.
-      - Streak count based on weekly goal (consecutive weeks ≥ goal).
-      - Tap bar to open a Day Detail sheet (iOS 17+ overlay); shows sessions, notes, tags and per‑day duration.
+    - Daily view: focus timeline bar (24-hour capsule) highlighting when sessions occurred.
+    - Weekly view: bar chart for 7/14 days with goal RuleMark and streak computation; tap a bar to open the Day Detail list.
+    - Day Detail sheet: chronological session list with per-session duration and project label.
 - Settings (`Monk/Views/SettingsView.swift`):
     - Weekly goal picker (wheel), discard-short toggle.
     - Soft-block toggle and FamilyActivityPicker integration for choosing apps to shield.
@@ -61,9 +55,10 @@ This document is a detailed handoff for future sessions with Codex or other agen
 - Reintroduce App Intents if Siri/Shortcuts automation is desired.
 - Requires adding the capability and rebuilding the intents module.
 
-2) Screen Time capabilities
-- Enable FamilyControls, ManagedSettings, and DeviceActivity in the app target.
+2) Screen Time capabilities & entitlements
+- Enable FamilyControls, ManagedSettings, DeviceActivity, and App Groups on the app target and every Screen Time extension (Shield UI, Shield Actions, Monitor, DeviceActivity report).
 - Users must grant Screen Time access the first time soft blocking is configured.
+- Ensure provisioning profiles include the `com.apple.familycontrols.shield-actions` entitlement so the quick-unlock handler can load.
 
 3) Deployment targets
 - Recommended iOS 17+ (required for Charts overlay selection).
@@ -79,14 +74,14 @@ This document is a detailed handoff for future sessions with Codex or other agen
 ## Usage & Validation (Manual QA)
 
 - Start/Stop flow
-  - Home → Start (optional note); Stop → Today total updates; Insights Weekly bar updates immediately.
+  - Home → Start; choose project; Stop → Today total updates; Insights Weekly bar updates immediately.
 
 - Insights
-  - Daily (default): pick a date; swipe between pages; verify stacked minutes by tag; y‑axis 0–60 min.
-  - Weekly: switch to 7/14; confirm totals and streak count; tap a bar (iOS 17+) to view the day’s sessions.
+  - Daily: choose a date; verify the timeline capsule highlights focused periods accurately.
+  - Weekly: switch between 7/14 days; confirm totals and streak count; tap a bar (iOS 17+) to view the day’s sessions.
 
-- Tags & notes
-  - Home → tap a Recent Session → edit note; add/remove tags; changes persist.
+- Session wrap-up
+  - Stop an in-progress session → CompletedSessionView appears; assign a project + mood; saving persists and updates Insights.
 
 ## Remaining Work (Prioritized with Acceptance Criteria)
 
@@ -105,17 +100,21 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 4) Insights polish
 - iOS 16 daily selection fallback (e.g., segmented hour ranges without overlay).
-- Day Detail: tag filter + inline note/tag edits.
-- AC: Daily view usable on iOS 16; Day Detail can filter tags.
+- Day Detail: richer session metadata (mood, project, duration) and quick actions.
+- AC: Daily view usable on iOS 16; Day Detail exposes mood/project info and navigation works without overlay APIs.
 
-5) Tag UX enhancements
-- Suggestions from existing tags; normalize input (lowercase, trim, no spaces or replace with dashes).
-- AC: Adding from suggestions works; duplicates prevented; consistent formatting.
+5) Project dashboards
+- Flesh out the project detail view (blocking configuration, per-session history, editing).
+- AC: Detail screen shows project timeline, lets users toggle project-specific soft blocking.
 
-6) Testing expansion
+6) Quick unlock stability
+- Verify the shield action extension schedules Device Activity successfully on device (needs entitlement + profiles regenerated after identifier fix).
+- AC: Tapping “Unlock briefly” triggers the 20s wait/120s unlock window; monitor logs show `Scheduled DeviceActivity…` without ManagedSettings errors.
+
+7) Testing expansion
 - Add unit tests:
   - FocusManager: start/stop invariants, today total across midnight.
-  - Aggregation: weekly totals, streak logic, hourly tag binning (including multi‑tag splits, DST boundaries).
+  - Aggregation: weekly totals, streak logic, daily timeline segmentation (including DST boundaries).
 - AC: Tests pass locally; cover critical logic paths.
 
 ## Architecture Map (Quick Reference)

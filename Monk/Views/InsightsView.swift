@@ -12,8 +12,6 @@ struct InsightsView: View {
     @State private var mode: Mode = .daily
     @State private var dailyDate: Date = Date()
     @State private var windowDays: Int = 14
-    @State private var availableTags: [String] = []
-    @State private var selectedTags: Set<String> = []
     @State private var streakCount: Int = 0
     @State private var daySheet: DaySelection? = nil
 
@@ -28,21 +26,17 @@ struct InsightsView: View {
                         }
                         .pickerStyle(.segmented)
 
-                        TagFilterView(available: availableTags, selected: $selectedTags)
-                            .onAppear { loadAvailableTags() }
-                            .onChange(of: windowDays) { _, _ in loadAvailableTags() }
-
                         if mode == .daily {
                             HStack {
                                 DatePicker("Day", selection: $dailyDate, displayedComponents: [.date])
                                     .datePickerStyle(.compact)
                                 Spacer()
                             }
-                            DailyTimelineBarView(day: dailyDate, selectedTags: selectedTags)
+                            DailyTimelineBarView(day: dailyDate)
                                 .frame(height: 36)
                                 .padding(.top, 8)
                         } else {
-                            ChartView(windowDays: windowDays, weeklyGoalHours: prefs?.weeklyGoalHours ?? 0, selectedTags: selectedTags, onSelectDay: { date in
+                            ChartView(windowDays: windowDays, weeklyGoalHours: prefs?.weeklyGoalHours ?? 0, onSelectDay: { date in
                                 let dayStart = Calendar(identifier: .gregorian).startOfDay(for: date)
                                 daySheet = DaySelection(dayStart: dayStart)
                             }) { totals in
@@ -83,7 +77,6 @@ struct InsightsView: View {
                     .padding(.top, 36)
                     .padding(.bottom, 80)
                 }
-                .onAppear { loadAvailableTags() }
             }
             .navigationTitle("Data")
             .sheet(item: $daySheet) { DayDetailView(dayStart: $0.dayStart) }
@@ -102,7 +95,6 @@ private struct ChartView: View {
     @Query(sort: [SortDescriptor<FocusSession>(\.startedAt)]) private var sessions: [FocusSession]
     let windowDays: Int
     let weeklyGoalHours: Double
-    let selectedTags: Set<String>
     var onSelectDay: (Date) -> Void = { _ in }
     var onData: (([DayTotal]) -> Void)? = nil
 
@@ -122,13 +114,8 @@ private struct ChartView: View {
         let end = calendar.startOfDay(for: now).addingTimeInterval(24*60*60)
         guard let start = calendar.date(byAdding: .day, value: -windowDays + 1, to: end) else { return [] }
 
-        var filtered = sessions
-        if !selectedTags.isEmpty {
-            filtered = filtered.filter { !Set($0.tags).isDisjoint(with: selectedTags) }
-        }
-
         var buckets: [Date: TimeInterval] = [:]
-        for s in filtered where s.startedAt < end && (s.endedAt == nil || s.endedAt! >= start) {
+        for s in sessions where s.startedAt < end && (s.endedAt == nil || s.endedAt! >= start) {
             let sStart = max(s.startedAt, start)
             let sEnd = min(s.endedAt ?? now, end)
             guard sEnd > sStart else { continue }
@@ -155,8 +142,7 @@ private struct ChartView: View {
     }
 
     private var changeSignature: String {
-        let tagSig = selectedTags.sorted().joined(separator: ",")
-        return "\(sessionsSignature)|wd=\(windowDays)|tags=\(tagSig)|wg=\(weeklyGoalHours)"
+        return "\(sessionsSignature)|wd=\(windowDays)|wg=\(weeklyGoalHours)"
     }
 }
 
@@ -234,7 +220,6 @@ private struct DailyTimelineBarView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor<FocusSession>(\.startedAt)]) private var sessions: [FocusSession]
     let day: Date
-    let selectedTags: Set<String>
 
     var body: some View {
         let cal = Calendar(identifier: .gregorian)
@@ -265,39 +250,33 @@ private struct DailyTimelineBarView: View {
 
     private func segments(dayStart: Date, dayEnd: Date) -> [TimelineSegment] {
         let now = Date()
-        var filtered = sessions.filter { $0.startedAt < dayEnd && ($0.endedAt ?? now) > dayStart }
-        if !selectedTags.isEmpty {
-            filtered = filtered.filter { !Set($0.tags).isDisjoint(with: selectedTags) }
-        }
-        // Map to clamped intervals with a primary tag for color
-        var intervals: [(start: Date, end: Date, tag: String)] = []
+        let filtered = sessions.filter { $0.startedAt < dayEnd && ($0.endedAt ?? now) > dayStart }
+        var intervals: [(start: Date, end: Date, color: Color)] = []
         for s in filtered {
             let start = max(s.startedAt, dayStart)
             let end = min(s.endedAt ?? now, dayEnd)
             guard end > start else { continue }
-            let tag = s.tags.first ?? "Focus"
-            intervals.append((start, end, tag))
+            intervals.append((start, end, color(for: s)))
         }
-        // Sort and merge overlapping by preferring earlier start (coalesce same tag contiguous)
         intervals.sort { $0.start < $1.start }
         var result: [TimelineSegment] = []
         for iv in intervals {
-            let color = colorForTag(iv.tag)
-            if var last = result.last, iv.start <= last.end { // overlap or touch
-                // Extend the last segment end to cover overlap; keep last color
+            if var last = result.last, iv.start <= last.end {
                 last.end = max(last.end, iv.end)
                 result[result.count - 1] = last
             } else {
-                result.append(TimelineSegment(start: iv.start, end: iv.end, color: color))
+                result.append(TimelineSegment(start: iv.start, end: iv.end, color: iv.color))
             }
         }
         return result
     }
 
-    private func colorForTag(_ tag: String) -> Color {
-        let palette: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .indigo, .cyan, .yellow]
-        let idx = abs(tag.hashValue) % palette.count
-        return palette[idx]
+    private func color(for session: FocusSession) -> Color {
+        if let project = session.project {
+            let gradient = ProjectPalette.shared.gradient(for: project.gradientIndex)
+            return gradient.start
+        }
+        return Color.cyan.opacity(0.9)
     }
 }
 
@@ -305,6 +284,28 @@ private struct TimelineSegment {
     var start: Date
     var end: Date
     var color: Color
+}
+
+private struct ProjectPalette {
+    static let shared = ProjectPalette()
+    private init() {}
+
+    private let gradients: [(start: Color, end: Color)] = [
+        (Color(red: 0.27, green: 0.56, blue: 0.99), Color(red: 0.60, green: 0.28, blue: 0.98)),
+        (Color(red: 0.33, green: 0.76, blue: 0.86), Color(red: 0.20, green: 0.48, blue: 0.97)),
+        (Color(red: 0.99, green: 0.62, blue: 0.45), Color(red: 0.95, green: 0.30, blue: 0.55)),
+        (Color(red: 0.98, green: 0.80, blue: 0.36), Color(red: 0.96, green: 0.48, blue: 0.31)),
+        (Color(red: 0.54, green: 0.43, blue: 0.99), Color(red: 0.28, green: 0.21, blue: 0.58)),
+        (Color(red: 0.34, green: 0.64, blue: 0.99), Color(red: 0.22, green: 0.30, blue: 0.64)),
+        (Color(red: 0.99, green: 0.45, blue: 0.69), Color(red: 0.58, green: 0.32, blue: 0.93)),
+        (Color(red: 0.46, green: 0.35, blue: 0.82), Color(red: 0.19, green: 0.18, blue: 0.38))
+    ]
+
+    func gradient(for index: Int) -> (start: Color, end: Color) {
+        guard !gradients.isEmpty else { return (.cyan, .blue) }
+        let safe = ((index % gradients.count) + gradients.count) % gradients.count
+        return gradients[safe]
+    }
 }
 
 // Day detail list
@@ -334,9 +335,8 @@ private struct DayDetailView: View {
                                 .fontDesign(.monospaced)
                                 .foregroundStyle(.secondary)
                         }
-                        // Note removed from model; only show tags now
-                        if !s.tags.isEmpty {
-                            Text("#" + s.tags.joined(separator: " #"))
+                        if let project = s.project {
+                            Text(project.title)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -356,183 +356,7 @@ private struct DayDetailView: View {
     }
 }
 
-// MARK: - Daily stacked per hour by tag
-
-private struct HourlyStackedChartView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: [SortDescriptor<FocusSession>(\.startedAt)]) private var sessions: [FocusSession]
-    let day: Date
-    let selectedTags: Set<String>
-
-    @State private var pageIndex: Int = 0
-
-    var body: some View {
-        TabView(selection: $pageIndex) {
-            ForEach(0..<2, id: \.self) { idx in
-                let startHour = (idx == 0) ? 0 : 8
-                page(startHour: startHour)
-                    .tag(idx)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .always))
-        .indexViewStyle(.page(backgroundDisplayMode: .interactive))
-    }
-
-    @ViewBuilder
-    private func page(startHour: Int) -> some View {
-        let cal = Calendar(identifier: .gregorian)
-        let dayStart = cal.startOfDay(for: day)
-        let windowStart = cal.date(byAdding: .hour, value: startHour, to: dayStart)!
-        let windowEnd = cal.date(byAdding: .hour, value: min(startHour + 16, 24), to: dayStart)!
-        let bins = computeData().filter { $0.hourStart >= windowStart && $0.hourStart < windowEnd }
-
-        VStack(alignment: .leading, spacing: 8) {
-            Chart {
-                ForEach(bins) { item in
-                    BarMark(
-                        x: .value("Hour", item.hourStart, unit: .hour),
-                        y: .value("Minutes", item.minutes)
-                    )
-                    .foregroundStyle(by: .value("Tag", item.tag))
-                    .opacity(item.minutes > 0 ? 1 : 0)
-                }
-            }
-            .chartXScale(domain: windowStart...windowEnd)
-            .chartYScale(domain: 0...60)
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .hour)) { value in
-                    AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
-                }
-            }
-            .chartLegend(.automatic)
-        }
-        .padding(.horizontal, 2)
-    }
-
-    private func computeData() -> [HourTagBin] {
-        let cal = Calendar(identifier: .gregorian)
-        let dayStart = cal.startOfDay(for: day)
-        let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart)!
-        let now = Date()
-
-        var filtered = sessions.filter { $0.startedAt < dayEnd && ($0.endedAt ?? now) > dayStart }
-        if !selectedTags.isEmpty {
-            filtered = filtered.filter { !Set($0.tags).isDisjoint(with: selectedTags) }
-        }
-
-        // Prepare all hours and tag set
-        var tagSet = Set<String>()
-        for s in filtered { tagSet.formUnion(s.tags) }
-        if tagSet.isEmpty { tagSet.insert("Untagged") }
-
-        // Initialize buckets: hour -> tag -> seconds
-        var buckets: [Date: [String: TimeInterval]] = [:]
-        for h in 0..<24 {
-            let hStart = cal.date(byAdding: .hour, value: h, to: dayStart)!
-            buckets[hStart] = [:]
-        }
-
-        for s in filtered {
-            let sStart = max(s.startedAt, dayStart)
-            let sEnd = min(s.endedAt ?? now, dayEnd)
-            guard sEnd > sStart else { continue }
-            let tags = s.tags.isEmpty ? ["Untagged"] : s.tags
-            let share = 1.0 / Double(tags.count)
-            // Iterate hours overlapping the session
-            var hCursor = cal.dateInterval(of: .hour, for: sStart)!.start
-            while hCursor < sEnd {
-                let hEnd = cal.date(byAdding: .hour, value: 1, to: hCursor)!
-                let segStart = max(hCursor, sStart)
-                let segEnd = min(hEnd, sEnd)
-                if segEnd > segStart {
-                    let seconds = segEnd.timeIntervalSince(segStart) * share
-                    for tag in tags {
-                        buckets[hCursor, default: [:]][tag, default: 0] += seconds
-                    }
-                }
-                hCursor = hEnd
-            }
-        }
-
-        // Map to bins in minutes
-        var bins: [HourTagBin] = []
-        for (hStart, tagDict) in buckets {
-            for tag in tagSet {
-                let sec = tagDict[tag] ?? 0
-                let minutes = sec / 60.0
-                bins.append(HourTagBin(hourStart: hStart, tag: tag, minutes: minutes))
-            }
-        }
-        return bins.sorted { lhs, rhs in
-            if lhs.hourStart == rhs.hourStart { return lhs.tag < rhs.tag }
-            return lhs.hourStart < rhs.hourStart
-        }
-    }
-}
-
-private struct HourTagBin: Identifiable {
-    var id: String { "\(hourStart.timeIntervalSince1970)-\(tag)" }
-    let hourStart: Date
-    let tag: String
-    let minutes: Double
-}
-
-// MARK: - Tag Filter & Streaks
-
-private struct TagFilterView: View {
-    let available: [String]
-    @Binding var selected: Set<String>
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                SelectableChip(title: "All", isSelected: selected.isEmpty) {
-                    selected.removeAll()
-                }
-                ForEach(available, id: \.self) { tag in
-                    SelectableChip(title: "#\(tag)", isSelected: selected.contains(tag)) {
-                        if selected.contains(tag) { selected.remove(tag) } else { selected.insert(tag) }
-                    }
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-}
-
-private struct SelectableChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.15))
-                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 private extension InsightsView {
-    func loadAvailableTags(now: Date = .now) {
-        let calendar = Calendar(identifier: .gregorian)
-        let end = calendar.startOfDay(for: now).addingTimeInterval(24*60*60)
-        guard let start = calendar.date(byAdding: .day, value: -windowDays + 1, to: end) else { return }
-        let descriptor = FetchDescriptor<FocusSession>(
-            predicate: #Predicate { s in
-                s.startedAt < end && (s.endedAt == nil || s.endedAt! >= start)
-            }
-        )
-        let sessions = (try? modelContext.fetch(descriptor)) ?? []
-        let tags = Set(sessions.flatMap { $0.tags })
-        availableTags = Array(tags).sorted()
-        selectedTags = selectedTags.intersection(tags)
-    }
-
     func computeStreak(from totals: [DayTotal], weeklyGoal: Double) {
         guard weeklyGoal > 0 else { streakCount = 0; return }
         let sorted = totals.sorted { $0.dayStart < $1.dayStart }

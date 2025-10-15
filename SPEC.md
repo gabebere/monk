@@ -47,12 +47,10 @@ AC: Each bar = total daily hours; includes optional goal RuleMark.
 AC: Consecutive week count increments when the last 7-day sum ≥ weekly goal.
 
 Organization
-    •    Notes: Optionally add a short note at start/stop.
-AC: note persisted and editable post‑hoc.
-    •    Tags: Apply tags (e.g., #thesis, #coding) for filtering.
-AC: Multi‑select chips; filter persists for current view only.
     •    Session mood: Quick slider between Bad / Neutral / Good.
 AC: Saved as part of each session and editable later.
+    •    Projects: Create projects with unique visual identity, assign sessions, and configure per-project hard blocking.
+AC: User selects a project (or “none”) on session start; hours roll up per project; project hard block overrides global soft block during the session.
 
 Optional extensions (deferred)
     •    Shortcuts automation via App Intents.
@@ -85,14 +83,13 @@ AC: Start is disabled when one is active; Stop finalizes exactly one.
 4) UX Flows (high‑level)
     1.    Start/Stop: Home → Start → in-app timer runs → Stop → summary toast.
     2.    Review week: Home → Insights tab → bar chart with goal line → tap a bar to view that day’s sessions.
-    3.    Tag filter: Insights → Tag filter chip row → filter chart & list.
 Tone: Quiet, friendly, minimal. Monospaced timers, subtle haptics.
 
 ⸻
 
 5) Information Architecture
     •    Home: Active timer, Today total, Recent Sessions list.
-    •    Insights: Weekly chart, tag filter, streak indicator, goal.
+    •    Insights: Weekly/daily charts, focus timeline, streak indicator, goal.
     •    Settings: Weekly goal, discard-short toggle, about/privacy.
 
 ⸻
@@ -104,9 +101,8 @@ final class FocusSession {
   @Attribute(.unique) var id: UUID
   var startedAt: Date
   var endedAt: Date?   // nil => in progress
-  var note: String?
   var moodScore: Int?
-  var tags: [String]
+  var project: Project?
 }
 
 @Model
@@ -114,6 +110,21 @@ final class Preferences {
   @Attribute(.unique) var id: String = "singleton"
   var weeklyGoalHours: Double // e.g., 40.0
   var discardShortSessions: Bool?
+  var softBlockEnabled: Bool
+  var softBlockSelectionData: Data?
+}
+
+@Model
+final class Project {
+  @Attribute(.unique) var id: UUID
+  var title: String
+  var createdAt: Date
+  var gradientIndex: Int
+  var softBlockEnabled: Bool
+  var softBlockSelectionData: Data?
+  var hardBlockEnabled: Bool
+  var hardBlockSelectionData: Data?
+  @Relationship(deleteRule: .nullify, inverse: \FocusSession.project) var sessions: [FocusSession]
 }
 
 Computed fields (not persisted): duration, dayKey = startOfDay(startedAt)
@@ -173,7 +184,7 @@ Goal: Pair‑program with a coding agent that proposes diffs, while Xcode builds
 
 10) Security & Privacy
     •    Default: on‑device only. No third‑party analytics by default.
-    •    Telemetry (optional): page views and feature events via app‑owned endpoint, opt‑in only; no session notes/tags.
+    •    Telemetry (optional): page views and feature events via app-owned endpoint, opt-in only; no session notes stored remotely.
     •    iCloud: end‑to‑end Apple infrastructure; always enabled when available.
     •    Clear privacy page outlining data handling.
 
@@ -205,7 +216,7 @@ Exploratory
 
 13) Release Plan
     •    v0.1 (Internal): Start/Stop, Today total, Weekly chart, Settings (weekly goal), history list.
-    •    v0.2: Tags, notes, streaks, Siri/Shortcuts (if prioritized).
+    •    v0.2: Notes, streaks, Siri/Shortcuts (if prioritized).
     •    v1.0 (TestFlight): iCloud sync, accessibility polish, telemetry opt‑in.
 
 App Store positioning: “A quiet, privacy‑first deep work timer with honest weekly insights.”
@@ -221,7 +232,7 @@ App Store positioning: “A quiet, privacy‑first deep work timer with honest w
 
 15) Appendix: Example Data
 
-id,started_at_iso8601,ended_at_iso8601,duration_s,tags,note
+id,started_at_iso8601,ended_at_iso8601,duration_s,project_id
 "e8c…",2025-08-25T08:32:10+03:00,2025-08-25T10:02:15+03:00,5405,"[coding,thesis]","chapter 2 outline"
 
 

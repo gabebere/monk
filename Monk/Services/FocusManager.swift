@@ -20,19 +20,35 @@ final class FocusManager: ObservableObject {
         startTicking()
         // Optionally purge short sessions on launch if the preference is enabled
         purgeShortSessionsIfNeeded()
+
+        if let activeProject = currentSession?.project {
+            if !HardBlockManager.shared.activateHardBlock(for: activeProject) {
+                reapplySoftBlockFromPreferences()
+            }
+        } else {
+            reapplySoftBlockFromPreferences()
+        }
     }
 
-    func start(tags: [String] = [], mood: Int? = nil) {
+    func start(project: Project? = nil, mood: Int? = nil) {
         guard currentSession == nil else { return }
-        let session = FocusSession(startedAt: Date(), endedAt: nil, moodScore: mood, feelings: [], tags: tags)
+        let session = FocusSession(startedAt: Date(),
+                                   endedAt: nil,
+                                   moodScore: mood,
+                                   project: project)
         modelContext.insert(session)
         try? modelContext.save()
         currentSession = session
         Haptics.light()
+
+        if let project {
+            _ = HardBlockManager.shared.activateHardBlock(for: project)
+        }
     }
 
     func stop() {
         guard let session = currentSession else { return }
+        let activeProject = session.project
         session.endedAt = Date()
         try? modelContext.save()
         // Discard session if shorter than threshold and preference is enabled
@@ -43,6 +59,11 @@ final class FocusManager: ObservableObject {
         currentSession = nil
         recalcTodayTotal()
         Haptics.success()
+
+        if activeProject != nil {
+            HardBlockManager.shared.deactivateHardBlock()
+        }
+        reapplySoftBlockFromPreferences()
     }
 
     func recalcTodayTotal(now: Date = .now) {
@@ -112,5 +133,22 @@ extension FocusManager {
             }
         }
         if didDelete { try? modelContext.save(); recalcTodayTotal(now: now) }
+    }
+}
+
+extension FocusManager {
+    func totalDuration(for project: Project, now: Date = .now) -> TimeInterval {
+        project.totalDuration(now: now)
+    }
+
+    func lastActivityDate(for project: Project) -> Date? {
+        project.mostRecentSessionDate
+    }
+
+    private func reapplySoftBlockFromPreferences() {
+        let descriptor = FetchDescriptor<Preferences>()
+        guard let prefs = (try? modelContext.fetch(descriptor))?.first else { return }
+        let selection = SoftBlockManager.shared.decodeSelection(from: prefs.softBlockSelectionData)
+        SoftBlockManager.shared.apply(selection: selection, enabled: prefs.softBlockEnabled)
     }
 }
