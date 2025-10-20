@@ -51,16 +51,16 @@ Organization
 AC: Saved as part of each session and editable later.
     •    Projects: Create projects with unique visual identity, assign sessions, and configure per-project hard blocking.
 AC: User selects a project (or “none”) on session start; hours roll up per project; project hard block overrides global soft block during the session.
+    •    Live Activity (iPhone): While a focus session is running, show an ActivityKit view with elapsed time and title on the Lock Screen/Dynamic Island.
+AC: Requires enabling the MonkLiveActivities WidgetKit extension.
 
 Optional extensions (deferred)
     •    Shortcuts automation via App Intents.
 AC: Define start/stop intents that operate without opening the UI.
 
 Data & Sync
-    •    On‑device by default: All data stored locally.
-AC: App operates fully without sign‑in.
-    •    iCloud sync: Automatically keeps sessions in sync across devices when CloudKit is configured.
-AC: CloudKit container; conflict resolution = last‑writer‑wins for edits, duplicate resolution on create.
+    •    SwiftData + CloudKit: Focus sessions, projects, and preferences sync via private CloudKit container `iCloud.com.gbr.Monk`.
+AC: Schema provisions in CloudKit; last-writer-wins merges; new devices see existing data after login.
 
 Settings
     •    Weekly goal: Set hours/week (e.g., 40h).

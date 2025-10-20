@@ -6,12 +6,12 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 - Data & Persistence
   - `Monk/Models/FocusSession.swift` (SwiftData `@Model`):
-    - Fields: `id: UUID @unique`, `startedAt: Date`, `endedAt: Date?` (nil=in‑progress), `moodScore: Int?`, `project: Project?`.
+    - Fields: `id: UUID @unique`, `startedAt: Date`, `endedAt: Date?` (nil=in-progress), `moodScore: Int?`, `project: Project?`.
     - Computed: `isInProgress`, `duration` (uses `endedAt ?? Date()`).
   - `Monk/Models/Preferences.swift` (SwiftData `@Model`):
     - Singleton: `id = "singleton"`.
     - Fields: `weeklyGoalHours: Double` (default 40.0), `discardShortSessions: Bool?`.
-  - App container: `Monk/MonkApp.swift` sets a shared `ModelContainer` with both models (`ModelConfiguration(isStoredInMemoryOnly: false)`).
+  - App container: `Monk/MonkApp.swift` sets a shared CloudKit-backed `ModelContainer` (private DB `iCloud.com.gbr.Monk`) so FocusSession/Project/Preferences sync across devices.
 
 - Focus Management (`Monk/Services/FocusManager.swift` – `@MainActor`)
   - Start/Stop with SwiftData persistence; prevents overlapping sessions.
@@ -33,12 +33,13 @@ This document is a detailed handoff for future sessions with Codex or other agen
 - Home (`Monk/Views/HomeView.swift`):
     - TimerCard with animated CTA and stop button; starting now opens a project picker sheet (including “None”).
     - Completed Session sheet (`CompletedSessionView`): celebrate, assign project, capture mood.
-    - Projects section: grid of project cards ordered by recent activity, quick create button, detail sheet with hard blocking + delete.
+    - Edit Session sheet (`Monk/Views/EditSessionView.swift`): view timing, adjust project, adjust mood.
+    - Projects section: grid of project cards ordered by recent activity, quick create button, detail sheet with rename, hard blocking, and delete.
+    - Live Activity support: starting a session spins up an ActivityKit live activity (after adding the Live Activities widget extension) and ends it when the session stops.
 - Insights (`Monk/Views/InsightsView.swift`):
-    - Mode toggle: Daily | Weekly.
-    - Daily view: focus timeline bar (24-hour capsule) highlighting when sessions occurred.
-    - Weekly view: bar chart for 7/14 days with goal RuleMark and streak computation; tap a bar to open the Day Detail list.
-    - Day Detail sheet: chronological session list with per-session duration and project label.
+    - Landing grid: compact two-column cards (plus full-width weekly-goal tile) highlighting weekly totals, satisfaction, consistency, prime hours, and rhythm with a palette keyed to the home gradient.
+    - Tapping any tile pushes a gradient-matched detail view with haptic-enabled week selector, Swift Charts visualisations, and historical context tuned for quick scanning.
+    - `InsightSnapshot` helper and reusable analyzer hooks pave the way for widget targets and lock-screen surfaces.
 - Settings (`Monk/Views/SettingsView.swift`):
     - Weekly goal picker (wheel), discard-short toggle.
     - Soft-block toggle and FamilyActivityPicker integration for choosing apps to shield.
@@ -59,6 +60,9 @@ This document is a detailed handoff for future sessions with Codex or other agen
 - Enable FamilyControls, ManagedSettings, DeviceActivity, and App Groups on the app target and every Screen Time extension (Shield UI, Shield Actions, Monitor, DeviceActivity report).
 - Users must grant Screen Time access the first time soft blocking is configured.
 - Ensure provisioning profiles include the `com.apple.familycontrols.shield-actions` entitlement so the quick-unlock handler can load.
+
+3) Live Activities
+- Enable Background Modes → Remote notifications for the app target, add the `activitykit` entitlement, and create a WidgetKit extension for `MonkLiveActivities`.
 
 3) Deployment targets
 - Recommended iOS 17+ (required for Charts overlay selection).
@@ -82,6 +86,30 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 - Session wrap-up
   - Stop an in-progress session → CompletedSessionView appears; assign a project + mood; saving persists and updates Insights.
+- Cloud sync
+  - Run the app on two devices/simulators logged into the same iCloud account; create/edit sessions/projects and confirm changes replicate.
+- Live Activity visible in Dynamic Island / Lock Screen
+  - After adding the `MonkLiveActivities` WidgetKit extension in Xcode, start a session on device (iOS 16.2+) and confirm the live activity appears and updates.
+
+## Temporal Insights Roadmap
+
+### Phase 1 — MVP (shipped)
+- Temporal summary card (total focus time, session count, satisfaction, streak).
+- Best Focus Window detection (2-hour rolling window, duration × satisfaction scoring).
+- Time-of-day bar chart (hourly aggregation with highlight for the best window).
+- Duration-weighted mood averages to ground all copy in recorded satisfaction.
+
+### Phase 2 — Correlations & Trends
+- Add weekly/monthly trend charts for focus hours, session counts, and satisfaction.
+- Compute consistency indices (stddev of start times and daily totals) and streak callouts.
+- Chart satisfaction vs. duration/time-of-day correlations with descriptive copy.
+- Acceptance: Insights tab surfaces at least two correlation views, all calculations back SwiftData sessions, and empty-state messaging covers sparse data.
+
+### Phase 3 — Contextual & Predictive Insights
+- Project-level insights (time allocation, satisfaction, efficiency score).
+- Weekly summary cards (total time, average satisfaction, top project, best day) reusable for notifications/widgets.
+- Forecasting hooks (predictive “try this next” recommendations, fatigue detector scaffolding).
+- Acceptance: Summary cards and project analytics available in UI, predictive surfaces pull from a reusable analyzer API, and all user-facing copy reflects on-device calculations.
 
 ## Remaining Work (Prioritized with Acceptance Criteria)
 
@@ -111,10 +139,23 @@ This document is a detailed handoff for future sessions with Codex or other agen
 - Verify the shield action extension schedules Device Activity successfully on device (needs entitlement + profiles regenerated after identifier fix).
 - AC: Tapping “Unlock briefly” triggers the 20s wait/120s unlock window; monitor logs show `Scheduled DeviceActivity…` without ManagedSettings errors.
 
-7) Testing expansion
+7) Live Activity widget target
+- Add a WidgetKit extension (`MonkLiveActivities`) and wire `MonkLiveActivities.swift` + Info.plist to that target so the ActivityKit configuration renders.
+- AC: Widget extension builds; live activity renders on Lock Screen and Dynamic Island.
+
+8) Temporal insights expansion (Phase 2)
+- Add correlation charts, variability metrics, and trend summaries from Phase 2 above.
+- AC: Time-of-day and trend charts cross-link, calculated metrics match CSV spot checks, and empty states cover <3 sessions.
+
+9) Predictive insights scaffolding (Phase 3)
+- Build analyzer hooks for project-based and forecast insights described above.
+- AC: Analyzer returns stubs for forecasts, summary cards render from live data, and push/notification copy can reuse the generated payloads.
+
+10) Testing expansion
 - Add unit tests:
   - FocusManager: start/stop invariants, today total across midnight.
   - Aggregation: weekly totals, streak logic, daily timeline segmentation (including DST boundaries).
+  - InsightsAnalyzer: hourly bucketing, best-window ranking, satisfaction weighting.
 - AC: Tests pass locally; cover critical logic paths.
 
 ## Architecture Map (Quick Reference)

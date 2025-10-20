@@ -31,7 +31,7 @@ struct ContentView: View {
                     }
                     .tabItem {
                         Label("", systemImage: "chart.bar.doc.horizontal")
-                            .accessibilityLabel("Data")
+                            .accessibilityLabel("Insights")
                     }
                     .tag(Tab.data)
 

@@ -733,9 +733,10 @@ private struct ProjectDetailView: View {
     @State private var showingHardBlockPicker = false
     @State private var authorizationDenied = false
     @State private var showDeleteConfirmation = false
+    @State private var editedTitle: String = ""
 
     private var totalHours: Double { focus.totalDuration(for: project) / 3600 }
-    private var sessionCount: Int { project.sessions.count }
+    private var sessionCount: Int { project.sessions?.count ?? 0 }
     private var sessionActive: Bool { focus.currentSession != nil }
 
     var body: some View {
@@ -755,6 +756,39 @@ private struct ProjectDetailView: View {
                     VStack(spacing: 28) {
                         if sessionActive {
                             BannerView(text: "Stop the active session to change hard blocking settings.")
+                        }
+
+                        ProjectFormCard(title: "Name",
+                                        subtitle: "Rename this project to keep things organized.",
+                                        icon: "pencil") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                TextField("Project name", text: $editedTitle)
+                                    .textInputAutocapitalization(.words)
+                                    .autocorrectionDisabled(false)
+                                    .padding()
+                                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .foregroundColor(.white)
+                                    .onSubmit { commitRename() }
+
+                                HStack {
+                                    Button {
+                                        commitRename()
+                                    } label: {
+                                        Text("Save name")
+                                            .font(.footnote.weight(.semibold))
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 10)
+                                            .background(Color.white.opacity(canCommitName ? 0.22 : 0.08), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(!canCommitName)
+                                    Spacer()
+                                }
+
+                                Text(nameHint)
+                                    .font(.footnote)
+                                    .foregroundStyle(.white.opacity(0.65))
+                            }
                         }
 
                         VStack(alignment: .leading, spacing: 8) {
@@ -881,6 +915,7 @@ private struct ProjectDetailView: View {
             if let stored = HardBlockManager.shared.decodeSelection(from: project.hardBlockSelectionData) {
                 hardBlockSelection = stored
             }
+            editedTitle = project.title
         }
         .onChange(of: hardBlockSelection) { _, newValue in
             guard !sessionActive else { return }
@@ -903,6 +938,26 @@ private struct ProjectDetailView: View {
         }, message: {
             Text("Existing sessions will remain but will no longer be associated with this project.")
         })
+    }
+
+    private var canCommitName: Bool {
+        let trimmed = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed != project.title
+    }
+
+    private var nameHint: String {
+        canCommitName ? "Tap save to apply the new name." : "Names can’t be empty."
+    }
+
+    private func commitRename() {
+        let trimmed = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            editedTitle = project.title
+            return
+        }
+        guard trimmed != project.title else { return }
+        project.title = trimmed
+        try? modelContext.save()
     }
 
     private var hardBlockSummary: String {

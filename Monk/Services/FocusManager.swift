@@ -1,6 +1,9 @@
 import Foundation
 import SwiftData
 import Combine
+#if canImport(ActivityKit)
+import ActivityKit
+#endif
 
 @MainActor
 final class FocusManager: ObservableObject {
@@ -41,6 +44,12 @@ final class FocusManager: ObservableObject {
         currentSession = session
         Haptics.light()
 
+#if canImport(ActivityKit)
+        if #available(iOS 16.2, *) {
+            LiveActivityManager.shared.startActivity(for: session)
+        }
+#endif
+
         if let project {
             _ = HardBlockManager.shared.activateHardBlock(for: project)
         }
@@ -63,6 +72,11 @@ final class FocusManager: ObservableObject {
         if activeProject != nil {
             HardBlockManager.shared.deactivateHardBlock()
         }
+#if canImport(ActivityKit)
+        if #available(iOS 16.2, *) {
+            LiveActivityManager.shared.endActivity(for: session)
+        }
+#endif
         reapplySoftBlockFromPreferences()
     }
 
@@ -101,6 +115,11 @@ final class FocusManager: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 if self.currentSession != nil { self.recalcTodayTotal() }
+#if canImport(ActivityKit)
+                if #available(iOS 16.2, *), let session = self.currentSession {
+                    LiveActivityManager.shared.updateActivity(for: session)
+                }
+#endif
                 self.objectWillChange.send() // keep timer updates flowing
             }
     }

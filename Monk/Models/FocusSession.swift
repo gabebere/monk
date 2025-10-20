@@ -3,9 +3,9 @@ import SwiftData
 
 @Model
 final class FocusSession {
-    @Attribute(.unique) var id: UUID
-    var startedAt: Date
-    var endedAt: Date? // nil => in progress
+    var id: UUID = Foundation.UUID()
+    var startedAt: Date = Foundation.Date()
+    var endedAt: Date?
     var moodScore: Int?
     var project: Project?
 
