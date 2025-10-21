@@ -8,14 +8,16 @@ final class LiveActivityManager {
     static let shared = LiveActivityManager()
 
     private var currentActivity: Activity<FocusSessionActivityAttributes>?
+    private var cachedSnapshot: FocusScoreSnapshot?
 
     private init() {}
 
-    func startActivity(for session: FocusSession) {
+    func startActivity(for session: FocusSession, focusSnapshot: FocusScoreSnapshot?) {
         guard LiveActivityManager.activitiesAvailable else { return }
         endActivity()
         let attributes = FocusSessionActivityAttributes(sessionID: session.id)
-        let state = makeState(for: session)
+        cachedSnapshot = focusSnapshot
+        let state = makeState(for: session, snapshot: cachedSnapshot)
         do {
             let content = ActivityContent(state: state, staleDate: nil)
             currentActivity = try Activity<FocusSessionActivityAttributes>.request(
@@ -27,10 +29,11 @@ final class LiveActivityManager {
         }
     }
 
-    func updateActivity(for session: FocusSession) {
+    func updateActivity(for session: FocusSession, focusSnapshot: FocusScoreSnapshot?) {
         guard LiveActivityManager.activitiesAvailable,
               let activity = currentActivity else { return }
-        let state = makeState(for: session)
+        if let focusSnapshot { cachedSnapshot = focusSnapshot }
+        let state = makeState(for: session, snapshot: cachedSnapshot)
         Task {
             let content = ActivityContent(state: state, staleDate: nil)
             await activity.update(content)
@@ -43,6 +46,7 @@ final class LiveActivityManager {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
         currentActivity = nil
+        cachedSnapshot = nil
     }
 
     func endActivity(for session: FocusSession) {
@@ -50,13 +54,27 @@ final class LiveActivityManager {
         endActivity()
     }
 
-    private func makeState(for session: FocusSession) -> FocusSessionActivityAttributes.ContentState {
+    private func makeState(for session: FocusSession, snapshot: FocusScoreSnapshot?, now: Date = .now) -> FocusSessionActivityAttributes.ContentState {
         let isPaused = session.endedAt != nil
-        let now = Date()
         let timerEnd = session.endedAt ?? now
+        let weeklyProjection = snapshot?.weeklyProjection
+        let dynamicTodayGoalHours = snapshot?.dynamicTodayGoalHours
+        let todayActualHours = snapshot?.todayActualHours ?? 0
+
         return FocusSessionActivityAttributes.ContentState(
-            title: session.project?.title,
-            startedAt: session.startedAt,
+            projectName: session.project?.title,
+            focusScore: snapshot?.score,
+            focusScoreDelta: snapshot?.delta,
+            focusScoreLabel: snapshot?.rating.rawValue,
+            weeklyGoalSeconds: weeklyProjection.map { $0.goalHours * 3600 },
+            weeklyCompletedSeconds: weeklyProjection.map { $0.actualHours * 3600 },
+            weeklyRemainingSeconds: weeklyProjection.map { $0.remainingHours * 3600 },
+            dailyTargetSeconds: snapshot.map { $0.dailyTargetHours * 3600 },
+            todayGoalSeconds: dynamicTodayGoalHours.map { max(0, $0) * 3600 },
+            todayCompletedSeconds: snapshot.map { $0.todayActualHours * 3600 },
+            todayRemainingSeconds: dynamicTodayGoalHours.map { goal in
+                max(0, goal - todayActualHours) * 3600
+            },
             timerInterval: session.startedAt...timerEnd,
             isPaused: isPaused
         )

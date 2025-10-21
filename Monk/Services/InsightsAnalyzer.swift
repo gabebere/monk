@@ -37,6 +37,133 @@ struct TemporalInsightsSummary {
     let bestWindow: BestFocusWindow?
     let dailySnapshots: [DaySnapshot]
     let activeDayCount: Int
+    let dailyHourlyTotals: [Date: [Int: TimeInterval]]
+}
+
+struct FocusScoreSnapshot {
+    struct Component: Identifiable {
+        enum Kind {
+            case goalPace
+            case primeAlignment
+        }
+
+        let kind: Kind
+        let title: String
+        let weight: Double
+        let normalizedValue: Double
+        let points: Double
+        let actualValue: Double
+        let targetValue: Double?
+        let hasData: Bool
+
+        var id: Kind { kind }
+        var maxPoints: Double { weight * 100 }
+        var progressFraction: Double {
+            guard maxPoints > 0 else { return 0 }
+            return max(0, min(points / maxPoints, 1))
+        }
+    }
+
+    struct DailyEntry: Identifiable {
+        let dayStart: Date
+        let score: Int
+        let goalRatio: Double
+        let primeRatio: Double?
+        let actualHours: Double
+        let targetHours: Double
+        let actualPrimeHours: Double
+        let expectedPrimeHours: Double
+
+        var id: Date { dayStart }
+    }
+
+    enum Rating: String {
+        case peakFlow = "Peak Flow"
+        case strongFocus = "Strong Focus"
+        case stable = "Stable"
+        case distracted = "Distracted"
+        case unfocused = "Unfocused"
+
+        init(score: Int) {
+            switch score {
+            case 90...: self = .peakFlow
+            case 75..<90: self = .strongFocus
+            case 60..<75: self = .stable
+            case 40..<60: self = .distracted
+            default: self = .unfocused
+            }
+        }
+    }
+
+    let score: Int
+    let rating: Rating
+    let delta: Int?
+    let components: [Component]
+    let today: DailyEntry?
+    let timeline: [DailyEntry]
+    let bestHours: [Int]
+    let dailyTargetHours: Double
+    let hasPrimeData: Bool
+    let weeklyProjection: WeeklyGoalProjection?
+    let dynamicTodayGoalHours: Double?
+
+    var hasData: Bool {
+        if today != nil { return true }
+        return hasPrimeData
+    }
+
+    var todayActualHours: Double {
+        if let projection = weeklyProjection {
+            return projection.todayActualHours
+        }
+        return today?.actualHours ?? 0
+    }
+
+    var todayRecommendedHours: Double {
+        if let projection = weeklyProjection {
+            return projection.todayRecommendedHours
+        }
+        return dailyTargetHours
+    }
+
+    var todayAdditionalHoursNeeded: Double {
+        if let dynamicGoal = dynamicTodayGoalHours {
+            let diff = dynamicGoal - todayActualHours
+            return diff > 0 ? diff : 0
+        }
+        if let projection = weeklyProjection {
+            return projection.todayAdditionalHoursNeeded
+        }
+        let diff = todayRecommendedHours - todayActualHours
+        return diff > 0 ? diff : 0
+    }
+
+    var weeklyGoalHours: Double? { weeklyProjection?.goalHours }
+    var weeklyActualHours: Double? { weeklyProjection?.actualHours }
+    var weeklyRemainingHours: Double? { weeklyProjection?.remainingHours }
+}
+
+struct WeeklyGoalProjection {
+    struct DayPlan: Identifiable {
+        let dayStart: Date
+        let actualHours: Double
+        let plannedHours: Double
+        let isFuture: Bool
+
+        var id: Date { dayStart }
+    }
+
+    let goalHours: Double
+    let actualHours: Double
+    let completionFraction: Double
+    let remainingHours: Double
+    let remainingDays: Int
+    let recommendedDailyHours: Double
+    let todayActualHours: Double
+    let todayRecommendedHours: Double
+    let todayAdditionalHoursNeeded: Double
+    let primeHourLabels: [String]
+    let dayPlans: [DayPlan]
 }
 
 struct TemporalInsightsConfig {
@@ -66,7 +193,8 @@ struct InsightsAnalyzer {
                 topHourMetrics: [],
                 bestWindow: nil,
                 dailySnapshots: [],
-                activeDayCount: 0
+                activeDayCount: 0,
+                dailyHourlyTotals: [:]
             )
         }
 
@@ -78,6 +206,7 @@ struct InsightsAnalyzer {
         var hourlyTotals: [Int: TimeInterval] = [:]
         var hourlyMoodSums: [Int: Double] = [:]
         var hourlyMoodWeights: [Int: TimeInterval] = [:]
+        var dailyHourlyTotals: [Date: [Int: TimeInterval]] = [:]
 
         var dailyTotals: [Date: TimeInterval] = [:]
         var dailyMoodSums: [Date: Double] = [:]
@@ -109,7 +238,8 @@ struct InsightsAnalyzer {
                 moodScore: session.moodScore,
                 totals: &hourlyTotals,
                 moodSums: &hourlyMoodSums,
-                moodWeights: &hourlyMoodWeights
+                moodWeights: &hourlyMoodWeights,
+                dailyHourTotals: &dailyHourlyTotals
             )
 
             for part in DateUtils.splitByDay(start: clippedStart, end: clippedEnd, calendar: calendar) {
@@ -173,7 +303,8 @@ struct InsightsAnalyzer {
             topHourMetrics: Array(topHourMetrics),
             bestWindow: bestWindow,
             dailySnapshots: dailySnapshots,
-            activeDayCount: activeDayCount
+            activeDayCount: activeDayCount,
+            dailyHourlyTotals: dailyHourlyTotals
         )
     }
 
@@ -185,6 +316,239 @@ struct InsightsAnalyzer {
             return summarize(sessions: sessions, now: now, config: config)
         }
         return summarize(sessions: sessions, now: shiftedNow, config: config)
+    }
+
+    func focusScore(sessions: [FocusSession],
+                    weeklyGoalHours: Double?,
+                    now: Date = .now,
+                    fallbackWeeklyGoal: Double = 40) -> FocusScoreSnapshot {
+        let config = TemporalInsightsConfig(lookbackDays: 14)
+        let summary = summarize(sessions: sessions, now: now, config: config)
+        let dailyTargetHours = max((weeklyGoalHours ?? fallbackWeeklyGoal) / 7, 0)
+        let dailyTargetSeconds = dailyTargetHours * 3600
+        let activeDayDivisor = max(1, summary.activeDayCount)
+
+        let primeHours = summary.hourlyMetrics
+            .sorted { $0.totalSeconds > $1.totalSeconds }
+            .prefix(4)
+            .map(\.hour)
+        let primeHourSet = Set(primeHours)
+
+        var expectedPrimePerHour: [Int: TimeInterval] = [:]
+        for hour in primeHours {
+            if let metric = summary.hourlyMetrics.first(where: { $0.hour == hour }) {
+                expectedPrimePerHour[hour] = metric.totalSeconds / Double(activeDayDivisor)
+            }
+        }
+
+        let weights = (goal: 0.65, prime: 0.35)
+        var entries: [FocusScoreSnapshot.DailyEntry] = []
+
+        for snapshot in summary.dailySnapshots {
+            let actualSeconds = snapshot.totalSeconds
+            let goalRatio: Double
+            if dailyTargetSeconds > 0 {
+                goalRatio = actualSeconds / dailyTargetSeconds
+            } else {
+                goalRatio = actualSeconds > 0 ? 1 : 0
+            }
+
+            let hourlyMap = summary.dailyHourlyTotals[snapshot.dayStart] ?? [:]
+            let actualPrimeSeconds = primeHourSet.reduce(0) { $0 + (hourlyMap[$1] ?? 0) }
+            let expectedPrimeSeconds = primeHourSet.reduce(0) { $0 + (expectedPrimePerHour[$1] ?? 0) }
+
+            let primeRatio: Double?
+            if expectedPrimeSeconds > 0 {
+                primeRatio = actualPrimeSeconds / expectedPrimeSeconds
+            } else if actualSeconds > 0 {
+                primeRatio = 1
+            } else {
+                primeRatio = nil
+            }
+
+            let normalizedGoal = min(max(goalRatio, 0), 1)
+            let normalizedPrime: Double
+            if let primeRatio {
+                normalizedPrime = min(max(primeRatio, 0), 1)
+            } else {
+                normalizedPrime = 0
+            }
+
+            let composite = (weights.goal * normalizedGoal) + (weights.prime * normalizedPrime)
+            let score = Int(round(composite * 100))
+
+            let entry = FocusScoreSnapshot.DailyEntry(
+                dayStart: snapshot.dayStart,
+                score: score,
+                goalRatio: goalRatio,
+                primeRatio: primeRatio,
+                actualHours: actualSeconds / 3600,
+                targetHours: dailyTargetHours,
+                actualPrimeHours: actualPrimeSeconds / 3600,
+                expectedPrimeHours: expectedPrimeSeconds / 3600
+            )
+            entries.append(entry)
+        }
+
+        let todayEntry = entries.last
+        let previousEntry = entries.dropLast().last
+        let delta = todayEntry.flatMap { today in previousEntry.map { today.score - $0.score } }
+
+        let components: [FocusScoreSnapshot.Component]
+        if let todayEntry {
+            let goalNormalized = min(max(todayEntry.goalRatio, 0), 1)
+            let primeHasData = todayEntry.primeRatio != nil
+            let primeNormalized: Double
+            if let primeRatio = todayEntry.primeRatio {
+                primeNormalized = min(max(primeRatio, 0), 1)
+            } else {
+                primeNormalized = 0
+            }
+
+            components = [
+                .init(
+                    kind: .goalPace,
+                    title: "Goal Pace",
+                    weight: weights.goal,
+                    normalizedValue: goalNormalized,
+                    points: weights.goal * goalNormalized * 100,
+                    actualValue: todayEntry.actualHours,
+                    targetValue: dailyTargetHours,
+                    hasData: dailyTargetHours > 0
+                ),
+                .init(
+                    kind: .primeAlignment,
+                    title: "Prime Hours",
+                    weight: weights.prime,
+                    normalizedValue: primeNormalized,
+                    points: weights.prime * primeNormalized * 100,
+                    actualValue: todayEntry.actualPrimeHours,
+                    targetValue: todayEntry.expectedPrimeHours,
+                    hasData: primeHasData
+                )
+            ]
+        } else {
+            components = []
+        }
+
+        let weeklyProjection = weeklyGoalProjection(sessions: sessions, weeklyGoalHours: weeklyGoalHours, now: now)
+        let dynamicTodayGoalHours = weeklyProjection.flatMap { projection -> Double? in
+            guard let weeklyGoalHours else { return nil }
+            let remainingHours = max(0, weeklyGoalHours - projection.actualHours)
+            guard remainingHours > 0 else { return 0 }
+            let todayStart = calendar.startOfDay(for: now)
+            guard let nextSunday = calendar.nextDate(after: todayStart,
+                                                     matching: DateComponents(weekday: 1),
+                                                     matchingPolicy: .nextTimePreservingSmallerComponents) else {
+                return nil
+            }
+
+            var days = 0
+            var cursor = todayStart
+            while cursor < nextSunday {
+                // Skip upcoming Sunday itself, but include today even if Sunday.
+                if calendar.component(.weekday, from: cursor) != 1 || calendar.isDate(cursor, inSameDayAs: todayStart) {
+                    days += 1
+                }
+                guard let nextDay = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+                cursor = nextDay
+            }
+
+            let divisor = max(1, days)
+            return remainingHours / Double(divisor)
+        }
+
+        return FocusScoreSnapshot(
+            score: todayEntry?.score ?? 0,
+            rating: FocusScoreSnapshot.Rating(score: todayEntry?.score ?? 0),
+            delta: delta,
+            components: components,
+            today: todayEntry,
+            timeline: entries,
+            bestHours: Array(primeHourSet).sorted(),
+            dailyTargetHours: dailyTargetHours,
+            hasPrimeData: expectedPrimePerHour.values.contains(where: { $0 > 0 }),
+            weeklyProjection: weeklyProjection,
+            dynamicTodayGoalHours: dynamicTodayGoalHours
+        )
+    }
+
+    func weeklyGoalProjection(sessions: [FocusSession],
+                              weeklyGoalHours: Double?,
+                              now: Date = .now) -> WeeklyGoalProjection? {
+        guard let weeklyGoalHours, weeklyGoalHours > 0 else { return nil }
+
+        let weekConfig = TemporalInsightsConfig(lookbackDays: 7)
+        let weekSummary = summarize(sessions: sessions, now: now, config: weekConfig)
+        let extendedSummary = summarize(sessions: sessions, now: now, config: TemporalInsightsConfig(lookbackDays: 14))
+
+        let daySnapshots = weekSummary.dailySnapshots.sorted { $0.dayStart < $1.dayStart }
+        let totalGoalSeconds = weeklyGoalHours * 3600
+        let totalActualSeconds = daySnapshots.reduce(0) { $0 + $1.totalSeconds }
+        let completionFraction = totalGoalSeconds > 0 ? min(1, totalActualSeconds / totalGoalSeconds) : 0
+
+        let todayStart = calendar.startOfDay(for: now)
+        let todaysSnapshot = daySnapshots.first { calendar.isDate($0.dayStart, inSameDayAs: todayStart) }
+        let todaysActualSeconds = todaysSnapshot?.totalSeconds ?? 0
+
+        let remainingTotalSeconds = max(0, totalGoalSeconds - totalActualSeconds)
+        let daysIncludingToday = max(1, daySnapshots.filter { $0.dayStart >= todayStart }.count)
+        let daysAfterToday = daySnapshots.filter { $0.dayStart > todayStart }.count
+
+        let recommendedDailyHours = daysIncludingToday > 0 ? (remainingTotalSeconds / Double(daysIncludingToday)) / 3600 : 0
+
+        let completedBeforeTodaySeconds = daySnapshots
+            .filter { $0.dayStart < todayStart }
+            .reduce(0) { $0 + $1.totalSeconds }
+        let remainingIncludingTodaySeconds = max(0, totalGoalSeconds - completedBeforeTodaySeconds)
+        let perDayIncludingTodayHours = (remainingIncludingTodaySeconds / Double(max(1, daysIncludingToday))) / 3600
+        let todayRecommendedHours = perDayIncludingTodayHours
+        let todayAdditionalHoursNeeded = max(0, todayRecommendedHours - (todaysActualSeconds / 3600))
+
+        let remainingAfterTodaySeconds = max(0, totalGoalSeconds - (completedBeforeTodaySeconds + todaysActualSeconds))
+        let futureDaysForPlan = max(1, daysAfterToday)
+        let plannedFutureHours = (remainingAfterTodaySeconds / Double(futureDaysForPlan)) / 3600
+
+        var dayPlans: [WeeklyGoalProjection.DayPlan] = []
+        for snapshot in daySnapshots {
+            let actualHours = snapshot.totalSeconds / 3600
+            let isFuture = snapshot.dayStart > todayStart
+            let plannedHours: Double
+            if snapshot.dayStart < todayStart {
+                plannedHours = actualHours
+            } else if calendar.isDate(snapshot.dayStart, inSameDayAs: todayStart) {
+                plannedHours = max(actualHours, todayRecommendedHours)
+            } else {
+                plannedHours = plannedFutureHours
+            }
+            dayPlans.append(
+                WeeklyGoalProjection.DayPlan(
+                    dayStart: snapshot.dayStart,
+                    actualHours: actualHours,
+                    plannedHours: plannedHours,
+                    isFuture: isFuture
+                )
+            )
+        }
+
+        let primeHourLabels: [String] = extendedSummary.hourlyMetrics
+            .sorted { $0.totalSeconds > $1.totalSeconds }
+            .prefix(3)
+            .map { hourRangeLabel(for: $0.hour) }
+
+        return WeeklyGoalProjection(
+            goalHours: weeklyGoalHours,
+            actualHours: totalActualSeconds / 3600,
+            completionFraction: completionFraction,
+            remainingHours: remainingTotalSeconds / 3600,
+            remainingDays: remainingTotalSeconds > 0 ? daysIncludingToday : 0,
+            recommendedDailyHours: recommendedDailyHours,
+            todayActualHours: todaysActualSeconds / 3600,
+            todayRecommendedHours: todayRecommendedHours,
+            todayAdditionalHoursNeeded: todayAdditionalHoursNeeded,
+            primeHourLabels: primeHourLabels,
+            dayPlans: dayPlans
+        )
     }
 
     func availableWeekOffsets(sessions: [FocusSession],
@@ -231,7 +595,8 @@ private extension InsightsAnalyzer {
                                  moodScore: Int?,
                                  totals: inout [Int: TimeInterval],
                                  moodSums: inout [Int: Double],
-                                 moodWeights: inout [Int: TimeInterval]) {
+                                 moodWeights: inout [Int: TimeInterval],
+                                 dailyHourTotals: inout [Date: [Int: TimeInterval]]) {
         var cursor = start
         while cursor < end {
             let hourStart = calendar.dateInterval(of: .hour, for: cursor)?.start ?? cursor
@@ -240,6 +605,10 @@ private extension InsightsAnalyzer {
             let seconds = segmentEnd.timeIntervalSince(cursor)
             let hour = calendar.component(.hour, from: hourStart)
             totals[hour, default: 0] += seconds
+            let dayStart = calendar.startOfDay(for: hourStart)
+            var dayHours = dailyHourTotals[dayStart] ?? [:]
+            dayHours[hour, default: 0] += seconds
+            dailyHourTotals[dayStart] = dayHours
             if let mood = moodScore {
                 let score = satisfactionScore(for: mood)
                 moodSums[hour, default: 0] += score * seconds
@@ -304,4 +673,19 @@ private extension InsightsAnalyzer {
         }
         return best
     }
+
+    func hourRangeLabel(for hour: Int) -> String {
+        var components = DateComponents()
+        components.hour = hour
+        let start = calendar.date(from: components) ?? Date()
+        let end = calendar.date(byAdding: .hour, value: 1, to: start) ?? start.addingTimeInterval(3600)
+        return "\(InsightsAnalyzer.hourFormatter.string(from: start)) - \(InsightsAnalyzer.hourFormatter.string(from: end))"
+    }
+
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateFormat = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: Locale.current) ?? "h a"
+        return formatter
+    }()
 }

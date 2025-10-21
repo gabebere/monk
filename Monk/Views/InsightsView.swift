@@ -18,28 +18,47 @@ struct InsightsView: View {
         analyzer.summarize(sessions: sessions, now: referenceNow)
     }
 
+    private var focusScoreSnapshot: FocusScoreSnapshot {
+        analyzer.focusScore(
+            sessions: sessions,
+            weeklyGoalHours: weeklyGoalHours,
+            now: referenceNow
+        )
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
                 AnimatingBackground(base: Theme.dataBackground(), halo: Theme.dataHaloGradient)
                 ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
-                        if let goalHours = weeklyGoalHours, goalHours > 0 {
-                            NavigationLink(value: InsightRoute.weeklyGoal) {
-                                InsightTile(model: weeklyGoalTile(summary: summary, goalHours: goalHours))
-                            }
-                            .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
-                        }
+                    LazyVStack(spacing: InsightsLayout.verticalSpacing) {
+                        FocusScoreCard(model: focusScoreSnapshot, palette: InsightPalette.focusScore)
+                            .frame(maxWidth: .infinity)
+                            .aspectRatio(InsightsLayout.focusScoreAspectRatio, contentMode: .fit)
+                            .padding(.bottom, InsightsLayout.focusScoreGap)
 
-                        ForEach(tileModels(summary: summary)) { tile in
-                            NavigationLink(value: tile.route) {
-                                InsightTile(model: tile)
+                        LazyVGrid(columns: gridColumns, spacing: InsightsLayout.verticalSpacing) {
+                            if let goalHours = weeklyGoalHours, goalHours > 0 {
+                                NavigationLink(value: InsightRoute.weeklyGoal) {
+                                    InsightTile(model: weeklyGoalTile(summary: summary, goalHours: goalHours))
+                                }
+                                .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
                             }
-                            .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
+
+                            ForEach(tileModels(summary: summary)) { tile in
+                                NavigationLink(value: tile.route) {
+                                    InsightTile(model: tile)
+                                }
+                                .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
+                            }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 32)
+                    .padding(.horizontal, InsightsLayout.horizontalPadding)
+                    .padding(.top, InsightsLayout.topPadding)
+                    .padding(.bottom, InsightsLayout.bottomPadding)
+                }
+                .safeAreaInset(edge: .bottom) {
+                    Color.clear.frame(height: InsightsLayout.bottomInset)
                 }
             }
             .navigationTitle("Insights")
@@ -69,7 +88,8 @@ struct InsightsView: View {
     }
 
     private var gridColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
+        [GridItem(.flexible(), spacing: InsightsLayout.verticalSpacing),
+         GridItem(.flexible(), spacing: InsightsLayout.verticalSpacing)]
     }
 
     private func weeklyGoalTile(summary: TemporalInsightsSummary, goalHours: Double) -> InsightTileModel {
@@ -210,6 +230,264 @@ private enum InsightKind: CaseIterable {
     }
 }
 
+private enum InsightsLayout {
+    static let horizontalPadding: CGFloat = 20
+    static let verticalSpacing: CGFloat = 16
+    static let topPadding: CGFloat = 56
+    static let bottomPadding: CGFloat = 48
+    static let bottomInset: CGFloat = 72
+    static let focusScoreAspectRatio: CGFloat = 2.0
+    static let focusScoreGap: CGFloat = 28
+}
+
+private struct FocusScoreCard: View {
+    let model: FocusScoreSnapshot
+    let palette: InsightPalette.Colors
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let height = proxy.size.height
+            let ringSize = min(height * 0.44, width * 0.26)
+            let sectionSpacing: CGFloat = 8
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(InsightPalette.gradient(for: palette))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+                    .shadow(color: palette.primary.opacity(0.18), radius: 16, x: 0, y: 10)
+
+                VStack(alignment: .leading, spacing: sectionSpacing) {
+                    Label {
+                        Text("Focus Score")
+                            .font(.headline)
+                            .foregroundStyle(Color.white.opacity(0.95))
+                    } icon: {
+                        Image(systemName: "scope")
+                            .foregroundStyle(Color.white.opacity(0.9))
+                    }
+
+                    HStack(alignment: .center, spacing: 12) {
+                        FocusScoreRing(model: model, diameter: ringSize)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(model.rating.rawValue)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Color.white)
+                                .minimumScaleFactor(0.85)
+                            if let delta = model.delta, model.hasData {
+                                FocusScoreDeltaBadge(delta: delta)
+                            } else {
+                                Text("Trailing \(model.timeline.count) days")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.white.opacity(0.75))
+                            }
+                            Text(summaryLine)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Color.white.opacity(0.78))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    Divider()
+                        .overlay(Color.white.opacity(0.15))
+
+                    if !model.components.isEmpty {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(model.components) { component in
+                                FocusScoreComponentColumn(component: component)
+                            }
+                        }
+                    } else {
+                        Text("Log focus sessions to unlock your personalized score.")
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.75))
+                    }
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, max(18, width * 0.06))
+            }
+        }
+    }
+
+    private var summaryLine: String {
+        guard let today = model.today else {
+            return "Focus metrics appear once you log sessions."
+        }
+
+        if model.dailyTargetHours > 0 {
+            return String(format: "%.1fh today • %.1fh target", today.actualHours, model.dailyTargetHours)
+        }
+
+        return String(format: "%.1fh focused today", today.actualHours)
+    }
+}
+
+private struct FocusScoreRing: View {
+    let model: FocusScoreSnapshot
+    let diameter: CGFloat
+    private let lineWidth: CGFloat = 12
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.15), lineWidth: lineWidth)
+            ForEach(segments) { segment in
+                Circle()
+                    .trim(from: segment.start, to: segment.end)
+                    .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(segment.color)
+                    .rotationEffect(.degrees(-90))
+            }
+            Text("\(model.score)")
+                .font(.system(size: diameter * 0.36, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color.white)
+        }
+        .frame(width: diameter, height: diameter)
+        .allowsHitTesting(false)
+    }
+
+    private struct Segment: Identifiable {
+        let kind: FocusScoreSnapshot.Component.Kind
+        let start: Double
+        let end: Double
+
+        var id: FocusScoreSnapshot.Component.Kind { kind }
+        var color: Color { FocusScoreStyling.color(for: kind) }
+    }
+
+    private var segments: [Segment] {
+        var items: [Segment] = []
+        var cursor: Double = 0
+        for component in model.components {
+            let length = max(0, min(component.points / 100, 1))
+            guard length > 0 else { continue }
+            let start = cursor
+            let end = min(cursor + length, 1)
+            items.append(Segment(kind: component.kind, start: start, end: end))
+            cursor = end
+        }
+        return items
+    }
+}
+
+private struct FocusScoreDeltaBadge: View {
+    let delta: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbolName)
+                .font(.caption.weight(.semibold))
+            Text(labelText)
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 12)
+        .background(backgroundColor)
+        .foregroundStyle(foregroundColor)
+        .clipShape(Capsule())
+    }
+
+    private var symbolName: String {
+        if delta > 0 { return "arrow.up" }
+        if delta < 0 { return "arrow.down" }
+        return "equal"
+    }
+
+    private var labelText: String {
+        if delta > 0 { return "Up \(delta) vs yesterday" }
+        if delta < 0 { return "Down \(abs(delta)) vs yesterday" }
+        return "Even with yesterday"
+    }
+
+    private var backgroundColor: Color {
+        if delta > 0 { return FocusScoreStyling.positiveBackground }
+        if delta < 0 { return FocusScoreStyling.negativeBackground }
+        return Color.white.opacity(0.18)
+    }
+
+    private var foregroundColor: Color {
+        if delta > 0 { return FocusScoreStyling.positiveForeground }
+        if delta < 0 { return FocusScoreStyling.negativeForeground }
+        return Color.white.opacity(0.9)
+    }
+}
+
+private struct FocusScoreComponentColumn: View {
+    let component: FocusScoreSnapshot.Component
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(FocusScoreStyling.color(for: component.kind).opacity(component.hasData ? 1 : 0.35))
+                    .frame(width: 7, height: 7)
+                Text(component.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(component.hasData ? 0.9 : 0.65))
+            }
+
+            Text(detailText)
+                .font(.caption2)
+                .foregroundStyle(Color.white.opacity(0.72))
+                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text(pointsLabel)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.white.opacity(0.9))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var pointsLabel: String {
+        let earned = Int(round(component.points))
+        let maxPoints = Int(round(component.maxPoints))
+        return "\(earned)/\(maxPoints)"
+    }
+
+    private var detailText: String {
+        switch component.kind {
+        case .goalPace:
+            let target = component.targetValue ?? 0
+            guard target > 0 else {
+                return String(format: "%.1fh today", component.actualValue)
+            }
+            return String(format: "%.1fh of %.1fh target", component.actualValue, target)
+        case .primeAlignment:
+            guard component.hasData else {
+                return "Need more data for prime hours"
+            }
+            let target = component.targetValue ?? 0
+            guard target > 0 else {
+                return String(format: "%.1fh in prime", component.actualValue)
+            }
+            return String(format: "%.1fh of %.1fh prime", component.actualValue, target)
+        }
+    }
+}
+
+private enum FocusScoreStyling {
+    static func color(for kind: FocusScoreSnapshot.Component.Kind) -> Color {
+        switch kind {
+        case .goalPace:
+            return Color(red: 0.33, green: 0.64, blue: 0.99)
+        case .primeAlignment:
+            return Color(red: 0.39, green: 0.82, blue: 0.67)
+        }
+    }
+
+    static let positiveBackground = Color(red: 0.36, green: 0.82, blue: 0.58).opacity(0.22)
+    static let positiveForeground = Color.white
+    static let negativeBackground = Color(red: 0.94, green: 0.45, blue: 0.37).opacity(0.22)
+    static let negativeForeground = Color.white
+}
+
 private struct InsightTileModel: Identifiable {
     let id = UUID()
     let route: InsightRoute
@@ -265,29 +543,33 @@ private struct InsightTile: View {
 private enum InsightPalette {
     typealias Colors = (primary: Color, secondary: Color)
 
+    static let focusScore: Colors = (
+        Color(red: 0.27, green: 0.56, blue: 0.99),
+        Color(red: 0.60, green: 0.28, blue: 0.98)
+    )
     static let goal: Colors = (
-        Color(red: 0.30, green: 0.70, blue: 0.98),
-        Color(red: 0.08, green: 0.42, blue: 0.84)
+        Color(red: 0.33, green: 0.76, blue: 0.86),
+        Color(red: 0.20, green: 0.48, blue: 0.97)
     )
     static let focus: Colors = (
-        Color(red: 0.23, green: 0.58, blue: 0.96),
-        Color(red: 0.11, green: 0.34, blue: 0.70)
+        Color(red: 0.34, green: 0.64, blue: 0.99),
+        Color(red: 0.22, green: 0.30, blue: 0.64)
     )
     static let satisfaction: Colors = (
-        Color(red: 0.17, green: 0.79, blue: 0.72),
-        Color(red: 0.05, green: 0.52, blue: 0.62)
+        Color(red: 0.99, green: 0.62, blue: 0.45),
+        Color(red: 0.95, green: 0.30, blue: 0.55)
     )
     static let consistency: Colors = (
-        Color(red: 0.55, green: 0.42, blue: 0.97),
-        Color(red: 0.30, green: 0.23, blue: 0.68)
+        Color(red: 0.54, green: 0.43, blue: 0.99),
+        Color(red: 0.28, green: 0.21, blue: 0.58)
     )
     static let prime: Colors = (
-        Color(red: 0.93, green: 0.48, blue: 0.82),
-        Color(red: 0.68, green: 0.27, blue: 0.65)
+        Color(red: 0.99, green: 0.45, blue: 0.69),
+        Color(red: 0.58, green: 0.32, blue: 0.93)
     )
     static let rhythm: Colors = (
-        Color(red: 0.29, green: 0.60, blue: 0.94),
-        Color(red: 0.18, green: 0.42, blue: 0.74)
+        Color(red: 0.98, green: 0.80, blue: 0.36),
+        Color(red: 0.96, green: 0.48, blue: 0.31)
     )
 
     static func gradient(for colors: Colors) -> LinearGradient {

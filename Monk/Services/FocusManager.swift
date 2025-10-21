@@ -13,6 +13,8 @@ final class FocusManager: ObservableObject {
     private var timer: AnyCancellable?
     private let modelContext: ModelContext
     private let calendar: Calendar
+    private let insightsAnalyzer = InsightsAnalyzer()
+    private var focusScoreTickCounter = 0
 
     init(modelContext: ModelContext,
          calendar: Calendar = Calendar(identifier: .gregorian)) {
@@ -46,9 +48,11 @@ final class FocusManager: ObservableObject {
 
 #if canImport(ActivityKit)
         if #available(iOS 16.2, *) {
-            LiveActivityManager.shared.startActivity(for: session)
+            let snapshot = currentFocusScoreSnapshot()
+            LiveActivityManager.shared.startActivity(for: session, focusSnapshot: snapshot)
         }
 #endif
+        focusScoreTickCounter = 0
 
         if let project {
             _ = HardBlockManager.shared.activateHardBlock(for: project)
@@ -77,6 +81,7 @@ final class FocusManager: ObservableObject {
             LiveActivityManager.shared.endActivity(for: session)
         }
 #endif
+        focusScoreTickCounter = 0
         reapplySoftBlockFromPreferences()
     }
 
@@ -117,11 +122,27 @@ final class FocusManager: ObservableObject {
                 if self.currentSession != nil { self.recalcTodayTotal() }
 #if canImport(ActivityKit)
                 if #available(iOS 16.2, *), let session = self.currentSession {
-                    LiveActivityManager.shared.updateActivity(for: session)
+                    self.focusScoreTickCounter += 1
+                    if self.focusScoreTickCounter >= 5 {
+                        self.focusScoreTickCounter = 0
+                        let snapshot = self.currentFocusScoreSnapshot()
+                        LiveActivityManager.shared.updateActivity(for: session, focusSnapshot: snapshot)
+                    } else {
+                        LiveActivityManager.shared.updateActivity(for: session, focusSnapshot: nil)
+                    }
                 }
 #endif
                 self.objectWillChange.send() // keep timer updates flowing
             }
+    }
+
+    private func currentFocusScoreSnapshot(now: Date = .now) -> FocusScoreSnapshot? {
+        let sessions = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? []
+        guard !sessions.isEmpty else { return nil }
+        let prefs = (try? modelContext.fetch(FetchDescriptor<Preferences>()))
+            .flatMap { $0.first }
+        let weeklyGoal = prefs?.weeklyGoalHours
+        return insightsAnalyzer.focusScore(sessions: sessions, weeklyGoalHours: weeklyGoal, now: now)
     }
 
 }
