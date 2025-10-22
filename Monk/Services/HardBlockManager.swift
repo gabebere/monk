@@ -8,7 +8,9 @@ final class HardBlockManager {
 
     private let store = ManagedSettingsStore(named: .projectHardBlock)
 
-    private init() {}
+    private init() {
+        HardBlockStateStore.bootstrap()
+    }
 
     func ensureAuthorization() async -> Bool {
         let center = AuthorizationCenter.shared
@@ -35,6 +37,7 @@ final class HardBlockManager {
               AuthorizationCenter.shared.authorizationStatus == .approved,
               let selection = decodeSelection(from: project.hardBlockSelectionData),
               hasShieldableTargets(selection) else {
+            HardBlockStateStore.clear()
             return false
         }
 
@@ -52,6 +55,7 @@ final class HardBlockManager {
 
         store.shield.applicationCategories = categoryPolicy
         store.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
+        HardBlockStateStore.save(selection: selection, projectTitle: project.title)
         return true
     }
 
@@ -59,6 +63,7 @@ final class HardBlockManager {
         store.shield.applications = nil
         store.shield.applicationCategories = nil
         store.shield.webDomains = nil
+        HardBlockStateStore.clear()
     }
 
     func encodeSelection(_ selection: FamilyActivitySelection?) -> Data? {

@@ -5,25 +5,25 @@ import UIKit
 
 private enum SoftBlockShieldStrings {
     static func headline(for appName: String) -> String {
-        "\(appName) is softblocked"
+        "\(appName) can wait"
     }
 
-    static let focusReminder = "Monk is shielding distracting apps so you can stay in deep focus."
+    static let focusReminder = "Breathe. Monk is quietly holding distractions while you stay in flow."
 
     static func quickUnlockDetail(wait: TimeInterval, duration: TimeInterval) -> String {
         let waitString = formatted(seconds: Int(wait))
         let durationString = formatted(seconds: Int(duration))
-        return "Need a quick look? We can unlock after a \(waitString) pause for \(durationString)."
+        return "Need a quick peek? Pause for \(waitString) and enjoy \(durationString) of access."
     }
 
     static func waitingSubtitle(remaining: Int) -> String {
-        "Hang tight — unlock starts in \(formatted(seconds: remaining))."
+        "Almost there — unlock begins in \(formatted(seconds: remaining))."
     }
 
     static func unlockedSubtitle(remaining: Int) -> String {
         remaining > 0
-            ? "You have \(formatted(seconds: remaining)) before Monk re-engages the shield."
-            : "This app will lock again any second now."
+            ? "Enjoy your mini break — \(formatted(seconds: remaining)) left."
+            : "Monk is about to wrap this break."
     }
 
     private static func formatted(seconds: Int) -> String {
@@ -42,12 +42,47 @@ private enum SoftBlockShieldDurations {
 }
 
 private enum SoftBlockShieldPalette {
-    static let background = UIColor(red: 12 / 255, green: 14 / 255, blue: 24 / 255, alpha: 0.92)
-    static let surface = UIColor(red: 32 / 255, green: 38 / 255, blue: 62 / 255, alpha: 0.96)
-    static let primary = UIColor(red: 70 / 255, green: 158 / 255, blue: 255 / 255, alpha: 1.0)
-    static let caution = UIColor(red: 255 / 255, green: 115 / 255, blue: 92 / 255, alpha: 1.0)
+    static let background = UIColor(red: 28 / 255, green: 33 / 255, blue: 55 / 255, alpha: 0.94)
+    static let surface = UIColor(red: 57 / 255, green: 71 / 255, blue: 110 / 255, alpha: 0.95)
+    static let primaryButtonBackground = UIColor(red: 126 / 255, green: 199 / 255, blue: 255 / 255, alpha: 1.0)
+    static let primaryButtonText = UIColor(red: 5 / 255, green: 16 / 255, blue: 32 / 255, alpha: 0.95)
+    static let secondaryButtonText = UIColor(red: 146 / 255, green: 219 / 255, blue: 255 / 255, alpha: 1.0)
     static let textPrimary = UIColor(white: 0.96, alpha: 1.0)
     static let textSecondary = UIColor(white: 0.8, alpha: 1.0)
+}
+
+private enum HardBlockShieldPalette {
+    static let background = UIColor(red: 8 / 255, green: 10 / 255, blue: 20 / 255, alpha: 0.96)
+    static let surface = UIColor(red: 30 / 255, green: 33 / 255, blue: 50 / 255, alpha: 0.98)
+    static let buttonBackground = UIColor(red: 88 / 255, green: 108 / 255, blue: 227 / 255, alpha: 1.0)
+    static let buttonText = UIColor(white: 0.98, alpha: 1.0)
+    static let textPrimary = UIColor(white: 0.95, alpha: 1.0)
+    static let textSecondary = UIColor(white: 0.78, alpha: 1.0)
+}
+
+private enum HardBlockShieldStrings {
+    static func headline(appName: String, projectTitle: String?) -> String {
+        if let projectTitle, !projectTitle.isEmpty {
+            return "\(projectTitle) focus in progress"
+        }
+        return "Deep focus in progress"
+    }
+
+    static func subtitle(appName: String, projectTitle: String?) -> String {
+        if let projectTitle, !projectTitle.isEmpty {
+            return "\(appName) will reopen once \"\(projectTitle)\" focus wraps."
+        }
+        return "\(appName) opens again when this focus session ends."
+    }
+
+    static func webSubtitle(domain: String, projectTitle: String?) -> String {
+        if let projectTitle, !projectTitle.isEmpty {
+            return "\(domain) is unavailable while you focus on \(projectTitle)."
+        }
+        return "\(domain) is unavailable while Monk keeps you focused."
+    }
+
+    static let primaryLabel = "Back to focus"
 }
 
 private extension ShieldConfiguration.Label {
@@ -58,17 +93,30 @@ private extension ShieldConfiguration.Label {
     static func body(_ text: String) -> ShieldConfiguration.Label {
         .init(text: text, color: SoftBlockShieldPalette.textSecondary)
     }
+
+    static func hardTitle(_ text: String) -> ShieldConfiguration.Label {
+        .init(text: text, color: HardBlockShieldPalette.textPrimary)
+    }
+
+    static func hardBody(_ text: String) -> ShieldConfiguration.Label {
+        .init(text: text, color: HardBlockShieldPalette.textSecondary)
+    }
 }
 
 @objc final class SoftBlockShieldUIExtension: ShieldConfigurationDataSource {
     override init() {
         SoftBlockUnlockStore.bootstrap()
+        HardBlockStateStore.bootstrap()
         super.init()
     }
 
     override func configuration(shielding application: ManagedSettings.Application) -> ShieldConfiguration {
         SoftBlockUnlockStore.clearExpired()
         let displayName = application.localizedDisplayName ?? "This app"
+        if HardBlockStateStore.contains(application: application.token) || HardBlockStateStore.isActive {
+            return hardBlockConfiguration(appName: displayName)
+        }
+
         if let token = application.token, let record = SoftBlockUnlockStore.record(for: token) {
             return configuration(for: record, appName: displayName)
         }
@@ -76,19 +124,28 @@ private extension ShieldConfiguration.Label {
     }
 
     override func configuration(shielding application: ManagedSettings.Application, in category: ManagedSettings.ActivityCategory) -> ShieldConfiguration {
-        configuration(shielding: application)
+        if HardBlockStateStore.contains(category: category.token) {
+            return hardBlockConfiguration(appName: application.localizedDisplayName ?? "This app")
+        }
+        return configuration(shielding: application)
     }
 
     override func configuration(shielding webDomain: ManagedSettings.WebDomain) -> ShieldConfiguration {
+        if HardBlockStateStore.contains(webDomain: webDomain.token) || HardBlockStateStore.isActive {
+            return hardBlockWebConfiguration(domain: webDomain.domain ?? "This site")
+        }
         return baseConfiguration(
-            title: "Web access paused",
-            subtitle: "This website is shielded while Monk keeps you focused.",
-            primaryLabel: "Back to Monk"
+            title: "\(webDomain.domain ?? "This site") can wait",
+            subtitle: "Monk is keeping this site quiet while you focus.",
+            primaryLabel: "Back to focus"
         )
     }
 
     override func configuration(shielding webDomain: ManagedSettings.WebDomain, in category: ManagedSettings.ActivityCategory) -> ShieldConfiguration {
-        configuration(shielding: webDomain)
+        if HardBlockStateStore.contains(category: category.token) || HardBlockStateStore.contains(webDomain: webDomain.token) || HardBlockStateStore.isActive {
+            return hardBlockWebConfiguration(domain: webDomain.domain ?? "This site")
+        }
+        return configuration(shielding: webDomain)
     }
 
     private func promptConfiguration(appName: String) -> ShieldConfiguration {
@@ -102,8 +159,8 @@ private extension ShieldConfiguration.Label {
         return baseConfiguration(
             title: SoftBlockShieldStrings.headline(for: appName),
             subtitle: subtitleLines.joined(separator: "\n"),
-            primaryLabel: "Stay focused",
-            secondaryLabel: "Unlock briefly"
+            primaryLabel: "Unlock for 3 min",
+            secondaryLabel: "Back to focus"
         )
     }
 
@@ -123,7 +180,7 @@ private extension ShieldConfiguration.Label {
         return baseConfiguration(
             title: SoftBlockShieldStrings.headline(for: appName),
             subtitle: SoftBlockShieldStrings.waitingSubtitle(remaining: remaining),
-            primaryLabel: "Cancel unlock"
+            primaryLabel: "Never mind"
         )
     }
 
@@ -131,7 +188,35 @@ private extension ShieldConfiguration.Label {
         return baseConfiguration(
             title: SoftBlockShieldStrings.headline(for: appName),
             subtitle: SoftBlockShieldStrings.unlockedSubtitle(remaining: remaining),
-            primaryLabel: "Thanks, Monk"
+            primaryLabel: "Wrap it up"
+        )
+    }
+
+    private func hardBlockConfiguration(appName: String) -> ShieldConfiguration {
+        let projectTitle = HardBlockStateStore.projectTitle
+        return ShieldConfiguration(
+            backgroundBlurStyle: .systemUltraThinMaterialDark,
+            backgroundColor: HardBlockShieldPalette.background,
+            icon: nil,
+            title: .hardTitle(HardBlockShieldStrings.headline(appName: appName, projectTitle: projectTitle)),
+            subtitle: .hardBody(HardBlockShieldStrings.subtitle(appName: appName, projectTitle: projectTitle)),
+            primaryButtonLabel: .init(text: HardBlockShieldStrings.primaryLabel, color: HardBlockShieldPalette.buttonText),
+            primaryButtonBackgroundColor: HardBlockShieldPalette.buttonBackground,
+            secondaryButtonLabel: nil
+        )
+    }
+
+    private func hardBlockWebConfiguration(domain: String) -> ShieldConfiguration {
+        let projectTitle = HardBlockStateStore.projectTitle
+        return ShieldConfiguration(
+            backgroundBlurStyle: .systemUltraThinMaterialDark,
+            backgroundColor: HardBlockShieldPalette.background,
+            icon: nil,
+            title: .hardTitle(HardBlockShieldStrings.headline(appName: domain, projectTitle: projectTitle)),
+            subtitle: .hardBody(HardBlockShieldStrings.webSubtitle(domain: domain, projectTitle: projectTitle)),
+            primaryButtonLabel: .init(text: HardBlockShieldStrings.primaryLabel, color: HardBlockShieldPalette.buttonText),
+            primaryButtonBackgroundColor: HardBlockShieldPalette.buttonBackground,
+            secondaryButtonLabel: nil
         )
     }
 
@@ -147,9 +232,9 @@ private extension ShieldConfiguration.Label {
             icon: nil,
             title: .title(title),
             subtitle: .body(subtitle),
-            primaryButtonLabel: .init(text: primaryLabel, color: SoftBlockShieldPalette.textPrimary),
-            primaryButtonBackgroundColor: SoftBlockShieldPalette.surface,
-            secondaryButtonLabel: secondaryLabel.map { .init(text: $0, color: SoftBlockShieldPalette.caution) }
+            primaryButtonLabel: .init(text: primaryLabel, color: SoftBlockShieldPalette.primaryButtonText),
+            primaryButtonBackgroundColor: SoftBlockShieldPalette.primaryButtonBackground,
+            secondaryButtonLabel: secondaryLabel.map { .init(text: $0, color: SoftBlockShieldPalette.secondaryButtonText) }
         )
     }
 }

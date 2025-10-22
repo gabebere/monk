@@ -17,9 +17,23 @@ final class SoftBlockShieldActionExtension: ShieldActionDelegate {
     override func handle(action: ShieldAction, for application: ApplicationToken, completionHandler: @escaping (ShieldActionResponse) -> Void) {
         switch action {
         case .primaryButtonPressed:
-            completionHandler(.close)
+            if HardBlockStateStore.isActive && HardBlockStateStore.contains(application: application) {
+                completionHandler(.close)
+                return
+            }
+
+            if SoftBlockUnlockStore.record(for: application) != nil {
+                completionHandler(.defer)
+                return
+            }
+
+            logger.info("Scheduling soft block unlock for token \(String(describing: application), privacy: .public)")
+            scheduleUnlock(for: application, completionHandler: completionHandler)
+
         case .secondaryButtonPressed:
-            handleUnlockRequest(for: application, completionHandler: completionHandler)
+            cancelPendingUnlock(for: application)
+            completionHandler(.close)
+
         default:
             completionHandler(.none)
         }
@@ -35,13 +49,7 @@ final class SoftBlockShieldActionExtension: ShieldActionDelegate {
         completionHandler(.close)
     }
 
-    private func handleUnlockRequest(for application: ApplicationToken, completionHandler: @escaping (ShieldActionResponse) -> Void) {
-        if let existing = SoftBlockUnlockStore.record(for: application) {
-            logger.info("Unlock already pending for application token \(existing.id.uuidString)")
-            completionHandler(.defer)
-            return
-        }
-
+    private func scheduleUnlock(for application: ApplicationToken, completionHandler: @escaping (ShieldActionResponse) -> Void) {
         var selection = FamilyActivitySelection()
         selection.applicationTokens.insert(application)
 
@@ -51,23 +59,24 @@ final class SoftBlockShieldActionExtension: ShieldActionDelegate {
             return
         }
 
-        let id = UUID()
-        let unlockStart = Date().addingTimeInterval(waitDuration)
+        let now = Date()
+        let unlockStart = now.addingTimeInterval(waitDuration)
         let unlockEnd = unlockStart.addingTimeInterval(unlockDuration)
         let record = SoftBlockUnlockRecord(
-            id: id,
+            id: UUID(),
             selectionData: selectionData,
             unlockStart: unlockStart,
             unlockEnd: unlockEnd,
             waitDuration: waitDuration,
             unlockDuration: unlockDuration,
-            createdAt: Date()
+            createdAt: now
         )
 
         if scheduleDeviceActivity(for: record) {
             SoftBlockUnlockStore.upsert(record)
             completionHandler(.defer)
         } else {
+            logger.error("Failed to schedule DeviceActivity for unlock record \(record.id.uuidString, privacy: .public)")
             completionHandler(.none)
         }
     }
@@ -77,14 +86,15 @@ final class SoftBlockShieldActionExtension: ShieldActionDelegate {
         let name = DeviceActivity.DeviceActivityName(record.id.uuidString)
         center.stopMonitoring([name])
 
-        let calendar = Calendar.current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.autoupdatingCurrent
         let components: Set<Calendar.Component> = [.year, .month, .day, .hour, .minute, .second]
         var startComponents = calendar.dateComponents(components, from: record.unlockStart)
         var endComponents = calendar.dateComponents(components, from: record.unlockEnd)
         startComponents.calendar = calendar
-        startComponents.timeZone = TimeZone.current
+        startComponents.timeZone = calendar.timeZone
         endComponents.calendar = calendar
-        endComponents.timeZone = TimeZone.current
+        endComponents.timeZone = calendar.timeZone
 
         if let startDate = startComponents.date, let endDate = endComponents.date, endDate <= startDate,
            let adjustedEnd = calendar.date(byAdding: .day, value: 1, to: endDate) {
@@ -103,5 +113,12 @@ final class SoftBlockShieldActionExtension: ShieldActionDelegate {
             logger.error("Failed to start DeviceActivity monitoring: \(String(describing: error))")
             return false
         }
+    }
+
+    private func cancelPendingUnlock(for application: ApplicationToken) {
+        guard let record = SoftBlockUnlockStore.record(for: application) else { return }
+        SoftBlockUnlockStore.remove(id: record.id)
+        let center = DeviceActivityCenter()
+        center.stopMonitoring([DeviceActivity.DeviceActivityName(record.id.uuidString)])
     }
 }

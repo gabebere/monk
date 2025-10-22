@@ -21,7 +21,7 @@
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>
-        <string>com.apple.familycontrols.shield-actions</string>
+        <string>com.apple.familycontrols.shield-action</string>
         <key>NSExtensionPrincipalClass</key>
         <string>$(PRODUCT_MODULE_NAME).SoftBlockShieldActionExtension</string>
     </dict>

@@ -15,6 +15,7 @@ struct MonkApp: App {
 
     init() {
         SoftBlockUnlockStore.bootstrap()
+        HardBlockStateStore.bootstrap()
         // Global UINavigationBar appearance: white titles and buttons, transparent background
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
