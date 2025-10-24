@@ -6,8 +6,6 @@ final class Preferences {
     var id: String = "singleton"
     @Attribute(originalName: "dailyGoalHours") var weeklyGoalHours: Double = 40.0
     var discardShortSessions: Bool?
-    var softBlockEnabled: Bool = false
-    var softBlockSelectionData: Data?
 
     init(weeklyGoalHours: Double = 40.0, discardShortSessions: Bool? = nil) {
         self.weeklyGoalHours = weeklyGoalHours

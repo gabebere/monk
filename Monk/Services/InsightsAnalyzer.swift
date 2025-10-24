@@ -486,6 +486,7 @@ struct InsightsAnalyzer {
         let totalGoalSeconds = weeklyGoalHours * 3600
         let totalActualSeconds = daySnapshots.reduce(0) { $0 + $1.totalSeconds }
         let completionFraction = totalGoalSeconds > 0 ? min(1, totalActualSeconds / totalGoalSeconds) : 0
+        let baselineDailyHours = weeklyGoalHours / Double(max(1, daySnapshots.count))
 
         let todayStart = calendar.startOfDay(for: now)
         let todaysSnapshot = daySnapshots.first { calendar.isDate($0.dayStart, inSameDayAs: todayStart) }
@@ -495,19 +496,20 @@ struct InsightsAnalyzer {
         let daysIncludingToday = max(1, daySnapshots.filter { $0.dayStart >= todayStart }.count)
         let daysAfterToday = daySnapshots.filter { $0.dayStart > todayStart }.count
 
-        let recommendedDailyHours = daysIncludingToday > 0 ? (remainingTotalSeconds / Double(daysIncludingToday)) / 3600 : 0
-
         let completedBeforeTodaySeconds = daySnapshots
             .filter { $0.dayStart < todayStart }
             .reduce(0) { $0 + $1.totalSeconds }
         let remainingIncludingTodaySeconds = max(0, totalGoalSeconds - completedBeforeTodaySeconds)
         let perDayIncludingTodayHours = (remainingIncludingTodaySeconds / Double(max(1, daysIncludingToday))) / 3600
         let todayRecommendedHours = perDayIncludingTodayHours
-        let todayAdditionalHoursNeeded = max(0, todayRecommendedHours - (todaysActualSeconds / 3600))
+        let todayActualHours = todaysActualSeconds / 3600
+        let todayAdditionalHoursNeeded = max(0, todayRecommendedHours - todayActualHours)
 
         let remainingAfterTodaySeconds = max(0, totalGoalSeconds - (completedBeforeTodaySeconds + todaysActualSeconds))
-        let futureDaysForPlan = max(1, daysAfterToday)
-        let plannedFutureHours = (remainingAfterTodaySeconds / Double(futureDaysForPlan)) / 3600
+        let futureDaysForPlan = max(0, daysAfterToday)
+        let plannedFutureHours = futureDaysForPlan > 0 ? (remainingAfterTodaySeconds / Double(futureDaysForPlan)) / 3600 : 0
+        let remainingDaysCount = remainingTotalSeconds > 0 ? futureDaysForPlan + (todayAdditionalHoursNeeded > 0 ? 1 : 0) : 0
+        let recommendedDailyHours = remainingDaysCount > 0 ? (remainingTotalSeconds / 3600) / Double(remainingDaysCount) : 0
 
         var dayPlans: [WeeklyGoalProjection.DayPlan] = []
         for snapshot in daySnapshots {
@@ -515,7 +517,7 @@ struct InsightsAnalyzer {
             let isFuture = snapshot.dayStart > todayStart
             let plannedHours: Double
             if snapshot.dayStart < todayStart {
-                plannedHours = actualHours
+                plannedHours = baselineDailyHours
             } else if calendar.isDate(snapshot.dayStart, inSameDayAs: todayStart) {
                 plannedHours = max(actualHours, todayRecommendedHours)
             } else {
@@ -541,9 +543,9 @@ struct InsightsAnalyzer {
             actualHours: totalActualSeconds / 3600,
             completionFraction: completionFraction,
             remainingHours: remainingTotalSeconds / 3600,
-            remainingDays: remainingTotalSeconds > 0 ? daysIncludingToday : 0,
+            remainingDays: remainingDaysCount,
             recommendedDailyHours: recommendedDailyHours,
-            todayActualHours: todaysActualSeconds / 3600,
+            todayActualHours: todayActualHours,
             todayRecommendedHours: todayRecommendedHours,
             todayAdditionalHoursNeeded: todayAdditionalHoursNeeded,
             primeHourLabels: primeHourLabels,

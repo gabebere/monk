@@ -50,7 +50,6 @@ Organization
     •    Session mood: Quick slider between Bad / Neutral / Good.
 AC: Saved as part of each session and editable later.
     •    Projects: Create projects with unique visual identity, assign sessions, and configure per-project hard blocking.
-AC: User selects a project (or “none”) on session start; hours roll up per project; project hard block overrides global soft block during the session.
     •    Live Activity (iPhone): While a focus session is running, show an ActivityKit view with elapsed time and title on the Lock Screen/Dynamic Island.
 AC: Requires enabling the MonkLiveActivities WidgetKit extension.
 
@@ -67,7 +66,6 @@ Settings
 AC: Drives goal line, streak logic, and reminders.
     •    Privacy: Explicit statement; telemetry opt-in (default Off).
 AC: No data leaves device without explicit opt-in.
-    •    Soft blocking: Choose apps to shield during focus periods.
 AC: Toggle to enable; user picks apps via FamilyActivityPicker.
 
 Reliability & Edge cases

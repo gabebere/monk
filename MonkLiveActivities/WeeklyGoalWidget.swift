@@ -502,7 +502,7 @@ private struct WeeklyGoalDayColumn: View {
     let isToday: Bool
 
     private var barWidth: CGFloat { 28 }
-    private var cornerRadius: CGFloat { barWidth / 2 }
+    private let cornerRadius: CGFloat = 6
 
     private var weekdayLabel: String {
         WeekdayFormatter.shared.string(from: plan.dayStart)
@@ -518,13 +518,13 @@ private struct WeeklyGoalDayColumn: View {
     @ViewBuilder
     private func fillShape(height: CGFloat, style: some ShapeStyle, roundTop: Bool, roundBottom: Bool) -> some View {
         if height > 0 {
-            let cappedBottomRadius = roundBottom ? min(cornerRadius, height / 2) : 0
-            let topRadius = roundTop ? min(cornerRadius, height / 2) : 0
+            let topRadius = roundTop ? cornerRadius : 0
+            let bottomRadius = roundBottom ? cornerRadius : 0
             UnevenRoundedRectangle(
                 cornerRadii: .init(
                     topLeading: topRadius,
-                    bottomLeading: cappedBottomRadius,
-                    bottomTrailing: cappedBottomRadius,
+                    bottomLeading: bottomRadius,
+                    bottomTrailing: bottomRadius,
                     topTrailing: topRadius
                 )
             )
@@ -536,14 +536,14 @@ private struct WeeklyGoalDayColumn: View {
     var body: some View {
         let plannedRatio = min(max(plan.plannedHours / maxHours, 0), 1)
         let actualRatio = min(max(plan.actualHours / maxHours, 0), 1)
-        let minSegmentHeight: CGFloat = cornerRadius * 2
+        let minSegmentHeight: CGFloat = max(4, cornerRadius * 1.5)
         let plannedHeight = plannedRatio > 0 ? min(barHeight, max(barHeight * plannedRatio, minSegmentHeight)) : 0
-        let actualHeight = plan.actualHours > 0
-        ? min(barHeight, max(barHeight * actualRatio, minSegmentHeight))
-        : 0
-        let remainderHeight = max(plannedHeight - actualHeight, 0)
+        let baseActualHeight = plan.actualHours > 0
+            ? min(barHeight, max(barHeight * actualRatio, minSegmentHeight))
+            : 0
         let dayComplete = plan.actualHours >= max(plan.plannedHours, 0.01) - 0.05
-        let actualRoundsTop = dayComplete && actualHeight > 0
+        let actualHeight = dayComplete ? barHeight : min(baseActualHeight, plannedHeight)
+        let remainderHeight = plan.isFuture ? max(plannedHeight - actualHeight, 0) : 0
 
         VStack(spacing: 6) {
             ZStack(alignment: .bottom) {
@@ -551,7 +551,7 @@ private struct WeeklyGoalDayColumn: View {
                     .fill(WeeklyGoalWidgetPalette.progressTrack)
                     .frame(width: barWidth, height: barHeight)
 
-                if remainderHeight > 0 && plan.isFuture {
+                if remainderHeight > 0 {
                     fillShape(
                         height: remainderHeight,
                         style: WeeklyGoalWidgetPalette.accentGradient.opacity(0.35),
@@ -565,19 +565,31 @@ private struct WeeklyGoalDayColumn: View {
                     fillShape(
                         height: actualHeight,
                         style: WeeklyGoalWidgetPalette.accentGradient,
-                        roundTop: actualRoundsTop,
+                        roundTop: dayComplete,
                         roundBottom: true
                     )
                 }
             }
             .frame(width: barWidth, height: barHeight, alignment: .bottom)
-            .overlay(
+            .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
-                        isToday ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.45) : Color.clear,
-                        lineWidth: isToday ? 2 : 0
+                        dayComplete ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.35) : (isToday ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.45) : Color.clear),
+                        lineWidth: dayComplete ? 1.5 : (isToday ? 2 : 0)
                     )
-            )
+                    .shadow(
+                        color: dayComplete ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.12) : (isToday ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.18) : .clear),
+                        radius: dayComplete ? 2 : (isToday ? 3 : 0)
+                    )
+                    .overlay(alignment: .topTrailing) {
+                        if dayComplete {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
+                                .padding(4)
+                        }
+                    }
+            }
 
             Text(isToday ? "TODAY" : weekdayLabel.uppercased())
                 .font(.caption2.weight(.semibold))
@@ -587,7 +599,7 @@ private struct WeeklyGoalDayColumn: View {
 
             Text(footerLabel)
                 .font(.caption2)
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
+                .foregroundStyle(dayComplete ? WeeklyGoalWidgetPalette.titlePrimary : WeeklyGoalWidgetPalette.bodyMuted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }

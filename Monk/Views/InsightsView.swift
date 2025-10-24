@@ -32,10 +32,14 @@ struct InsightsView: View {
                 AnimatingBackground(base: Theme.dataBackground(), halo: Theme.dataHaloGradient)
                 ScrollView {
                     LazyVStack(spacing: InsightsLayout.verticalSpacing) {
-                        FocusScoreCard(model: focusScoreSnapshot, palette: InsightPalette.focusScore)
-                            .frame(maxWidth: .infinity)
-                            .aspectRatio(InsightsLayout.focusScoreAspectRatio, contentMode: .fit)
-                            .padding(.bottom, InsightsLayout.focusScoreGap)
+                        NavigationLink(value: InsightRoute.focusScore) {
+                            FocusScoreCard(model: focusScoreSnapshot, palette: InsightPalette.focusScore)
+                                .frame(maxWidth: .infinity)
+                                .aspectRatio(InsightsLayout.focusScoreAspectRatio, contentMode: .fit)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.bottom, InsightsLayout.focusScoreGap)
+                        .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
 
                         LazyVGrid(columns: gridColumns, spacing: InsightsLayout.verticalSpacing) {
                             if let goalHours = weeklyGoalHours, goalHours > 0 {
@@ -64,6 +68,14 @@ struct InsightsView: View {
             .navigationTitle("Insights")
             .navigationDestination(for: InsightRoute.self) { route in
                 switch route {
+                case .focusScore:
+                    FocusScoreDetailView(
+                        analyzer: analyzer,
+                        sessions: sessions,
+                        weeklyGoalHours: weeklyGoalHours,
+                        palette: InsightPalette.focusScore,
+                        now: referenceNow
+                    )
                 case .weeklyGoal:
                     WeeklyGoalDetailView(
                         sessions: sessions,
@@ -184,6 +196,7 @@ struct InsightsView: View {
 }
 
 private enum InsightRoute: Hashable {
+    case focusScore
     case weeklyGoal
     case focus
     case satisfaction
@@ -233,11 +246,11 @@ private enum InsightKind: CaseIterable {
 private enum InsightsLayout {
     static let horizontalPadding: CGFloat = 20
     static let verticalSpacing: CGFloat = 16
-    static let topPadding: CGFloat = 56
+    static let topPadding: CGFloat = 32
     static let bottomPadding: CGFloat = 48
     static let bottomInset: CGFloat = 72
     static let focusScoreAspectRatio: CGFloat = 2.0
-    static let focusScoreGap: CGFloat = 28
+    static let focusScoreGap: CGFloat = verticalSpacing
 }
 
 private struct FocusScoreCard: View {
@@ -702,6 +715,237 @@ private struct WeeklyGoalDetailView: View {
         formatter.setLocalizedDateFormatFromTemplate("EEE")
         return formatter
     }()
+}
+
+private struct FocusScoreDetailView: View {
+    let analyzer: InsightsAnalyzer
+    let sessions: [FocusSession]
+    let weeklyGoalHours: Double?
+    let palette: InsightPalette.Colors
+    let now: Date
+
+    private var snapshot: FocusScoreSnapshot {
+        analyzer.focusScore(sessions: sessions, weeklyGoalHours: weeklyGoalHours, now: now)
+    }
+
+    private var timeline: [FocusScoreSnapshot.DailyEntry] {
+        snapshot.timeline.sorted { $0.dayStart < $1.dayStart }
+    }
+
+    var body: some View {
+        let gradient = InsightPalette.gradient(for: palette)
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                MetricCapsules(metrics: summaryMetrics)
+
+                focusTrend
+
+                if !snapshot.components.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Score components")
+                            .font(.headline)
+                            .foregroundStyle(Color.white.opacity(0.9))
+                        FocusScoreComponentRow(components: snapshot.components)
+                    }
+                }
+
+                if !snapshot.bestHours.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Prime focus windows")
+                            .font(.headline)
+                            .foregroundStyle(Color.white.opacity(0.9))
+                        HStack(spacing: 10) {
+                            ForEach(snapshot.bestHours.prefix(3), id: \.self) { hour in
+                                Text(hourLabel(hour))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.white.opacity(0.85))
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 10)
+                                    .background(Color.white.opacity(0.18), in: Capsule())
+                            }
+                        }
+                    }
+                }
+
+                if !timeline.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Daily history")
+                            .font(.headline)
+                            .foregroundStyle(Color.white.opacity(0.9))
+                        ForEach(timeline.reversed()) { entry in
+                            FocusScoreHistoryRow(entry: entry)
+                        }
+                    }
+                } else {
+                    Text("Focus score history appears once you log a few sessions.")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.white.opacity(0.75))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(20)
+        }
+        .background(gradient.ignoresSafeArea())
+        .navigationTitle("Focus Score")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var summaryMetrics: [Metric] {
+        var items: [Metric] = [
+            Metric(title: "Score", value: "\(snapshot.score)"),
+            Metric(title: "Rating", value: snapshot.rating.rawValue)
+        ]
+        if let delta = snapshot.delta {
+            let symbol = delta > 0 ? "+" : (delta < 0 ? "−" : "±")
+            let amount = abs(delta)
+            let label = delta == 0 ? "No change" : "\(symbol)\(amount) vs yesterday"
+            items.append(Metric(title: "Change", value: label))
+        }
+        return items
+    }
+
+    @ViewBuilder
+    private var focusTrend: some View {
+        if timeline.isEmpty {
+            Text("No history yet. Come back after you’ve logged more days.")
+                .font(.subheadline)
+                .foregroundStyle(Color.white.opacity(0.75))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Chart {
+                ForEach(timeline) { entry in
+                    LineMark(
+                        x: .value("Day", entry.dayStart),
+                        y: .value("Score", entry.score)
+                    )
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    PointMark(
+                        x: .value("Day", entry.dayStart),
+                        y: .value("Score", entry.score)
+                    )
+                    .symbolSize(32)
+                    .foregroundStyle(Color.white)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisValueLabel("\(value.as(Int.self) ?? 0)")
+                        .foregroundStyle(Color.white.opacity(0.7))
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: timeline.map(\.dayStart)) { value in
+                    if let date = value.as(Date.self) {
+                        AxisValueLabel {
+                            Text(date, format: .dateTime.weekday(.abbreviated))
+                        }
+                        .foregroundStyle(Color.white.opacity(0.7))
+                    }
+                }
+            }
+            .frame(height: 220)
+        }
+    }
+
+    private func hourLabel(_ hour: Int) -> String {
+        var comps = DateComponents()
+        comps.hour = hour
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: comps) ?? now
+        return Self.hourFormatter.string(from: date)
+    }
+
+    private static let hourFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("HH")
+        return formatter
+    }()
+}
+
+private struct FocusScoreComponentRow: View {
+    let components: [FocusScoreSnapshot.Component]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(components) { component in
+                FocusScoreComponentColumn(component: component)
+            }
+        }
+    }
+}
+
+private struct FocusScoreHistoryRow: View {
+    let entry: FocusScoreSnapshot.DailyEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(Self.dayFormatter.string(from: entry.dayStart))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.8))
+                Spacer()
+                Text("\(entry.score)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.white)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(Color.white.opacity(0.18), in: Capsule())
+            }
+
+            ProgressStripe(label: "Goal pace", ratio: entry.goalRatio)
+
+            if let primeRatio = entry.primeRatio {
+                ProgressStripe(label: "Prime time", ratio: primeRatio)
+            }
+
+            HStack(spacing: 6) {
+                Text(String(format: "%.1fh actual", entry.actualHours))
+                    .font(.caption2)
+                    .foregroundStyle(Color.white.opacity(0.65))
+                Text("•")
+                    .foregroundStyle(Color.white.opacity(0.4))
+                Text(String(format: "%.1fh target", entry.targetHours))
+                    .font(.caption2)
+                    .foregroundStyle(Color.white.opacity(0.65))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("EEE")
+        return formatter
+    }()
+
+    private struct ProgressStripe: View {
+        let label: String
+        let ratio: Double
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(Color.white.opacity(0.6))
+                GeometryReader { geo in
+                    let width = geo.size.width * CGFloat(min(max(ratio, 0), 1))
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.white.opacity(0.12))
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.white.opacity(0.75))
+                            .frame(width: max(4, width))
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+    }
 }
 
 private struct InsightDetailView: View {

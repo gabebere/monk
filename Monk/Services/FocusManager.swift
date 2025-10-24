@@ -27,11 +27,7 @@ final class FocusManager: ObservableObject {
         purgeShortSessionsIfNeeded()
 
         if let activeProject = currentSession?.project {
-            if !HardBlockManager.shared.activateHardBlock(for: activeProject) {
-                reapplySoftBlockFromPreferences()
-            }
-        } else {
-            reapplySoftBlockFromPreferences()
+            _ = HardBlockManager.shared.activateHardBlock(for: activeProject)
         }
     }
 
@@ -82,7 +78,7 @@ final class FocusManager: ObservableObject {
         }
 #endif
         focusScoreTickCounter = 0
-        reapplySoftBlockFromPreferences()
+        
     }
 
     func recalcTodayTotal(now: Date = .now) {
@@ -185,10 +181,4 @@ extension FocusManager {
         project.mostRecentSessionDate
     }
 
-    private func reapplySoftBlockFromPreferences() {
-        let descriptor = FetchDescriptor<Preferences>()
-        guard let prefs = (try? modelContext.fetch(descriptor))?.first else { return }
-        let selection = SoftBlockManager.shared.decodeSelection(from: prefs.softBlockSelectionData)
-        SoftBlockManager.shared.apply(selection: selection, enabled: prefs.softBlockEnabled)
-    }
 }

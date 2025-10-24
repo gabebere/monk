@@ -592,7 +592,7 @@ private struct NewProjectView: View {
                                         Text("Enable project hard blocking")
                                             .font(.headline.weight(.medium))
                                             .foregroundStyle(.white)
-                                        Text("Overrides your global soft block list while focusing on this project.")
+                                        Text("Locks away distractions tailored to this project.")
                                             .font(.footnote)
                                             .foregroundStyle(.white.opacity(0.7))
                                     }
@@ -819,7 +819,7 @@ private struct ProjectDetailView: View {
                                         Text("Enable project hard blocking")
                                             .font(.headline.weight(.medium))
                                             .foregroundStyle(.white)
-                                        Text("Overrides the global soft block list while you focus on this project.")
+                                        Text("Keeps distracting apps and sites locked whenever this project is active.")
                                             .font(.footnote)
                                             .foregroundStyle(.white.opacity(0.7))
                                     }
@@ -849,7 +849,6 @@ private struct ProjectDetailView: View {
                                             authorizationDenied = false
                                             if focus.currentSession?.project?.id == project.id {
                                                 HardBlockManager.shared.deactivateHardBlock()
-                                                reapplySoftBlockLayer()
                                             }
                                         }
                                         try? modelContext.save()
@@ -925,7 +924,6 @@ private struct ProjectDetailView: View {
             if newValue.isEmpty {
                 if focus.currentSession?.project?.id == project.id {
                     HardBlockManager.shared.deactivateHardBlock()
-                    reapplySoftBlockLayer()
                 }
             } else if focus.currentSession?.project?.id == project.id {
                 _ = HardBlockManager.shared.activateHardBlock(for: project)
@@ -985,18 +983,10 @@ private struct ProjectDetailView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func reapplySoftBlockLayer() {
-        let descriptor = FetchDescriptor<Preferences>()
-        guard let prefs = (try? modelContext.fetch(descriptor))?.first else { return }
-        let selection = SoftBlockManager.shared.decodeSelection(from: prefs.softBlockSelectionData)
-        SoftBlockManager.shared.apply(selection: selection, enabled: prefs.softBlockEnabled)
-    }
-
     private func deleteProject() {
         if let session = focus.currentSession, session.project?.id == project.id {
             session.project = nil
             HardBlockManager.shared.deactivateHardBlock()
-            reapplySoftBlockLayer()
         }
         modelContext.delete(project)
         try? modelContext.save()

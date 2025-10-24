@@ -14,7 +14,6 @@ struct MonkApp: App {
     @UIApplicationDelegateAdaptor(MonkAppDelegate.self) private var appDelegate
 
     init() {
-        SoftBlockUnlockStore.bootstrap()
         HardBlockStateStore.bootstrap()
         // Global UINavigationBar appearance: white titles and buttons, transparent background
         let appearance = UINavigationBarAppearance()

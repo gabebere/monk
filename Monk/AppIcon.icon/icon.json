@@ -1,24 +1,32 @@
 {
-  "fill" : {
-    "linear-gradient" : [
-      "srgb:0.34379,0.20815,0.90334,1.00000",
-      "extended-srgb:0.00000,0.53333,1.00000,1.00000"
-    ]
-  },
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "display-p3:0.13721,0.12549,0.31372,1.00000",
+          "display-p3:0.23535,0.49805,0.60400,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "linear-gradient" : [
+          "display-p3:0.13721,0.12549,0.31372,1.00000",
+          "display-p3:0.23535,0.49805,0.60400,1.00000"
+        ]
+      }
+    }
+  ],
   "groups" : [
     {
-      "blur-material" : 0.5,
       "layers" : [
         {
-          "blend-mode" : "normal",
-          "fill" : {
-            "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
-          },
-          "hidden" : false,
-          "image-name" : "8880b06d-85b0-47cd-9c16-a3f08ba80381_removalai_preview.png",
-          "name" : "8880b06d-85b0-47cd-9c16-a3f08ba80381_removalai_preview",
+          "glass" : false,
+          "image-name" : "monklogotransparent.png",
+          "name" : "monklogotransparent",
           "position" : {
-            "scale" : 1.8,
+            "scale" : 0.9,
             "translation-in-points" : [
               0,
               0
@@ -26,14 +34,12 @@
           }
         }
       ],
-      "lighting" : "individual",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
       },
-      "specular" : false,
       "translucency" : {
-        "enabled" : false,
+        "enabled" : true,
         "value" : 0.5
       }
     }

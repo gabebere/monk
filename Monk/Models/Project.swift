@@ -6,8 +6,6 @@ final class Project {
     var id: UUID = Foundation.UUID()
     var title: String = ""
     var createdAt: Date = Foundation.Date()
-    var softBlockEnabled: Bool = false
-    var softBlockSelectionData: Data?
     var gradientIndex: Int = 0
     var hardBlockEnabled: Bool = false
     var hardBlockSelectionData: Data?
@@ -16,16 +14,12 @@ final class Project {
     init(id: UUID = UUID(),
          title: String,
          createdAt: Date = .now,
-         softBlockEnabled: Bool = false,
-         softBlockSelectionData: Data? = nil,
          gradientIndex: Int = 0,
          hardBlockEnabled: Bool = false,
          hardBlockSelectionData: Data? = nil) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
-        self.softBlockEnabled = softBlockEnabled
-        self.softBlockSelectionData = softBlockSelectionData
         self.gradientIndex = gradientIndex
         self.hardBlockEnabled = hardBlockEnabled
         self.hardBlockSelectionData = hardBlockSelectionData

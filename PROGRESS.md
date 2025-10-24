@@ -17,12 +17,8 @@ This document is a detailed handoff for future sessions with Codex or other agen
   - Start/Stop with SwiftData persistence; prevents overlapping sessions.
   - Haptics on start/stop (`Monk/Utilities/Haptics.swift`).
   - Today total: recalculates every second while active; correctly clamps sessions that span midnight.
-- Soft Blocking (`Monk/Services/SoftBlockManager.swift`, `SoftBlock*` extensions)
-  - Manages Screen Time shields for the user-selected set of “soft blocked” apps using ManagedSettings.
   - Applies a custom shield configuration with the requested copy and actions when enabled.
   - Shield UI now matches Monk’s brand palette and explains the quick-unlock flow; durations pulled from shared constants so UI and logic stay in sync.
-  - Shield Action and Monitor extensions bootstrap the shared app-group container and persist unlock requests via JSON (`Monk/Shared/SoftBlockUnlockStore.swift`) instead of `UserDefaults`, removing the sandbox warnings.
-  - Device Activity entitlements in app + extensions are required; `SoftBlockShieldActionExtension` uses the corrected `com.apple.familycontrols.shield-actions` identifier so the unlock handler can load.
 
 - Utilities
   - `Monk/Utilities/DateUtils.swift`: `splitByDay(start:end:)` segments time across day boundaries.
@@ -42,7 +38,6 @@ This document is a detailed handoff for future sessions with Codex or other agen
     - `InsightSnapshot` helper and reusable analyzer hooks pave the way for widget targets and lock-screen surfaces.
 - Settings (`Monk/Views/SettingsView.swift`):
     - Weekly goal picker (wheel), discard-short toggle.
-    - Soft-block toggle and FamilyActivityPicker integration for choosing apps to shield.
 
 - Shortcuts: Not implemented (App Intents removed in current build).
   - Gallery tiles were removed due to SDK signature differences; actions still discoverable via Shortcuts search.
@@ -58,7 +53,6 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 2) Screen Time capabilities & entitlements
 - Enable FamilyControls, ManagedSettings, DeviceActivity, and App Groups on the app target and every Screen Time extension (Shield UI, Shield Actions, Monitor, DeviceActivity report).
-- Users must grant Screen Time access the first time soft blocking is configured.
 - Ensure provisioning profiles include the `com.apple.familycontrols.shield-actions` entitlement so the quick-unlock handler can load.
 
 3) Live Activities
@@ -133,7 +127,6 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 5) Project dashboards
 - Flesh out the project detail view (blocking configuration, per-session history, editing).
-- AC: Detail screen shows project timeline, lets users toggle project-specific soft blocking.
 
 6) Quick unlock stability
 - Verify the shield action extension schedules Device Activity successfully on device (needs entitlement + profiles regenerated after identifier fix).

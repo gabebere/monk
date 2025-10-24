@@ -1,11 +1,12 @@
 import SwiftUI
 import SwiftData
-import FamilyControls
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
     @Query private var prefsList: [Preferences]
+
+    @State private var showingGoalPicker = false
 
     private var prefs: Preferences {
         if let existing = prefsList.first {
@@ -23,11 +24,6 @@ struct SettingsView: View {
         return created
     }
 
-    @State private var showingSoftBlockPicker = false
-    @State private var softBlockSelection = FamilyActivitySelection()
-    @State private var screenTimeDenied = false
-    @State private var showingGoalPicker = false
-
     var body: some View {
         NavigationStack {
             ZStack {
@@ -36,7 +32,6 @@ struct SettingsView: View {
                     VStack(spacing: 24) {
                         goalCard
                         sessionsCard
-                        softBlockCard
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 36)
@@ -44,20 +39,6 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
-        .onAppear(perform: restoreSoftBlockSelection)
-        .onChange(of: softBlockSelection) { _, newValue in
-            if newValue.applicationTokens.isEmpty &&
-                newValue.categoryTokens.isEmpty &&
-                newValue.webDomainTokens.isEmpty &&
-                !newValue.includeEntireCategory {
-                prefs.softBlockSelectionData = nil
-            } else {
-                prefs.softBlockSelectionData = SoftBlockManager.shared.encodeSelection(newValue)
-            }
-            try? modelContext.save()
-            applySoftBlock()
-        }
-        .familyActivityPicker(isPresented: $showingSoftBlockPicker, selection: $softBlockSelection)
     }
 }
 
@@ -128,50 +109,6 @@ private extension SettingsView {
         }
     }
 
-    var softBlockCard: some View {
-        SettingsCard(title: "Soft Blocking",
-                     subtitle: "Automatically shield distracting apps every time you focus.",
-                     icon: "shield.lefthalf.fill") {
-            Toggle(isOn: softBlockEnabledBinding) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Enable soft blocking")
-                        .font(.headline.weight(.medium))
-                        .foregroundStyle(.white)
-                    Text("Blocks your selected apps when a session starts.")
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.72))
-                }
-            }
-            .tint(Color.purple)
-
-            Button {
-                showingSoftBlockPicker = true
-            } label: {
-                Label("Choose apps and sites", systemImage: "square.and.pencil")
-                    .font(.footnote.weight(.semibold))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color.white.opacity(prefs.softBlockEnabled ? 0.18 : 0.08), in: Capsule(style: .continuous))
-                    .foregroundStyle(Color.white.opacity(prefs.softBlockEnabled ? 1 : 0.65))
-            }
-            .buttonStyle(.plain)
-            .disabled(!prefs.softBlockEnabled)
-            .opacity(prefs.softBlockEnabled ? 1 : 0.6)
-
-            if screenTimeDenied {
-                Text("Screen Time permission required. Open Settings → Screen Time to grant access.")
-                    .font(.footnote)
-                    .foregroundStyle(.red.opacity(0.85))
-                    .padding(.top, 6)
-            } else if let summary = softBlockSummary {
-                Text(summary)
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.65))
-                    .padding(.top, 6)
-            }
-        }
-    }
-
     var goalBinding: Binding<Int> {
         Binding(
             get: { Int(prefs.weeklyGoalHours.rounded()) },
@@ -193,80 +130,7 @@ private extension SettingsView {
         )
     }
 
-    var softBlockEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { prefs.softBlockEnabled },
-            set: { handleSoftBlockToggle(newValue: $0) }
-        )
-    }
-
     var selectedGoal: Int { Int(prefs.weeklyGoalHours.rounded()) }
-
-    func restoreSoftBlockSelection() {
-        if let restored = SoftBlockManager.shared.decodeSelection(from: prefs.softBlockSelectionData) {
-            softBlockSelection = restored
-        }
-        applySoftBlock()
-    }
-
-    func handleSoftBlockToggle(newValue: Bool) {
-        Task { @MainActor in
-            if newValue {
-                let approved = await SoftBlockManager.shared.ensureAuthorization()
-                if approved {
-                    prefs.softBlockEnabled = true
-                    try? modelContext.save()
-                    applySoftBlock()
-                } else {
-                    prefs.softBlockEnabled = false
-                    try? modelContext.save()
-                    showScreenTimeAlert()
-                }
-            } else {
-                prefs.softBlockEnabled = false
-                try? modelContext.save()
-                applySoftBlock()
-            }
-        }
-    }
-
-    func applySoftBlock() {
-        let hasTokens = softBlockSelection.includeEntireCategory ||
-            !(softBlockSelection.applicationTokens.isEmpty &&
-              softBlockSelection.categoryTokens.isEmpty &&
-              softBlockSelection.webDomainTokens.isEmpty)
-        let selection = hasTokens ? softBlockSelection : nil
-        SoftBlockManager.shared.apply(selection: selection, enabled: prefs.softBlockEnabled)
-    }
-
-    func showScreenTimeAlert() {
-        screenTimeDenied = true
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(5))
-            screenTimeDenied = false
-        }
-    }
-
-    var softBlockSummary: String? {
-        guard prefs.softBlockEnabled else { return nil }
-        guard let selection = SoftBlockManager.shared.decodeSelection(from: prefs.softBlockSelectionData) else {
-            return "No apps selected yet."
-        }
-        if selection.includeEntireCategory {
-            return "Blocking all categories" + (selection.applicationTokens.isEmpty ? "" : " (allowing \(selection.applicationTokens.count) apps)")
-        }
-        var components: [String] = []
-        if !selection.applicationTokens.isEmpty {
-            components.append("\(selection.applicationTokens.count) app\(selection.applicationTokens.count == 1 ? "" : "s")")
-        }
-        if !selection.categoryTokens.isEmpty {
-            components.append("\(selection.categoryTokens.count) categor\(selection.categoryTokens.count == 1 ? "y" : "ies")")
-        }
-        if !selection.webDomainTokens.isEmpty {
-            components.append("\(selection.webDomainTokens.count) domain\(selection.webDomainTokens.count == 1 ? "" : "s")")
-        }
-        return components.isEmpty ? "No apps selected yet." : "Blocking \(components.joined(separator: " · "))"
-    }
 }
 
 #Preview {
@@ -316,7 +180,6 @@ private struct SettingsCard<Content: View>: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            .blur(radius: 0)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
