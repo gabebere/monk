@@ -31,6 +31,10 @@ final class FocusManager: ObservableObject {
         }
     }
 
+    deinit {
+        timer?.cancel()
+    }
+
     func start(project: Project? = nil, mood: Int? = nil) {
         guard currentSession == nil else { return }
         let session = FocusSession(startedAt: Date(),
@@ -38,7 +42,7 @@ final class FocusManager: ObservableObject {
                                    moodScore: mood,
                                    project: project)
         modelContext.insert(session)
-        try? modelContext.save()
+        guard modelContext.saveOrRollback() else { return }
         currentSession = session
         Haptics.light()
 
@@ -59,12 +63,11 @@ final class FocusManager: ObservableObject {
         guard let session = currentSession else { return }
         let activeProject = session.project
         session.endedAt = Date()
-        try? modelContext.save()
-        // Discard session if shorter than threshold and preference is enabled
-        if shouldDiscard(session: session) {
+        let discardSession = shouldDiscard(session: session)
+        if discardSession {
             modelContext.delete(session)
-            try? modelContext.save()
         }
+        guard modelContext.saveOrRollback() else { return }
         currentSession = nil
         recalcTodayTotal()
         Haptics.success()
@@ -168,7 +171,9 @@ extension FocusManager {
                 didDelete = true
             }
         }
-        if didDelete { try? modelContext.save(); recalcTodayTotal(now: now) }
+        if didDelete, modelContext.saveOrRollback() {
+            recalcTodayTotal(now: now)
+        }
     }
 }
 

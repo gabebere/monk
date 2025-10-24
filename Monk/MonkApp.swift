@@ -5,8 +5,9 @@
 //  Created by Gabriel Berezovsky on 25/8/25.
 //
 
-import SwiftUI
+import OSLog
 import SwiftData
+import SwiftUI
 import UIKit
 
 @main
@@ -28,6 +29,7 @@ struct MonkApp: App {
     }
     // Configure SwiftData model container for app-wide use
     var sharedModelContainer: ModelContainer = {
+        let logger = Logger(subsystem: "com.gbr.Monk", category: "Persistence")
         let schema = Schema([
             FocusSession.self,
             Preferences.self,
@@ -39,9 +41,15 @@ struct MonkApp: App {
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            assertionFailure("Failed to create ModelContainer: \(error.localizedDescription)")
-            let fallback = ModelConfiguration(isStoredInMemoryOnly: false)
-            return try! ModelContainer(for: schema, configurations: [fallback])
+            logger.error("Failed to create CloudKit-backed ModelContainer: \(error.localizedDescription, privacy: .public)")
+            let fallbackConfiguration = ModelConfiguration(isStoredInMemoryOnly: false)
+            do {
+                logger.info("Falling back to on-device ModelContainer storage.")
+                return try ModelContainer(for: schema, configurations: [fallbackConfiguration])
+            } catch {
+                logger.critical("Failed to create fallback ModelContainer: \(error.localizedDescription, privacy: .public)")
+                fatalError("Unable to create ModelContainer: \(error)")
+            }
         }
     }()
 

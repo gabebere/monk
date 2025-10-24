@@ -12,10 +12,10 @@ struct SettingsView: View {
         if let existing = prefsList.first {
             if existing.weeklyGoalHours < 1 {
                 existing.weeklyGoalHours = 40
-                try? modelContext.save()
+                modelContext.saveOrRollback()
             } else if existing.weeklyGoalHours <= 24 {
                 existing.weeklyGoalHours = max(0, existing.weeklyGoalHours * 7)
-                try? modelContext.save()
+                modelContext.saveOrRollback()
             }
             return existing
         }
@@ -114,7 +114,7 @@ private extension SettingsView {
             get: { Int(prefs.weeklyGoalHours.rounded()) },
             set: { newValue in
                 prefs.weeklyGoalHours = Double(newValue)
-                try? modelContext.save()
+                modelContext.saveOrRollback()
             }
         )
     }
@@ -124,8 +124,10 @@ private extension SettingsView {
             get: { prefs.discardShortSessions ?? false },
             set: { newValue in
                 prefs.discardShortSessions = newValue
-                try? modelContext.save()
-                if newValue { focus.purgeShortSessionsIfNeeded() }
+                let didSave = modelContext.saveOrRollback()
+                if newValue && didSave {
+                    focus.purgeShortSessionsIfNeeded()
+                }
             }
         )
     }

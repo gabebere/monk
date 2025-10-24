@@ -166,8 +166,9 @@ struct EditSessionView: View {
         } else {
             session.project = nil
         }
-        try? modelContext.save()
-        dismiss()
+        if modelContext.saveOrRollback() {
+            dismiss()
+        }
     }
 }
 

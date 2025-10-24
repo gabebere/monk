@@ -686,8 +686,9 @@ private struct NewProjectView: View {
                               hardBlockEnabled: hardBlockEnabled,
                               hardBlockSelectionData: hardBlockEnabled ? selectionData : nil)
         modelContext.insert(project)
-        try? modelContext.save()
-        dismiss()
+        if modelContext.saveOrRollback() {
+            dismiss()
+        }
     }
 
     private func nextGradientIndex() -> Int {
@@ -851,7 +852,7 @@ private struct ProjectDetailView: View {
                                                 HardBlockManager.shared.deactivateHardBlock()
                                             }
                                         }
-                                        try? modelContext.save()
+                                        modelContext.saveOrRollback()
                                     }
                                 }
 
@@ -919,7 +920,7 @@ private struct ProjectDetailView: View {
         .onChange(of: hardBlockSelection) { _, newValue in
             guard !sessionActive else { return }
             project.hardBlockSelectionData = HardBlockManager.shared.encodeSelection(newValue)
-            try? modelContext.save()
+            guard modelContext.saveOrRollback() else { return }
             guard project.hardBlockEnabled else { return }
             if newValue.isEmpty {
                 if focus.currentSession?.project?.id == project.id {
@@ -955,7 +956,7 @@ private struct ProjectDetailView: View {
         }
         guard trimmed != project.title else { return }
         project.title = trimmed
-        try? modelContext.save()
+        modelContext.saveOrRollback()
     }
 
     private var hardBlockSummary: String {
@@ -989,8 +990,9 @@ private struct ProjectDetailView: View {
             HardBlockManager.shared.deactivateHardBlock()
         }
         modelContext.delete(project)
-        try? modelContext.save()
-        dismiss()
+        if modelContext.saveOrRollback() {
+            dismiss()
+        }
     }
 }
 
@@ -1263,9 +1265,10 @@ private struct CompletedSessionView: View {
         } else {
             session.project = nil
         }
-        try? modelContext.save()
-        onStop()
-        dismiss()
+        if modelContext.saveOrRollback() {
+            onStop()
+            dismiss()
+        }
     }
 
     private func congratulationText(now: Date = .now) -> String {
