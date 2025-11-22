@@ -2,16 +2,16 @@ import UIKit
 
 enum Haptics {
     static func light() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.65)
     }
     static func medium() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.8)
     }
     static func heavy() {
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred(intensity: 0.8)
     }
     static func soft() {
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5)
     }
     static func success() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)

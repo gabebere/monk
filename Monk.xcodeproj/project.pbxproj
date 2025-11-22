@@ -525,6 +525,7 @@
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -559,6 +560,7 @@
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

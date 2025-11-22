@@ -39,21 +39,21 @@ struct InsightsView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.bottom, InsightsLayout.focusScoreGap)
-                        .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
+                        .simultaneousGesture(TapGesture().onEnded { Haptics.heavy() })
 
                         LazyVGrid(columns: gridColumns, spacing: InsightsLayout.verticalSpacing) {
                             if let goalHours = weeklyGoalHours, goalHours > 0 {
                                 NavigationLink(value: InsightRoute.weeklyGoal) {
                                     InsightTile(model: weeklyGoalTile(summary: summary, goalHours: goalHours))
                                 }
-                                .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
+                                .simultaneousGesture(TapGesture().onEnded { Haptics.heavy() })
                             }
 
                             ForEach(tileModels(summary: summary)) { tile in
                                 NavigationLink(value: tile.route) {
                                     InsightTile(model: tile)
                                 }
-                                .simultaneousGesture(TapGesture().onEnded { Haptics.soft() })
+                                .simultaneousGesture(TapGesture().onEnded { Haptics.heavy() })
                             }
                         }
                     }
@@ -1226,7 +1226,7 @@ private struct WeekSelector: View {
             selectorButton(systemName: "chevron.left", disabled: selectedWeek >= maxOffset) {
                 guard selectedWeek < maxOffset else { return }
                 selectedWeek += 1
-                Haptics.soft()
+                Haptics.heavy()
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -1241,7 +1241,7 @@ private struct WeekSelector: View {
             selectorButton(systemName: "chevron.right", disabled: selectedWeek == 0) {
                 guard selectedWeek > 0 else { return }
                 selectedWeek -= 1
-                Haptics.soft()
+                Haptics.heavy()
             }
 
             Menu {
@@ -1249,7 +1249,7 @@ private struct WeekSelector: View {
                     Button {
                         guard selectedWeek != offset else { return }
                         selectedWeek = offset
-                        Haptics.soft()
+                        Haptics.heavy()
                     } label: {
                         Text(label(for: offset))
                     }
@@ -1267,7 +1267,10 @@ private struct WeekSelector: View {
 
     @ViewBuilder
     private func selectorButton(systemName: String, disabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button(action: {
+            if !disabled { Haptics.heavy() }
+            action()
+        }) {
             Image(systemName: systemName)
                 .font(.headline)
                 .foregroundColor(disabled ? Color.white.opacity(0.25) : Color.white)

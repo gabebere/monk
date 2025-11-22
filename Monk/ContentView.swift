@@ -11,7 +11,8 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var manager: FocusManager?
-    @State private var selectedTab: Tab = .home
+    @State private var selectedTab: AppTab = .home
+    @StateObject private var tutorial = TutorialCoordinator()
 
     var body: some View {
         Group {
@@ -24,7 +25,7 @@ struct ContentView: View {
                         Label("", systemImage: "house")
                             .accessibilityLabel("Home")
                     }
-                    .tag(Tab.home)
+                    .tag(AppTab.home)
 
                     NavigationStack {
                         InsightsView()
@@ -33,7 +34,7 @@ struct ContentView: View {
                         Label("", systemImage: "chart.bar.doc.horizontal")
                             .accessibilityLabel("Insights")
                     }
-                    .tag(Tab.data)
+                    .tag(AppTab.insights)
 
                     NavigationStack {
                         HistoryView()
@@ -42,7 +43,7 @@ struct ContentView: View {
                         Label("", systemImage: "clock.arrow.circlepath")
                             .accessibilityLabel("History")
                     }
-                    .tag(Tab.history)
+                    .tag(AppTab.history)
 
                     NavigationStack {
                         SettingsView()
@@ -51,15 +52,26 @@ struct ContentView: View {
                         Label("", systemImage: "gearshape")
                             .accessibilityLabel("Settings")
                     }
-                    .tag(Tab.settings)
+                    .tag(AppTab.settings)
                 }
                 .preferredColorScheme(.dark)
                 .tint(.white)
                 .onChange(of: selectedTab) { _, _ in
-                    Haptics.medium()
-                    Haptics.soft()
+                    Haptics.heavy()
                 }
                 .environmentObject(manager)
+                .environmentObject(tutorial)
+                .onAppear {
+                    tutorial.tabSelectionHandler = { tab in
+                        if selectedTab != tab {
+                            selectedTab = tab
+                        }
+                    }
+                }
+                .onChange(of: tutorial.activeStage) { _, stage in
+                    guard let stage, selectedTab != stage.preferredTab else { return }
+                    selectedTab = stage.preferredTab
+                }
             } else {
                 ProgressView().task {
                     await MainActor.run { self.manager = FocusManager(modelContext: modelContext) }
@@ -71,11 +83,4 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-}
-
-private enum Tab: Hashable {
-    case home
-    case data
-    case history
-    case settings
 }

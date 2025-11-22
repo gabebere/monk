@@ -14,6 +14,7 @@ final class FocusManager: ObservableObject {
     private let modelContext: ModelContext
     private let calendar: Calendar
     private let insightsAnalyzer = InsightsAnalyzer()
+    private let calendarIntegration = CalendarIntegration.shared
     private var focusScoreTickCounter = 0
 
     init(modelContext: ModelContext,
@@ -44,7 +45,7 @@ final class FocusManager: ObservableObject {
         modelContext.insert(session)
         guard modelContext.saveOrRollback() else { return }
         currentSession = session
-        Haptics.light()
+        Haptics.heavy()
 
 #if canImport(ActivityKit)
         if #available(iOS 16.2, *) {
@@ -67,7 +68,19 @@ final class FocusManager: ObservableObject {
         if discardSession {
             modelContext.delete(session)
         }
+
+        let preferences = (try? modelContext.fetch(FetchDescriptor<Preferences>()))?.first
+        let shouldLogCalendar = preferences?.calendarIntegrationEnabled == true
+        let calendarIdentifier = preferences?.calendarCalendarIdentifier
+
         guard modelContext.saveOrRollback() else { return }
+        if !discardSession, shouldLogCalendar,
+           let calendarIdentifier,
+           !calendarIdentifier.isEmpty {
+            Task {
+                await calendarIntegration.logSession(session, calendarIdentifier: calendarIdentifier)
+            }
+        }
         currentSession = nil
         recalcTodayTotal()
         Haptics.success()
@@ -111,6 +124,15 @@ final class FocusManager: ObservableObject {
             predicate: #Predicate { s in s.endedAt == nil }
         )
         return (try? modelContext.fetch(descriptor))?.first
+    }
+
+    private func weekBounds(containing date: Date) -> (start: Date, end: Date) {
+        let startOfDay = calendar.startOfDay(for: date)
+        let weekday = calendar.component(.weekday, from: startOfDay)
+        let daysSinceSunday = weekday - 1
+        let weekStart = calendar.date(byAdding: .day, value: -daysSinceSunday, to: startOfDay) ?? startOfDay
+        let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? startOfDay
+        return (weekStart, weekEnd)
     }
 
     private func startTicking() {
@@ -186,4 +208,34 @@ extension FocusManager {
         project.mostRecentSessionDate
     }
 
+    func weeklyGoalProgress(for project: Project, now: Date = .now) -> ProjectGoalProgress {
+        let (weekStart, weekEnd) = weekBounds(containing: now)
+        let sessions = project.sessions ?? []
+        var total: TimeInterval = 0
+        for session in sessions {
+            let sessionStart = session.startedAt
+            let sessionEnd = session.endedAt ?? now
+            if sessionEnd <= weekStart || sessionStart >= weekEnd { continue }
+            let clampedStart = max(sessionStart, weekStart)
+            let clampedEnd = min(sessionEnd, weekEnd)
+            if clampedEnd > clampedStart {
+                total += clampedEnd.timeIntervalSince(clampedStart)
+            }
+        }
+        let goalSeconds = project.weeklyGoalHours.map { max(0, $0) * 3600 }
+        return ProjectGoalProgress(actualSeconds: total, goalSeconds: goalSeconds)
+    }
+
+}
+
+struct ProjectGoalProgress {
+    let actualSeconds: TimeInterval
+    let goalSeconds: TimeInterval?
+
+    var actualHours: Double { actualSeconds / 3600 }
+    var goalHours: Double? { goalSeconds.map { $0 / 3600 } }
+    var progressFraction: Double {
+        guard let goal = goalSeconds, goal > 0 else { return 0 }
+        return min(max(actualSeconds / goal, 0), 1)
+    }
 }

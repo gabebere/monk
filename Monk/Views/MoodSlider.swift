@@ -29,10 +29,9 @@ struct MoodSlider: View {
                                 let rounded = Int(newVal.rounded())
                                 guard rounded != value else { return }
                                 value = rounded
+                                triggerHaptic(for: rounded)
                             }
-                        ), in: 0...Double(moods.count - 1), step: 1, onEditingChanged: { editing in
-                            if !editing { triggerHaptic(for: value) }
-                        })
+                        ), in: 0...Double(moods.count - 1), step: 1)
                         .tint(.white)
                         .padding(.horizontal, 18)
                     }
@@ -69,10 +68,6 @@ private struct MoodOption: Identifiable {
 
 private extension MoodSlider {
     func triggerHaptic(for moodIndex: Int) {
-        switch moodIndex {
-        case 0: Haptics.moodSoft()
-        case 1: Haptics.moodMedium()
-        default: Haptics.moodStrong()
-        }
+        Haptics.moodSoft()
     }
 }

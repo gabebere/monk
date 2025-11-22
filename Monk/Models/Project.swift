@@ -7,6 +7,7 @@ final class Project {
     var title: String = ""
     var createdAt: Date = Foundation.Date()
     var gradientIndex: Int = 0
+    var weeklyGoalHours: Double?
     var hardBlockEnabled: Bool = false
     var hardBlockSelectionData: Data?
     @Relationship(deleteRule: .nullify, inverse: \FocusSession.project) var sessions: [FocusSession]?
@@ -15,12 +16,14 @@ final class Project {
          title: String,
          createdAt: Date = .now,
          gradientIndex: Int = 0,
+         weeklyGoalHours: Double? = nil,
          hardBlockEnabled: Bool = false,
          hardBlockSelectionData: Data? = nil) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
         self.gradientIndex = gradientIndex
+        self.weeklyGoalHours = weeklyGoalHours
         self.hardBlockEnabled = hardBlockEnabled
         self.hardBlockSelectionData = hardBlockSelectionData
         self.sessions = []

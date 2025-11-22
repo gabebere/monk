@@ -5,14 +5,17 @@ import UIKit
 
 struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
+    @EnvironmentObject private var tutorial: TutorialCoordinator
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
     @State private var showingNewProject: Bool = false
     @State private var projectDetail: Project?
+    @State private var projectHighlight: TutorialHighlightInfo?
+    @State private var startHighlight: TutorialHighlightInfo?
 
     private var prefs: Preferences {
         if let existing = prefsList.first { return existing }
-        let created = Preferences()
+        let created = Preferences(hasConvertedDailyGoal: true)
         modelContext.insert(created)
         return created
     }
@@ -39,11 +42,50 @@ struct HomeView: View {
         .sheet(item: $projectDetail) { project in
             ProjectDetailView(project: project)
         }
+        .onPreferenceChange(TutorialAnchorPreferenceKey.self) { values in
+            for value in values {
+                switch value.stage {
+                case .createProject:
+                    projectHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
+                case .startSession:
+                    startHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
+                default:
+                    break
+                }
+            }
+        }
+        .overlay {
+            Group {
+                if let stage = tutorial.activeStage,
+                   stage == .createProject || stage == .startSession {
+                    TutorialOverlayView(
+                        stage: stage,
+                        highlight: highlightInfo(for: stage),
+                        onNext: tutorial.advance,
+                        onSkip: tutorial.skip
+                    )
+                }
+            }
+        }
+    }
+}
+
+private extension HomeView {
+    func highlightInfo(for stage: TutorialStage) -> TutorialHighlightInfo? {
+        switch stage {
+        case .createProject:
+            return projectHighlight
+        case .startSession:
+            return startHighlight
+        default:
+            return nil
+        }
     }
 }
 
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
+    @EnvironmentObject private var tutorial: TutorialCoordinator
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
 
@@ -64,7 +106,10 @@ private struct TimerCard: View {
     var body: some View {
         VStack(spacing: 20) {
             if focus.currentSession == nil {
-                Button(action: animateStartAndBeginSession) {
+                Button(action: {
+                    Haptics.heavy()
+                    animateStartAndBeginSession()
+                }) {
                     ZStack {
                         Capsule()
                             .fill(Theme.buttonGradient)
@@ -94,6 +139,7 @@ private struct TimerCard: View {
                     }
                 }
                 .accessibilityLabel("Start focusing")
+                .tutorialAnchor(.startSession, cornerRadius: 32)
                 .background(
                     ZStack {
                         Ellipse()
@@ -147,7 +193,10 @@ private struct TimerCard: View {
                             .blur(radius: 20)
                             .opacity(0.5)
 
-                        Button(action: stopSession) {
+                        Button(action: {
+                            Haptics.heavy()
+                            stopSession()
+                        }) {
                             ZStack {
                                 Circle()
                                     .fill(Theme.buttonGradient)
@@ -197,6 +246,9 @@ private struct TimerCard: View {
 
     private func startSession(with project: Project?) {
         focus.start(project: project)
+        if tutorial.activeStage == .startSession {
+            tutorial.advance()
+        }
     }
 
     private func stopSession() {
@@ -294,8 +346,8 @@ private struct ProjectSelectionSheet: View {
             ZStack {
                 LinearGradient(
                     colors: [
-                        Color(red: 0.07, green: 0.09, blue: 0.18),
-                        Color(red: 0.03, green: 0.04, blue: 0.10)
+                        Color(red: 0.03, green: 0.04, blue: 0.10),
+                        Color(red: 0.01, green: 0.01, blue: 0.05)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -303,53 +355,29 @@ private struct ProjectSelectionSheet: View {
                 .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 28) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("What are we focusing on?")
-                                .font(.title2.bold())
+                    VStack(alignment: .leading, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Choose your focus")
+                                .font(.title.bold())
                                 .foregroundStyle(.white)
-                            Text("Pick a project to channel this session, or go heads-down without tracking.")
+                            Text("Apply your next session to a project or keep it unassigned.")
                                 .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        .padding(.horizontal, 4)
-
-                        ProjectOptionCard(
-                            title: "No project",
-                            subtitle: "Stay focused without logging hours to a project.",
-                            icon: "sparkles",
-                            gradient: (start: Color(red: 0.21, green: 0.25, blue: 0.45), end: Color(red: 0.10, green: 0.12, blue: 0.26))
-                        ) {
-                            onSelect(nil)
-                            dismiss()
+                                .foregroundStyle(.white.opacity(0.72))
                         }
 
                         if projects.isEmpty {
-                            VStack(spacing: 12) {
-                                Image(systemName: "rectangle.stack.badge.plus")
-                                    .font(.system(size: 32, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.85))
-                                Text("Create your first project from the home screen to start tracking focused hours.")
-                                    .font(.footnote)
-                                    .multilineTextAlignment(.center)
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(32)
-                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                            )
+                            EmptyProjectsView()
                         } else {
-                            LazyVGrid(columns: columns, spacing: 20) {
+                            LazyVGrid(columns: columns, spacing: 18) {
                                 ForEach(projects) { project in
                                     let gradient = ProjectGradientPalette.gradient(at: project.gradientIndex)
-                                    ProjectOptionCard(
+                                    let info = projectProgress(for: project)
+                                    ProjectSelectionTile(
                                         title: project.title,
-                                        subtitle: projectSubtitle(for: project),
-                                        icon: "target",
-                                        gradient: gradient
+                                        ratioText: info.ratio,
+                                        detailText: projectDetail(for: project),
+                                        gradient: gradient,
+                                        progressFraction: info.fraction
                                     ) {
                                         onSelect(project)
                                         dismiss()
@@ -357,47 +385,53 @@ private struct ProjectSelectionSheet: View {
                                 }
                             }
                         }
+
+                        ProjectSelectionNoProjectTile {
+                            onSelect(nil)
+                            dismiss()
+                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 32)
                 }
             }
-            .navigationTitle("Choose Project")
+            .navigationTitle("Projects")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        Haptics.heavy()
+                        dismiss()
+                    }
+                        .foregroundStyle(.white.opacity(0.85))
                 }
             }
         }
-        .presentationDetents([.fraction(0.94)])
+        .presentationDetents([.fraction(0.94), .large])
         .presentationDragIndicator(.visible)
     }
 
-    private func projectSubtitle(for project: Project) -> String {
-        let hours = focus.totalDuration(for: project) / 3600
-        let hoursString: String
-        if hours >= 100 {
-            hoursString = String(format: "%.0f h logged", hours)
-        } else if hours >= 10 {
-            hoursString = String(format: "%.1f h logged", hours)
+    private func projectProgress(for project: Project) -> (ratio: String, fraction: Double?) {
+        let progress = focus.weeklyGoalProgress(for: project)
+        if let goal = progress.goalHours, goal > 0 {
+            return (String(format: "%.1fh / %.1fh", progress.actualHours, goal), progress.progressFraction)
         } else {
-            hoursString = String(format: "%.2f h logged", hours)
+            return (String(format: "%.1fh focused", progress.actualHours), nil)
         }
+    }
 
-        if let last = focus.lastActivityDate(for: project) {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .short
-            let relative = formatter.localizedString(for: last, relativeTo: .now)
-            return "\(hoursString) • last \(relative)"
+    private func projectDetail(for project: Project) -> String {
+        if let goal = project.weeklyGoalHours, goal > 0 {
+            return String(format: "Goal %.0fh/week", goal)
         }
-
-        return "\(hoursString) • no sessions yet"
+        let hours = focus.totalDuration(for: project) / 3600
+        return String(format: "%.1fh logged total", hours)
     }
 }
 
 private struct ProjectsSection: View {
     @EnvironmentObject private var focus: FocusManager
+    @EnvironmentObject private var tutorial: TutorialCoordinator
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
 
     let onAdd: () -> Void
@@ -418,7 +452,10 @@ private struct ProjectsSection: View {
                 Text("Projects")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Button(action: onAdd) {
+                Button(action: {
+                    Haptics.heavy()
+                    onAdd()
+                }) {
                     Image(systemName: "plus")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.white)
@@ -429,10 +466,14 @@ private struct ProjectsSection: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Create project")
+                .tutorialAnchor(.createProject, cornerRadius: 28)
             }
 
             if sortedProjects.isEmpty {
-                Button(action: onAdd) {
+                Button(action: {
+                    Haptics.heavy()
+                    onAdd()
+                }) {
                     VStack(spacing: 8) {
                         Image(systemName: "rectangle.stack.badge.plus")
                             .font(.system(size: 28, weight: .medium))
@@ -471,32 +512,58 @@ private struct ProjectCard: View {
     let project: Project
     let onTap: () -> Void
 
-    private var subtitle: String {
-        if let last = focus.lastActivityDate(for: project) {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .full
-            return "Last session \(formatter.localizedString(for: last, relativeTo: .now))"
+    private var weeklyProgress: ProjectGoalProgress {
+        focus.weeklyGoalProgress(for: project)
+    }
+
+    private var ratioText: String {
+        if let goal = weeklyProgress.goalHours, goal > 0 {
+            return String(format: "%.1fh/%.1fh", weeklyProgress.actualHours, goal)
         }
-        return "No sessions yet"
+        return String(format: "%.1fh focused", weeklyProgress.actualHours)
     }
 
     var body: some View {
         let gradient = ProjectGradientPalette.gradient(at: project.gradientIndex)
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 12) {
             Text(project.title)
-                .font(.headline)
+                .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
-            Text(hoursString())
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-            Text(subtitle)
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.7))
+            VStack(alignment: .leading, spacing: 12) {
+                if weeklyProgress.goalHours != nil {
+                    HStack {
+                        Text(ratioText)
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer()
+                    }
+                    ProgressView(value: min(max(weeklyProgress.progressFraction, 0), 1), total: 1)
+                        .tint(Color.white)
+                    Text(String(format: "%.1f%%", min(max(weeklyProgress.progressFraction, 0), 1) * 100))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(String(format: "%.1f h", weeklyProgress.actualHours))
+                            .font(.system(size: 32, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.9))
+                        Text("this week")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
         }
         .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 140)
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)
         .background(
             LinearGradient(colors: [gradient.start, gradient.end], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .overlay(
@@ -506,23 +573,21 @@ private struct ProjectCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 14)
-        .onTapGesture { onTap() }
+        .onTapGesture {
+            Haptics.heavy()
+            onTap()
+        }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
     }
 
-    private func hoursString() -> String {
-        let hours = focus.totalDuration(for: project) / 3600
-        if hours >= 100 { return String(format: "%.0f h", hours) }
-        if hours >= 10 { return String(format: "%.1f h", hours) }
-        return String(format: "%.2f h", hours)
-    }
 }
 
 private struct NewProjectView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
+    @EnvironmentObject private var tutorial: TutorialCoordinator
     @State private var title: String = ""
     @State private var hardBlockEnabled: Bool = false
     @State private var hardBlockSelection = FamilyActivitySelection()
@@ -623,6 +688,7 @@ private struct NewProjectView: View {
                                 }
 
                                 Button {
+                                    Haptics.heavy()
                                     showingHardBlockPicker = true
                                 } label: {
                                     Label("Choose apps and websites", systemImage: "square.and.pencil")
@@ -656,11 +722,15 @@ private struct NewProjectView: View {
                         .foregroundStyle(.white)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        Haptics.heavy()
+                        dismiss()
+                    }
                         .foregroundStyle(.white.opacity(0.8))
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        Haptics.heavy()
                         save()
                     } label: {
                         Text("Save")
@@ -687,6 +757,9 @@ private struct NewProjectView: View {
                               hardBlockSelectionData: hardBlockEnabled ? selectionData : nil)
         modelContext.insert(project)
         if modelContext.saveOrRollback() {
+            if tutorial.activeStage == .createProject {
+                tutorial.advance()
+            }
             dismiss()
         }
     }
@@ -735,10 +808,14 @@ private struct ProjectDetailView: View {
     @State private var authorizationDenied = false
     @State private var showDeleteConfirmation = false
     @State private var editedTitle: String = ""
+    @State private var hasWeeklyGoal: Bool = false
+    @State private var weeklyGoalHoursInput: Double = 10
+    @State private var didLoadGoalState = false
 
     private var totalHours: Double { focus.totalDuration(for: project) / 3600 }
     private var sessionCount: Int { project.sessions?.count ?? 0 }
     private var sessionActive: Bool { focus.currentSession != nil }
+    private var weeklyProgress: ProjectGoalProgress { focus.weeklyGoalProgress(for: project) }
 
     var body: some View {
         NavigationStack {
@@ -808,6 +885,76 @@ private struct ProjectDetailView: View {
                             HStack(spacing: 12) {
                                 StatPill(value: String(format: "%.2f", totalHours), label: "hours tracked", systemIcon: "clock.arrow.circlepath")
                                 StatPill(value: "\(sessionCount)", label: "sessions", systemIcon: "list.number")
+                            }
+                        }
+
+                        ProjectFormCard(title: "Weekly goal",
+                                        subtitle: "Set a per-project target that resets every Sunday.",
+                                        icon: "flag.fill") {
+                            VStack(alignment: .leading, spacing: 16) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("\(hoursString(weeklyProgress.actualHours)) h")
+                                            .font(.system(size: 28, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(.white)
+                                        Text("logged this week")
+                                            .font(.footnote)
+                                            .foregroundStyle(.white.opacity(0.7))
+                                    }
+                                    Spacer()
+                                    if hasWeeklyGoal, let goal = weeklyProgress.goalHours {
+                                        VStack(alignment: .trailing, spacing: 4) {
+                                            Text("\(hoursString(goal)) h")
+                                                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                                .foregroundStyle(.white)
+                                            Text("weekly goal")
+                                                .font(.footnote)
+                                                .foregroundStyle(.white.opacity(0.7))
+                                        }
+                                    }
+                                }
+
+                                if hasWeeklyGoal, weeklyProgress.goalHours != nil {
+                                    ProgressView(value: weeklyProgress.progressFraction, total: 1)
+                                        .tint(Color.cyan)
+                                    Text(goalStatusText(for: weeklyProgress))
+                                        .font(.footnote)
+                                        .foregroundStyle(.white.opacity(0.8))
+                                } else {
+                                    Text("Enable a weekly goal to compare this week's progress against a target.")
+                                        .font(.footnote)
+                                        .foregroundStyle(.white.opacity(0.8))
+                                }
+
+                                Toggle(isOn: $hasWeeklyGoal) {
+                                    Text("Track a weekly target")
+                                        .font(.headline.weight(.medium))
+                                        .foregroundStyle(.white)
+                                }
+                                .tint(Color.cyan)
+
+                                if hasWeeklyGoal {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Slider(value: $weeklyGoalHoursInput, in: 1...80, step: 1)
+                                            .tint(.white)
+                                            .onChange(of: weeklyGoalHoursInput) { _, newValue in
+                                                Haptics.soft()
+                                            }
+                                        HStack {
+                                            Text("Goal: \(Int(weeklyGoalHoursInput)) h / week")
+                                                .font(.footnote.weight(.semibold))
+                                                .foregroundStyle(.white)
+                                            Spacer()
+                                            Text("Auto-saved")
+                                                .font(.caption)
+                                                .foregroundStyle(.white.opacity(0.6))
+                                        }
+                                    }
+                                }
+
+                                Text("Goals reset every Sunday at midnight.")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.6))
                             }
                         }
 
@@ -888,6 +1035,7 @@ private struct ProjectDetailView: View {
                                         subtitle: "Remove this project and stop tracking future hours.",
                                         icon: "trash.fill") {
                             Button(role: .destructive) {
+                                Haptics.warning()
                                 showDeleteConfirmation = true
                             } label: {
                                 Text("Delete \(project.title)")
@@ -905,7 +1053,10 @@ private struct ProjectDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        Haptics.heavy()
+                        dismiss()
+                    }
                         .foregroundStyle(.white)
                 }
             }
@@ -916,6 +1067,7 @@ private struct ProjectDetailView: View {
                 hardBlockSelection = stored
             }
             editedTitle = project.title
+            bootstrapWeeklyGoalStateIfNeeded()
         }
         .onChange(of: hardBlockSelection) { _, newValue in
             guard !sessionActive else { return }
@@ -932,11 +1084,24 @@ private struct ProjectDetailView: View {
         }
         .familyActivityPicker(isPresented: $showingHardBlockPicker, selection: $hardBlockSelection)
         .alert("Delete Project?", isPresented: $showDeleteConfirmation, actions: {
-            Button("Delete", role: .destructive) { deleteProject() }
-            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Haptics.warning()
+                deleteProject()
+            }
+            Button("Cancel", role: .cancel) {
+                Haptics.heavy()
+            }
         }, message: {
             Text("Existing sessions will remain but will no longer be associated with this project.")
         })
+        .onChange(of: hasWeeklyGoal) { _, newValue in
+            applyGoalToggle(newValue)
+        }
+        .onChange(of: weeklyGoalHoursInput) { _, newValue in
+            guard hasWeeklyGoal else { return }
+            project.weeklyGoalHours = newValue
+            modelContext.saveOrRollback()
+        }
     }
 
     private var canCommitName: Bool {
@@ -982,6 +1147,44 @@ private struct ProjectDetailView: View {
             parts.append("\(hardBlockSelection.webDomainTokens.count) domain\(hardBlockSelection.webDomainTokens.count == 1 ? "" : "s")")
         }
         return parts.joined(separator: " · ")
+    }
+
+    private func bootstrapWeeklyGoalStateIfNeeded() {
+        guard !didLoadGoalState else { return }
+        if let stored = project.weeklyGoalHours, stored > 0 {
+            weeklyGoalHoursInput = stored
+            hasWeeklyGoal = true
+        } else {
+            weeklyGoalHoursInput = max(1, weeklyGoalHoursInput)
+            hasWeeklyGoal = false
+        }
+        didLoadGoalState = true
+    }
+
+    private func applyGoalToggle(_ isEnabled: Bool) {
+        if isEnabled {
+            project.weeklyGoalHours = weeklyGoalHoursInput
+        } else {
+            project.weeklyGoalHours = nil
+        }
+        modelContext.saveOrRollback()
+    }
+
+    private func goalStatusText(for progress: ProjectGoalProgress) -> String {
+        guard let goal = progress.goalHours else {
+            return "No goal yet — enable one to compare progress."
+        }
+        let remaining = goal - progress.actualHours
+        if remaining <= 0 {
+            return "Goal met for this week. Fantastic work!"
+        }
+        return "\(hoursString(max(remaining, 0))) h to go before Sunday."
+    }
+
+    private func hoursString(_ value: Double) -> String {
+        if value >= 100 { return String(format: "%.0f", value) }
+        if value >= 10 { return String(format: "%.1f", value) }
+        return String(format: "%.2f", value)
     }
 
     private func deleteProject() {
@@ -1044,57 +1247,135 @@ private struct ProjectFormCard<Content: View>: View {
     }
 }
 
-private struct ProjectOptionCard: View {
+private struct ProjectSelectionTile: View {
     let title: String
-    let subtitle: String
-    let icon: String
+    let ratioText: String
+    let detailText: String
     let gradient: (start: Color, end: Color)
+    let progressFraction: Double?
     let action: () -> Void
 
-    @State private var isPressed: Bool = false
-
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.18))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
+        Button(action: {
+            Haptics.heavy()
+            action()
+        }) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                Spacer(minLength: 0)
+
+                Text(ratioText)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                if let fraction = progressFraction {
+                    GeometryReader { proxy in
+                        let width = proxy.size.width * max(0, min(1, fraction))
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.25))
+                            Capsule()
+                                .fill(Color.white)
+                                .frame(width: width)
+                        }
+                        .frame(height: 10)
+                    }
+                    .frame(height: 10)
+
+                    Text(String(format: "%.0f%% of goal", max(0, min(1, fraction)) * 100))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.leading)
-                    Text(subtitle)
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.75))
-                        .multilineTextAlignment(.leading)
-                }
+
+                Text(detailText)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.75))
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+            .padding(18)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
             .background(
                 LinearGradient(colors: [gradient.start, gradient.end], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .opacity(isPressed ? 0.95 : 1.0)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 12)
-            .scaleEffect(isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isPressed)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 10)
         }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.01)
-                .onChanged { _ in if !isPressed { isPressed = true } }
-                .onEnded { _ in isPressed = false }
+        .buttonStyle(.projectSelection)
+    }
+}
+
+private struct ProjectSelectionNoProjectTile: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: {
+            Haptics.heavy()
+            action()
+        }) {
+            VStack(spacing: 8) {
+                Text("No project")
+                    .font(.system(size: 18, weight: .bold))
+                Text("Stay unassigned for this session.")
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .foregroundStyle(.white)
+            .padding(18)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
+            .background(
+                LinearGradient(colors: [Color(red: 0.21, green: 0.25, blue: 0.45), Color(red: 0.10, green: 0.12, blue: 0.26)],
+                               startPoint: .topLeading,
+                               endPoint: .bottomTrailing)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 10)
+        }
+        .buttonStyle(.projectSelection)
+    }
+}
+
+private struct ProjectSelectionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: configuration.isPressed)
+    }
+}
+
+private extension ButtonStyle where Self == ProjectSelectionButtonStyle {
+    static var projectSelection: ProjectSelectionButtonStyle { ProjectSelectionButtonStyle() }
+}
+private struct EmptyProjectsView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "rectangle.stack.badge.plus")
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+            Text("Create a project from the Home tab to start assigning focus sessions.")
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.75))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(32)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
         )
     }
 }
@@ -1241,11 +1522,17 @@ private struct CompletedSessionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        Haptics.heavy()
+                        dismiss()
+                    }
                         .foregroundStyle(.white.opacity(0.8))
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") { saveAndFinish() }
+                    Button("Save") {
+                        Haptics.success()
+                        saveAndFinish()
+                    }
                         .fontWeight(.semibold)
                 }
             }

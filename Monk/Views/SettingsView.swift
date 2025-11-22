@@ -5,21 +5,32 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
     @Query private var prefsList: [Preferences]
+    @Query(sort: [SortDescriptor(\FocusSession.startedAt, order: .forward)]) private var allSessions: [FocusSession]
 
-    @State private var showingGoalPicker = false
+    @State private var calendarOptions: [CalendarDisplayInfo] = []
+    @State private var calendarStatusMessage: String?
+    @State private var calendarBusy = false
 
     private var prefs: Preferences {
         if let existing = prefsList.first {
-            if existing.weeklyGoalHours < 1 {
-                existing.weeklyGoalHours = 40
-                modelContext.saveOrRollback()
-            } else if existing.weeklyGoalHours <= 24 {
-                existing.weeklyGoalHours = max(0, existing.weeklyGoalHours * 7)
+            var didChange = false
+            if existing.weeklyGoalHours < 0 {
+                existing.weeklyGoalHours = 0
+                didChange = true
+            }
+            if !existing.hasConvertedDailyGoal {
+                if existing.weeklyGoalHours > 0 && existing.weeklyGoalHours <= 24 {
+                    existing.weeklyGoalHours = existing.weeklyGoalHours * 7
+                }
+                existing.hasConvertedDailyGoal = true
+                didChange = true
+            }
+            if didChange {
                 modelContext.saveOrRollback()
             }
             return existing
         }
-        let created = Preferences()
+        let created = Preferences(hasConvertedDailyGoal: true)
         modelContext.insert(created)
         return created
     }
@@ -31,6 +42,7 @@ struct SettingsView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
                         goalCard
+                        calendarCard
                         sessionsCard
                     }
                     .padding(.horizontal, 24)
@@ -38,6 +50,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+        }
+        .task {
+            if prefs.calendarIntegrationEnabled {
+                await refreshCalendars()
+            }
         }
     }
 }
@@ -48,47 +65,125 @@ private extension SettingsView {
                      subtitle: "Choose how many hours you aim to focus each week.",
                      icon: "flag.fill") {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .center, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(selectedGoal) hours")
-                            .font(.system(size: 26, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
-                        Text("Currently targeted each week")
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                    Spacer()
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                            showingGoalPicker.toggle()
-                        }
-                    } label: {
-                        Label(showingGoalPicker ? "Hide picker" : "Adjust goal", systemImage: "slider.horizontal.3")
-                            .font(.footnote.weight(.semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(Color.white.opacity(0.15), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(selectedGoal) hours")
+                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("Currently targeted each week")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.7))
                 }
 
-                if showingGoalPicker {
-                    Divider().overlay(Color.white.opacity(0.18))
-                        .transition(.opacity)
-                    Picker("Weekly goal", selection: goalBinding) {
-                        ForEach(0...80, id: \.self) { value in
-                            Text("\(value) h").tag(value)
+                VStack(alignment: .leading, spacing: 10) {
+                    Slider(value: goalSliderBinding, in: 0...80, step: 1)
+                        .onChange(of: selectedGoal) { _, _ in
+                            Haptics.soft()
                         }
+                        .tint(.white)
+                    HStack {
+                        Text("Goal: \(selectedGoal) h / week")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Text("Auto-saved")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.6))
                     }
-                    .labelsHidden()
-                    .pickerStyle(.wheel)
-                    .frame(height: 160)
-                    .colorScheme(.dark)
-                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: showingGoalPicker)
+    }
+
+    var calendarCard: some View {
+        SettingsCard(title: "Calendar sync",
+                     subtitle: "Automatically log sessions to your personal calendars.",
+                     icon: "calendar") {
+            VStack(alignment: .leading, spacing: 16) {
+                Toggle(isOn: calendarEnabledBinding) {
+                    Text("Create events when sessions end")
+                        .font(.headline.weight(.medium))
+                        .foregroundStyle(.white)
+                }
+                .tint(Color.cyan)
+
+                if prefs.calendarIntegrationEnabled {
+                    if calendarOptions.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if calendarBusy {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            Text("No writable calendars available. Make sure the account is added in Settings › Calendar and allows edits.")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                    } else {
+                        Picker("Calendar", selection: calendarSelection) {
+                            ForEach(calendarOptions) { option in
+                                Text("\(option.title) — \(option.sourceName)")
+                                    .tag(option.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .accentColor(.white)
+                    }
+
+                    HStack(spacing: 12) {
+                        Button {
+                            Task { await refreshCalendars() }
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                                .font(.footnote.weight(.semibold))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 9)
+                                .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            Task { await syncCalendarHistory() }
+                        } label: {
+                            HStack {
+                                if calendarBusy {
+                                    ProgressView()
+                                        .tint(.white)
+                                }
+                                Text("Sync past sessions")
+                                    .font(.footnote.weight(.semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(calendarBusy || (prefs.calendarCalendarIdentifier ?? "").isEmpty)
+
+                        Button(role: .destructive) {
+                            Task { await removeAllMonkEvents() }
+                        } label: {
+                            Text("Delete all [Monk] events")
+                                .font(.footnote.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Color.red.opacity(0.2), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(calendarBusy)
+                    }
+                } else {
+                    Text("Turn this on to mirror Monk sessions onto one of your existing calendars.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+
+                if let status = calendarStatusMessage {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+            }
+        }
     }
 
     var sessionsCard: some View {
@@ -109,11 +204,11 @@ private extension SettingsView {
         }
     }
 
-    var goalBinding: Binding<Int> {
+    var goalSliderBinding: Binding<Double> {
         Binding(
-            get: { Int(prefs.weeklyGoalHours.rounded()) },
+            get: { prefs.weeklyGoalHours },
             set: { newValue in
-                prefs.weeklyGoalHours = Double(newValue)
+                prefs.weeklyGoalHours = max(0, min(80, newValue))
                 modelContext.saveOrRollback()
             }
         )
@@ -133,6 +228,135 @@ private extension SettingsView {
     }
 
     var selectedGoal: Int { Int(prefs.weeklyGoalHours.rounded()) }
+
+    var calendarEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { prefs.calendarIntegrationEnabled },
+            set: { newValue in
+                prefs.calendarIntegrationEnabled = newValue
+                modelContext.saveOrRollback()
+                Task { await handleCalendarToggle(enabled: newValue) }
+            }
+        )
+    }
+
+    var calendarSelection: Binding<String> {
+        Binding(
+            get: { prefs.calendarCalendarIdentifier ?? "" },
+            set: { newValue in
+                let normalized = newValue.isEmpty ? nil : newValue
+                guard prefs.calendarCalendarIdentifier != normalized else { return }
+                let previous = prefs.calendarCalendarIdentifier
+                prefs.calendarCalendarIdentifier = normalized
+                modelContext.saveOrRollback()
+                Task {
+                    await handleCalendarSelectionChange(from: previous, to: normalized)
+                }
+            }
+        )
+    }
+
+}
+
+private extension SettingsView {
+    func handleCalendarToggle(enabled: Bool) async {
+        if enabled {
+            let granted = await CalendarIntegration.shared.requestAccess()
+            guard granted else {
+                await MainActor.run {
+                    calendarStatusMessage = "Calendar access denied."
+                    prefs.calendarIntegrationEnabled = false
+                    modelContext.saveOrRollback()
+                }
+                return
+            }
+            await refreshCalendars()
+            await syncCalendarHistory()
+        } else {
+            await MainActor.run {
+                calendarBusy = false
+                calendarOptions = []
+                prefs.calendarCalendarIdentifier = nil
+                modelContext.saveOrRollback()
+                calendarStatusMessage = "Calendar sync disabled."
+            }
+        }
+    }
+
+    func syncCalendarHistory() async {
+        guard prefs.calendarIntegrationEnabled else { return }
+        await MainActor.run {
+            calendarBusy = true
+            calendarStatusMessage = "Syncing past sessions…"
+        }
+        guard let identifier = prefs.calendarCalendarIdentifier, !identifier.isEmpty else {
+            await MainActor.run {
+                calendarBusy = false
+                calendarStatusMessage = "Select a calendar first."
+            }
+            return
+        }
+        await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: identifier)
+        await MainActor.run {
+            calendarBusy = false
+            calendarStatusMessage = "Calendar is up to date."
+        }
+    }
+
+    func refreshCalendars() async {
+        let calendars = await CalendarIntegration.shared.availableCalendars()
+        await MainActor.run {
+            calendarOptions = calendars
+            if prefs.calendarCalendarIdentifier == nil,
+               let first = calendars.first {
+                prefs.calendarCalendarIdentifier = first.id
+                modelContext.saveOrRollback()
+            }
+        }
+        await MainActor.run {
+            updateSelectionStatus()
+        }
+    }
+
+    @MainActor
+    func updateSelectionStatus() {
+        if let identifier = prefs.calendarCalendarIdentifier,
+           let option = calendarOptions.first(where: { $0.id == identifier }) {
+            calendarStatusMessage = "Using \(option.title) in \(option.sourceName)."
+        } else {
+            calendarStatusMessage = "Choose which calendar Monk should write to."
+        }
+    }
+
+    func handleCalendarSelectionChange(from previous: String?, to newValue: String?) async {
+        guard prefs.calendarIntegrationEnabled else { return }
+        await MainActor.run {
+            calendarBusy = true
+            calendarStatusMessage = "Updating calendar selection…"
+        }
+        if let previous, !previous.isEmpty {
+            await CalendarIntegration.shared.purgeMonkEvents(in: previous)
+        }
+        if let newValue, !newValue.isEmpty {
+            await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: newValue)
+        }
+        await MainActor.run {
+            calendarBusy = false
+            updateSelectionStatus()
+        }
+    }
+
+    func removeAllMonkEvents() async {
+        await MainActor.run {
+            calendarBusy = true
+            calendarStatusMessage = "Deleting Monk events…"
+        }
+        await CalendarIntegration.shared.purgeAllMonkEvents()
+        await MainActor.run {
+            calendarBusy = false
+            calendarStatusMessage = "Removed all Monk-tagged events."
+        }
+    }
 }
 
 #Preview {

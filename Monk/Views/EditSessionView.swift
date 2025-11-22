@@ -1,3 +1,4 @@
+
 import SwiftUI
 import SwiftData
 
@@ -31,18 +32,24 @@ struct EditSessionView: View {
                         moodCard
                     }
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 32)
+                    .padding(.vertical, 32) 
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(.white.opacity(0.8))
+                    Button("Cancel") {
+                        Haptics.heavy()
+                        dismiss()
+                    }
+                    .foregroundStyle(.white.opacity(0.8))
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveAndClose() }
-                        .fontWeight(.semibold)
+                    Button("Save") {
+                        Haptics.success()
+                        saveAndClose()
+                    }
+                    .fontWeight(.semibold)
                 }
             }
         }
@@ -107,9 +114,15 @@ struct EditSessionView: View {
                    subtitle: "Choose which project should own this session.") {
             VStack(alignment: .leading, spacing: 16) {
                 Menu {
-                    Button("None") { selectedProjectID = nil }
+                    Button("None") {
+                        Haptics.heavy()
+                        selectedProjectID = nil
+                    }
                     ForEach(projects) { project in
-                        Button(project.title) { selectedProjectID = project.id }
+                        Button(project.title) {
+                            Haptics.heavy()
+                            selectedProjectID = project.id
+                        }
                     }
                 } label: {
                     HStack {
