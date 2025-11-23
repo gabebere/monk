@@ -1,32 +1,48 @@
 import WidgetKit
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct WeeklyGoalWidgetEntry: TimelineEntry {
     let date: Date
-    let projection: WeeklyGoalProjection?
+    let summary: WeeklyProjectGoalSummary?
+    let rotation: Int
 }
 
 struct WeeklyGoalWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> WeeklyGoalWidgetEntry {
-        WeeklyGoalWidgetEntry(date: .now, projection: .placeholder)
+        WeeklyGoalWidgetEntry(date: .now, summary: .placeholder, rotation: 0)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WeeklyGoalWidgetEntry) -> Void) {
         let now = Date()
-        if context.isPreview {
-            completion(WeeklyGoalWidgetEntry(date: now, projection: .preview))
-        } else {
-            completion(WeeklyGoalWidgetEntry(date: now, projection: WeeklyGoalWidgetDataSource.loadProjection(now: now)))
-        }
+        let capacity = WeeklyGoalWidgetLayout.maxRows(for: context.family)
+        let summary = context.isPreview ? .preview : WeeklyGoalWidgetDataSource.loadSummary(now: now)
+        let rotationEnabled = (summary?.segments.count ?? 0) > capacity
+        let entry = WeeklyGoalWidgetEntry(date: now, summary: summary, rotation: rotationEnabled ? 0 : 0)
+        completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WeeklyGoalWidgetEntry>) -> Void) {
         let now = Date()
-        let projection = WeeklyGoalWidgetDataSource.loadProjection(now: now)
-        let entry = WeeklyGoalWidgetEntry(date: now, projection: projection)
-        let refreshDate = Calendar.current.date(byAdding: .hour, value: 1, to: now) ?? now.addingTimeInterval(3600)
-        completion(Timeline(entries: [entry], policy: .after(refreshDate)))
+        let summary = WeeklyGoalWidgetDataSource.loadSummary(now: now)
+        let capacity = WeeklyGoalWidgetLayout.maxRows(for: context.family)
+        let shouldRotate = (summary?.segments.count ?? 0) > capacity
+        let entries: [WeeklyGoalWidgetEntry]
+        if let summary {
+            if shouldRotate {
+                let steps = max(summary.segments.count, capacity) * 3 // ~3s cadence covering multiple rotations
+                entries = (0..<steps).map { idx in
+                    WeeklyGoalWidgetEntry(date: now.addingTimeInterval(Double(idx) * 3), summary: summary, rotation: idx)
+                }
+            } else {
+                entries = [WeeklyGoalWidgetEntry(date: now, summary: summary, rotation: 0)]
+            }
+        } else {
+            entries = [WeeklyGoalWidgetEntry(date: now, summary: nil, rotation: 0)]
+        }
+        let refreshDate = entries.last?.date.addingTimeInterval(3) ?? now.addingTimeInterval(3600)
+        completion(Timeline(entries: entries, policy: .after(refreshDate)))
     }
 }
 
@@ -36,8 +52,8 @@ struct WeeklyGoalWidget: Widget {
             WeeklyGoalWidgetView(entry: entry)
         }
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
-        .configurationDisplayName("Weekly Focus Plan")
-        .description("Glance at your goal pace, daily plan, and prime focus windows.")
+        .configurationDisplayName("Project Goals")
+        .description("See a color-coded breakdown of your weekly project goals.")
     }
 }
 
@@ -47,18 +63,10 @@ private struct WeeklyGoalWidgetView: View {
 
     var body: some View {
         let metrics = WeeklyGoalWidgetLayout.metrics(for: family)
-
         ZStack(alignment: .topLeading) {
             Group {
-                if let projection = entry.projection {
-                    switch family {
-                    case .systemSmall:
-                        WeeklyGoalSmallView(projection: projection, layout: metrics)
-                    case .systemLarge:
-                        WeeklyGoalLargeView(projection: projection, layout: metrics)
-                    default:
-                        WeeklyGoalMediumView(projection: projection, layout: metrics)
-                    }
+                if let summary = entry.summary {
+                    ProjectGoalsWidgetContent(summary: summary, family: family, layout: metrics, rotation: entry.rotation)
                 } else {
                     WeeklyGoalPlaceholderView(family: family, layout: metrics)
                 }
@@ -76,610 +84,343 @@ private struct WeeklyGoalWidgetLayout {
     let verticalPadding: CGFloat
     let sectionSpacing: CGFloat
     let headerSpacing: CGFloat
-    let metricSpacing: CGFloat
+    let legendSpacing: CGFloat
     let progressHeight: CGFloat
 
     static func metrics(for family: WidgetFamily) -> WeeklyGoalWidgetLayout {
         switch family {
         case .systemSmall:
             return WeeklyGoalWidgetLayout(
-                outerPadding: 8,
-                verticalPadding: 8,
+                outerPadding: 12,
+                verticalPadding: 12,
                 sectionSpacing: 10,
                 headerSpacing: 6,
-                metricSpacing: 12,
-                progressHeight: 8
+                legendSpacing: 6,
+                progressHeight: 12
             )
         case .systemMedium:
             return WeeklyGoalWidgetLayout(
                 outerPadding: 16,
-                verticalPadding: 8,
+                verticalPadding: 12,
                 sectionSpacing: 12,
-                headerSpacing: 6,
-                metricSpacing: 14,
-                progressHeight: 9
+                headerSpacing: 8,
+                legendSpacing: 8,
+                progressHeight: 12
             )
         case .systemLarge:
             return WeeklyGoalWidgetLayout(
-                outerPadding: 18,
-                verticalPadding: 12,
-                sectionSpacing: 16,
+                outerPadding: 20,
+                verticalPadding: 14,
+                sectionSpacing: 14,
                 headerSpacing: 8,
-                metricSpacing: 18,
-                progressHeight: 12
+                legendSpacing: 10,
+                progressHeight: 14
             )
         default:
             return WeeklyGoalWidgetLayout(
                 outerPadding: 18,
                 verticalPadding: 12,
-                sectionSpacing: 14,
-                headerSpacing: 6,
-                metricSpacing: 16,
-                progressHeight: 10
+                sectionSpacing: 12,
+                headerSpacing: 8,
+                legendSpacing: 8,
+                progressHeight: 12
             )
+        }
+    }
+
+    static func maxRows(for family: WidgetFamily) -> Int {
+        switch family {
+        case .systemSmall:
+            return 2
+        case .systemMedium:
+            return 2
+        case .systemLarge:
+            return 4
+        default:
+            return 2
         }
     }
 }
 
-// MARK: - Medium
-
-private struct WeeklyGoalMediumView: View {
-    let projection: WeeklyGoalProjection
+private struct ProjectGoalsWidgetContent: View {
+    let summary: WeeklyProjectGoalSummary
+    let family: WidgetFamily
     let layout: WeeklyGoalWidgetLayout
+    let rotation: Int
+    private let capHours: Double = 112
+    private var maxRows: Int { WeeklyGoalWidgetLayout.maxRows(for: family) }
 
-    private var completionPercent: Int {
-        guard projection.goalHours > 0 else { return 0 }
-        return Int(round(projection.completionFraction * 100))
+    private var normalizedSegments: [WidgetGoalSegment] {
+        let total = max(summary.totalGoalHours, 1)
+        var cursor: Double = 0
+        return summary.segments
+            .sorted { $0.goalHours > $1.goalHours }
+            .compactMap { segment in
+                let scaledGoal = segment.goalHours * summary.scaleFactor
+                guard scaledGoal > 0 else { return nil }
+                let goalFraction = min(max(scaledGoal / total, 0), 1)
+                defer { cursor += goalFraction }
+                return WidgetGoalSegment(
+                    id: segment.id,
+                    title: segment.title,
+                    gradientIndex: segment.gradientIndex,
+                    startFraction: cursor,
+                    goalFraction: goalFraction,
+                    fillFraction: goalFraction * segment.progressFraction,
+                    goalHours: segment.goalHours,
+                    actualHours: segment.actualHours
+                )
+            }
     }
 
-    private var todayPlan: WeeklyGoalProjection.DayPlan? {
-        projection.dayPlans.first { Calendar.current.isDateInToday($0.dayStart) }
+    private var rotatingRows: [WidgetSmallRow] {
+        guard !normalizedSegments.isEmpty else { return [] }
+        let count = normalizedSegments.count
+        let limited = normalizedSegments.sorted { $0.goalHours > $1.goalHours }
+        if count <= maxRows {
+            return limited.prefix(maxRows).map { row(for: $0) }
+        }
+        let start = rotation % max(1, count)
+        let reordered = (0..<count).map { idx in
+            limited[(start + idx) % count]
+        }
+        return reordered
+            .prefix(maxRows)
+            .map { row(for: $0) }
+    }
+
+    private func row(for segment: WidgetGoalSegment) -> WidgetSmallRow {
+        let progress = segment.goalHours > 0 ? min(max(segment.actualHours / segment.goalHours, 0), 1) : 0
+        return WidgetSmallRow(
+            id: segment.id,
+            title: segment.title,
+            gradientIndex: segment.gradientIndex,
+            progress: progress,
+            goalHours: segment.goalHours,
+            actualHours: segment.actualHours
+        )
+    }
+
+    private var completionPercent: Int {
+        guard summary.totalGoalHours > 0 else { return 0 }
+        return Int(round(min(max(summary.totalActualHours / summary.totalGoalHours, 0), 1) * 100))
+    }
+
+    private var remainingText: String {
+        if summary.rawGoalHours > capHours {
+            return "Capped at \(Int(capHours))h"
+        }
+        let remaining = max(0, capHours - summary.rawGoalHours)
+        return "\(Int(remaining))h free"
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let height = proxy.size.height
-            let scale = min(1.0, max(0.85, height / 158.0))
-            let sectionSpacing = max(8, layout.sectionSpacing * scale)
-            let headerSpacing = max(4, layout.headerSpacing * scale)
-            let metricSpacing = max(10, layout.metricSpacing * scale)
-            let progressHeight = max(6, layout.progressHeight * scale)
-            let percentSize = max(20, 24 * scale)
-
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                VStack(alignment: .leading, spacing: sectionSpacing) {
-                    header(headerSpacing: headerSpacing, percentSize: percentSize)
-                    WeeklyGoalProgressBar(value: projection.completionFraction, height: progressHeight)
-                        .frame(maxWidth: .infinity)
-                    metricsRow(metricSpacing: metricSpacing)
-                    if let plan = todayPlan {
-                        todaySummary(plan: plan, headerSpacing: headerSpacing)
-                    }
-                    if !projection.primeHourLabels.isEmpty {
-                        primeSummary(headerSpacing: headerSpacing)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Spacer(minLength: 0)
+        Group {
+            if family == .systemSmall {
+                smallLayout
+            } else {
+                regularLayout
             }
-            .padding(.vertical, layout.sectionSpacing / 2)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    private func header(headerSpacing: CGFloat, percentSize: CGFloat) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: headerSpacing) {
-                Text("Weekly Focus Goal")
+    private var regularLayout: some View {
+        VStack(alignment: .leading, spacing: layout.sectionSpacing) {
+            header
+            WidgetGoalBar(segments: normalizedSegments)
+                .frame(height: layout.progressHeight)
+            WidgetProjectRows(rows: rotatingRows, spacing: layout.legendSpacing)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var smallLayout: some View {
+        VStack(alignment: .leading, spacing: layout.sectionSpacing) {
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Project Goals")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text("\(hoursLabel(summary.totalActualHours))h of \(hoursLabel(summary.totalGoalHours))h")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Spacer()
+                Text("\(completionPercent)%")
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
+            }
+
+            if rotatingRows.isEmpty {
+                WidgetGoalBar(segments: normalizedSegments)
+                    .frame(height: layout.progressHeight + 2)
+                Text("Set weekly goals on projects to see them here.")
+                    .font(.caption2)
+                    .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(rotatingRows) { row in
+                        WidgetProjectRow(row: row)
+                    }
+                }
+                HStack {
+                    Text(remainingText)
+                        .font(.caption2)
+                        .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: layout.headerSpacing) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Project Goals")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.9)
-                Text(String(format: "%.1fh of %.0fh", projection.actualHours, projection.goalHours))
+                    .minimumScaleFactor(0.6)
+                Text("\(hoursLabel(summary.totalActualHours))h of \(hoursLabel(summary.totalGoalHours))h")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.7)
             }
             Spacer()
             Text("\(completionPercent)%")
-                .font(.system(size: percentSize, weight: .heavy, design: .rounded))
+                .font(.system(size: family == .systemLarge ? 32 : 26, weight: .heavy, design: .rounded))
                 .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
     }
 
-    private func metricsRow(metricSpacing: CGFloat) -> some View {
-        HStack(alignment: .top, spacing: metricSpacing) {
-            MetricBlock(
-                title: "Remaining",
-                value: String(format: "%.1fh", projection.remainingHours),
-                footnote: projection.remainingDays > 0
-                    ? "\(projection.remainingDays) day\(projection.remainingDays == 1 ? "" : "s") left"
-                    : "Goal complete",
-                accent: WeeklyGoalWidgetPalette.accentGradient
-            )
+}
 
-            MetricBlock(
-                title: "Daily Pace",
-                value: String(format: "%.1fh", projection.recommendedDailyHours),
-                footnote: paceFootnote,
-                accent: WeeklyGoalWidgetPalette.accentGradient
-            )
-        }
-    }
+private struct WidgetGoalSegment: Identifiable {
+    let id: UUID
+    let title: String
+    let gradientIndex: Int
+    let startFraction: Double
+    let goalFraction: Double
+    let fillFraction: Double
+    let goalHours: Double
+    let actualHours: Double
 
-    private func todaySummary(plan: WeeklyGoalProjection.DayPlan, headerSpacing: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: headerSpacing) {
-            Text("Today")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-            Text(String(format: "%.1fh logged • %.1fh target", plan.actualHours, max(plan.plannedHours, 0.1)))
-                .font(.caption2)
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-    }
-
-    private func primeSummary(headerSpacing: CGFloat) -> some View {
-        HStack(spacing: headerSpacing) {
-            Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-            Text("Best hours: \(projection.primeHourLabels.joined(separator: ", "))")
-                .font(.caption2)
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-    }
-
-    private var paceFootnote: String {
-        if projection.todayAdditionalHoursNeeded <= 0 {
-            return String(format: "%.1fh logged", projection.todayActualHours)
-        }
-        return String(format: "+%.1fh today", projection.todayAdditionalHoursNeeded)
+    var progressPercent: Int {
+        guard goalHours > 0 else { return 0 }
+        return Int(round(min(max(actualHours / goalHours, 0), 1) * 100))
     }
 }
 
-// MARK: - Small
-
-private struct WeeklyGoalSmallView: View {
-    let projection: WeeklyGoalProjection
-    let layout: WeeklyGoalWidgetLayout
-
-    private var completionPercent: Int {
-        guard projection.goalHours > 0 else { return 0 }
-        return Int(round(projection.completionFraction * 100))
-    }
-
-    private var todayPlan: WeeklyGoalProjection.DayPlan? {
-        projection.dayPlans.first { Calendar.current.isDateInToday($0.dayStart) }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: layout.sectionSpacing) {
-            Text("Focus Goal")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            Text(String(format: "%.1fh of %.0fh", projection.actualHours, projection.goalHours))
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            WeeklyGoalProgressBar(value: projection.completionFraction, height: layout.progressHeight)
-                .frame(maxWidth: .infinity)
-
-            if let plan = todayPlan {
-                Text(String(format: "Today %.1fh / %.1fh", plan.actualHours, max(plan.plannedHours, 0.1)))
-                    .font(.caption2)
-                    .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if let label = projection.primeHourLabels.first {
-                HStack(spacing: layout.headerSpacing) {
-                    Image(systemName: "sparkles")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-                    Text(label)
-                        .font(.caption2)
-                        .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            Text("\(completionPercent)%")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .padding(.vertical, max(0, (layout.outerPadding / 2) - 2))
-    }
-}
-
-// MARK: - Large
-
-private struct WeeklyGoalLargeView: View {
-    let projection: WeeklyGoalProjection
-    let layout: WeeklyGoalWidgetLayout
-
-    private var completionPercent: Int {
-        guard projection.goalHours > 0 else { return 0 }
-        return Int(round(projection.completionFraction * 100))
-    }
-
-    private var planRows: [WeeklyGoalProjection.DayPlan] {
-        Array(projection.dayPlans.prefix(7))
-    }
-
-    private var remainingFootnote: String {
-        projection.remainingDays > 0
-            ? "\(projection.remainingDays) day\(projection.remainingDays == 1 ? "" : "s") left"
-            : "Goal complete"
-    }
-
-    private var todayMetricFootnote: String {
-        let delta = projection.todayActualHours - projection.todayRecommendedHours
-        if delta > 0.2 {
-            return String(format: "+%.1fh ahead", delta)
-        } else if delta < -0.2 {
-            return String(format: "%.1fh to go", abs(delta))
-        } else {
-            return "On pace"
-        }
-    }
-
-    private var paceFootnote: String {
-        if projection.remainingDays > 0 {
-            return String(format: "Next avg %.1fh", projection.recommendedDailyHours)
-        } else {
-            return "Plan next goal"
-        }
-    }
+private struct WidgetGoalBar: View {
+    let segments: [WidgetGoalSegment]
 
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let height = proxy.size.height
-            let scale = min(1.0, max(0.82, min(width / 338.0, height / 354.0)))
-            let sectionSpacing = max(12, layout.sectionSpacing * scale)
-            let headerSpacing = max(6, layout.headerSpacing * scale)
-            let metricSpacing = max(12, layout.metricSpacing * scale)
-            let progressHeight = max(10, layout.progressHeight * scale)
-
-            VStack(alignment: .leading, spacing: sectionSpacing) {
-                progressSection(
-                    scale: scale,
-                    headerSpacing: headerSpacing,
-                    progressHeight: max(progressHeight, 12)
-                )
-
-                metricsRow(metricSpacing: metricSpacing)
-
-                if !projection.primeHourLabels.isEmpty {
-                    primeWindowsRow(headerSpacing: headerSpacing)
-                }
-
-                weekPlanSection(headerSpacing: headerSpacing, barHeight: max(progressHeight * 4.5, 48))
-            }
-            .padding(.vertical, layout.verticalPadding)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
-    }
-
-    private func progressSection(scale: CGFloat, headerSpacing: CGFloat, progressHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: headerSpacing) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Weekly Progress")
-                    .font(.system(size: 22 * scale, weight: .semibold))
-                    .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Spacer(minLength: 0)
-                Text("\(completionPercent)%")
-                    .font(.system(size: 26 * scale, weight: .heavy, design: .rounded))
-                    .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-
-            WeeklyGoalProgressBar(value: projection.completionFraction, height: progressHeight)
-                .frame(maxWidth: .infinity)
-
-            Text(String(format: "%.1fh logged this week", projection.actualHours))
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func metricsRow(metricSpacing: CGFloat) -> some View {
-        HStack(alignment: .top, spacing: metricSpacing) {
-            MetricBlock(
-                title: "Remaining",
-                value: String(format: "%.1fh", projection.remainingHours),
-                footnote: remainingFootnote,
-                accent: WeeklyGoalWidgetPalette.accentGradient
-            )
-
-            MetricBlock(
-                title: "Today",
-                value: String(format: "%.1fh", projection.todayActualHours),
-                footnote: todayMetricFootnote,
-                accent: WeeklyGoalWidgetPalette.accentGradient
-            )
-
-            MetricBlock(
-                title: "Daily Pace",
-                value: String(format: "%.1fh", projection.recommendedDailyHours),
-                footnote: paceFootnote,
-                accent: WeeklyGoalWidgetPalette.accentGradient
-            )
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    private func primeWindowsRow(headerSpacing: CGFloat) -> some View {
-        VStack(alignment: .center, spacing: headerSpacing) {
-            Text("Prime focus windows")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                .textCase(.uppercase)
-                .kerning(0.8)
-
-            HStack(spacing: headerSpacing) {
-                ForEach(projection.primeHourLabels.prefix(3), id: \.self) { label in
-                    WeeklyGoalChip(label: label)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    private func weekPlanSection(headerSpacing: CGFloat, barHeight: CGFloat) -> some View {
-        WeeklyGoalWeekStrip(
-            plans: planRows,
-            barHeight: barHeight,
-            headerSpacing: headerSpacing
-        )
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-}
-
-private struct WeeklyGoalWeekStrip: View {
-    let plans: [WeeklyGoalProjection.DayPlan]
-    let barHeight: CGFloat
-    let headerSpacing: CGFloat
-
-    private var maximumHours: Double {
-        max(plans.map { max($0.actualHours, $0.plannedHours) }.max() ?? 1, 0.5)
-    }
-
-    var body: some View {
-        VStack(alignment: .center, spacing: headerSpacing) {
-            Text("Week plan")
-                .font(.caption.weight(.semibold))
-                .textCase(.uppercase)
-                .kerning(0.8)
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-
-            HStack(alignment: .bottom, spacing: 8) {
-                ForEach(plans) { plan in
-                    WeeklyGoalDayColumn(
-                        plan: plan,
-                        maxHours: maximumHours,
-                        barHeight: barHeight,
-                        isToday: Calendar.current.isDateInToday(plan.dayStart)
-                    )
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-}
-
-private struct WeeklyGoalDayColumn: View {
-    let plan: WeeklyGoalProjection.DayPlan
-    let maxHours: Double
-    let barHeight: CGFloat
-    let isToday: Bool
-
-    private var barWidth: CGFloat { 28 }
-    private let cornerRadius: CGFloat = 6
-
-    private var weekdayLabel: String {
-        WeekdayFormatter.shared.string(from: plan.dayStart)
-    }
-
-    private var footerLabel: String {
-        if plan.isFuture {
-            return String(format: "%.1fh", max(plan.plannedHours, 0))
-        }
-        return String(format: "%.1fh", plan.actualHours)
-    }
-
-    @ViewBuilder
-    private func fillShape(height: CGFloat, style: some ShapeStyle, roundTop: Bool, roundBottom: Bool) -> some View {
-        if height > 0 {
-            let topRadius = roundTop ? cornerRadius : 0
-            let bottomRadius = roundBottom ? cornerRadius : 0
-            UnevenRoundedRectangle(
-                cornerRadii: .init(
-                    topLeading: topRadius,
-                    bottomLeading: bottomRadius,
-                    bottomTrailing: bottomRadius,
-                    topTrailing: topRadius
-                )
-            )
-            .fill(style)
-            .frame(width: barWidth, height: height)
-        }
-    }
-
-    var body: some View {
-        let plannedRatio = min(max(plan.plannedHours / maxHours, 0), 1)
-        let actualRatio = min(max(plan.actualHours / maxHours, 0), 1)
-        let minSegmentHeight: CGFloat = max(4, cornerRadius * 1.5)
-        let plannedHeight = plannedRatio > 0 ? min(barHeight, max(barHeight * plannedRatio, minSegmentHeight)) : 0
-        let baseActualHeight = plan.actualHours > 0
-            ? min(barHeight, max(barHeight * actualRatio, minSegmentHeight))
-            : 0
-        let dayComplete = plan.actualHours >= max(plan.plannedHours, 0.01) - 0.05
-        let actualHeight = dayComplete ? barHeight : min(baseActualHeight, plannedHeight)
-        let remainderHeight = plan.isFuture ? max(plannedHeight - actualHeight, 0) : 0
-
-        VStack(spacing: 6) {
-            ZStack(alignment: .bottom) {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(WeeklyGoalWidgetPalette.progressTrack)
-                    .frame(width: barWidth, height: barHeight)
-
-                if remainderHeight > 0 {
-                    fillShape(
-                        height: remainderHeight,
-                        style: WeeklyGoalWidgetPalette.accentGradient.opacity(0.35),
-                        roundTop: true,
-                        roundBottom: actualHeight == 0
-                    )
-                    .offset(y: -actualHeight)
-                }
-
-                if actualHeight > 0 {
-                    fillShape(
-                        height: actualHeight,
-                        style: WeeklyGoalWidgetPalette.accentGradient,
-                        roundTop: dayComplete,
-                        roundBottom: true
-                    )
-                }
-            }
-            .frame(width: barWidth, height: barHeight, alignment: .bottom)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
-                        dayComplete ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.35) : (isToday ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.45) : Color.clear),
-                        lineWidth: dayComplete ? 1.5 : (isToday ? 2 : 0)
-                    )
-                    .shadow(
-                        color: dayComplete ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.12) : (isToday ? WeeklyGoalWidgetPalette.accentHigh.opacity(0.18) : .clear),
-                        radius: dayComplete ? 2 : (isToday ? 3 : 0)
-                    )
-                    .overlay(alignment: .topTrailing) {
-                        if dayComplete {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-                                .padding(4)
-                        }
-                    }
-            }
-
-            Text(isToday ? "TODAY" : weekdayLabel.uppercased())
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            Text(footerLabel)
-                .font(.caption2)
-                .foregroundStyle(dayComplete ? WeeklyGoalWidgetPalette.titlePrimary : WeeklyGoalWidgetPalette.bodyMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(width: barWidth)
-    }
-}
-
-private struct WeeklyGoalChip: View {
-    let label: String
-
-    var body: some View {
-        Text(label)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-            .padding(.vertical, 3)
-            .padding(.horizontal, 8)
-            .background(
-                Capsule()
-                    .fill(WeeklyGoalWidgetPalette.chipBackground)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(WeeklyGoalWidgetPalette.chipStroke, lineWidth: 1)
-            )
-    }
-}
-
-// MARK: - Shared Components
-
-private struct MetricBlock: View {
-    let title: String
-    let value: String
-    let footnote: String
-    var accent: LinearGradient? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-            if let accent {
-                Text(value)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(accent)
-            } else {
-                Text(value)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-            }
-            Text(footnote)
-                .font(.caption2)
-                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct WeeklyGoalProgressBar: View {
-    let value: Double
-    let height: CGFloat
-
-    init(value: Double, height: CGFloat = 10) {
-        self.value = value
-        self.height = height
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: height / 2)
+                RoundedRectangle(cornerRadius: height / 2, style: .continuous)
                     .fill(WeeklyGoalWidgetPalette.progressTrack)
-                RoundedRectangle(cornerRadius: height / 2)
-                    .fill(WeeklyGoalWidgetPalette.accentGradient)
-                    .frame(width: proxy.size.width * CGFloat(min(max(value, 0), 1)))
+                ForEach(segments) { segment in
+                    let gradient = WidgetProjectPalette.gradient(at: segment.gradientIndex)
+                    RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                        .fill(LinearGradient(colors: [gradient.start.opacity(0.35), gradient.end.opacity(0.28)], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: width * segment.goalFraction)
+                        .offset(x: width * segment.startFraction)
+                }
+                ForEach(segments) { segment in
+                    let gradient = WidgetProjectPalette.gradient(at: segment.gradientIndex)
+                    RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                        .fill(LinearGradient(colors: [gradient.start, gradient.end], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: width * segment.fillFraction)
+                        .offset(x: width * segment.startFraction)
+                }
             }
         }
-        .frame(height: height)
     }
+}
+
+private struct WidgetProjectRows: View {
+    let rows: [WidgetSmallRow]
+    let spacing: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(rows) { row in
+                WidgetProjectRow(row: row)
+            }
+        }
+    }
+}
+
+private struct WidgetSmallRow: Identifiable {
+    let id: UUID
+    let title: String
+    let gradientIndex: Int
+    let progress: Double
+    let goalHours: Double
+    let actualHours: Double
+
+    var percentString: String {
+        "\(Int(round(min(max(progress, 0), 1) * 100)))%"
+    }
+
+    var progressClamped: Double {
+        min(max(progress, 0), 1)
+    }
+}
+
+private struct WidgetProjectRow: View {
+    let row: WidgetSmallRow
+
+    var body: some View {
+        let gradient = WidgetProjectPalette.gradient(at: row.gradientIndex)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(row.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+                Spacer()
+                Text(row.percentString)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
+            }
+            Text("\(hoursLabel(row.actualHours))h of \(hoursLabel(row.goalHours))h")
+                .font(.caption2)
+                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let height = proxy.size.height
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                        .fill(WeeklyGoalWidgetPalette.progressTrack)
+                    RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                        .fill(LinearGradient(colors: [gradient.start, gradient.end], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: width * row.progressClamped)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+}
+
+private func hoursLabel(_ value: Double) -> String {
+    let rounded = value.rounded()
+    if abs(rounded - value) < 0.01 {
+        return String(format: "%.0f", rounded)
+    }
+    return String(format: "%.1f", value)
 }
 
 private struct WeeklyGoalPlaceholderView: View {
@@ -688,61 +429,54 @@ private struct WeeklyGoalPlaceholderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: layout.sectionSpacing) {
-            Text("Weekly Focus Goal")
-                .font(family == .systemSmall ? .headline.weight(.semibold) : .title2.weight(.semibold))
+            Text("Project Goals")
+                .font(.headline.weight(.semibold))
                 .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-            Text("Set a weekly goal in Monk to see your plan here.")
-                .font(family == .systemSmall ? .caption : .subheadline)
+            WidgetGoalBar(segments: placeholderSegments)
+                .frame(height: layout.progressHeight)
+            Text("Set weekly goals on projects to see them here.")
+                .font(.caption)
                 .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var placeholderSegments: [WidgetGoalSegment] {
+        [
+            WidgetGoalSegment(id: UUID(), title: "Research", gradientIndex: 0, startFraction: 0, goalFraction: 0.35, fillFraction: 0.22, goalHours: 40, actualHours: 14),
+            WidgetGoalSegment(id: UUID(), title: "Writing", gradientIndex: 1, startFraction: 0.35, goalFraction: 0.28, fillFraction: 0.16, goalHours: 32, actualHours: 9),
+            WidgetGoalSegment(id: UUID(), title: "Planning", gradientIndex: 2, startFraction: 0.63, goalFraction: 0.22, fillFraction: 0.18, goalHours: 25, actualHours: 14)
+        ]
     }
 }
-
-// MARK: - Palette & Helpers
 
 private enum WeeklyGoalWidgetPalette {
     static let baseBackground = LinearGradient(
         colors: [
             Color(red: 0.12, green: 0.07, blue: 0.26),
-            Color(red: 0.19, green: 0.12, blue: 0.37),
-            Color(red: 0.10, green: 0.29, blue: 0.47),
-            Color(red: 0.05, green: 0.48, blue: 0.56)
+            Color(red: 0.19, green: 0.12, blue: 0.38),
+            Color(red: 0.08, green: 0.36, blue: 0.58),
+            Color(red: 0.05, green: 0.58, blue: 0.62)
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
-
-    static let accentGradient = LinearGradient(
-        colors: [
-            Color(red: 0.47, green: 0.43, blue: 0.96),
-            Color(red: 0.24, green: 0.57, blue: 0.98),
-            Color(red: 0.12, green: 0.73, blue: 0.84)
-        ],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
-
-    static let accentHigh = Color.white.opacity(0.95)
-    static let titlePrimary = Color.white.opacity(0.92)
+    static let titlePrimary = Color.white.opacity(0.95)
     static let titleSecondary = Color.white.opacity(0.78)
-    static let bodyMuted = Color.white.opacity(0.65)
-    static let progressTrack = Color.white.opacity(0.18)
-    static let chipBackground = Color.white.opacity(0.12)
-    static let chipStroke = Color.white.opacity(0.22)
+    static let bodyMuted = Color.white.opacity(0.72)
+    static let accentHigh = Color(red: 0.18, green: 0.86, blue: 0.94)
+    static let progressTrack = Color.white.opacity(0.16)
 }
 
 private enum WeeklyGoalWidgetDataSource {
-    static func loadProjection(now: Date) -> WeeklyGoalProjection? {
+    static func loadSummary(now: Date) -> WeeklyProjectGoalSummary? {
         do {
             let schema = Schema([FocusSession.self, Preferences.self, Project.self])
             let configuration = ModelConfiguration(cloudKitDatabase: .private("iCloud.com.gbr.Monk"))
             let container = try ModelContainer(for: schema, configurations: [configuration])
             let context = ModelContext(container)
 
-            let prefs = try context.fetch(FetchDescriptor<Preferences>()).first
-            let weeklyGoal = prefs?.weeklyGoalHours ?? 0
-            guard weeklyGoal > 0 else { return nil }
+            let projects = try context.fetch(FetchDescriptor<Project>())
+            guard !projects.isEmpty else { return nil }
 
             let calendar = Calendar(identifier: .gregorian)
             let startDate = calendar.date(byAdding: .day, value: -21, to: now) ?? now.addingTimeInterval(-21 * 24 * 3600)
@@ -756,65 +490,72 @@ private enum WeeklyGoalWidgetDataSource {
 
             let sessions = try context.fetch(descriptor)
             let analyzer = InsightsAnalyzer()
-            return analyzer.weeklyGoalProjection(sessions: sessions, weeklyGoalHours: weeklyGoal, now: now)
+            let summary = analyzer.weeklyProjectGoals(projects: projects, sessions: sessions, now: now)
+            return summary.hasGoals ? summary : nil
         } catch {
             return nil
         }
     }
 }
 
-private extension WeeklyGoalProjection {
-    static let placeholder: WeeklyGoalProjection = .mock(goalHours: 35, actualHours: 18, remainingHours: 17, remainingDays: 4, todayActual: 2.2, todayRecommended: 2.6, todayAdditional: 0.4)
-    static let preview: WeeklyGoalProjection = .mock(goalHours: 45, actualHours: 32, remainingHours: 13, remainingDays: 3, todayActual: 4.2, todayRecommended: 3.6, todayAdditional: -0.6)
+private enum WidgetProjectPalette {
+    private static let gradients: [(start: Color, end: Color)] = [
+        (Color(red: 0.27, green: 0.56, blue: 0.99), Color(red: 0.60, green: 0.28, blue: 0.98)),
+        (Color(red: 0.33, green: 0.76, blue: 0.86), Color(red: 0.20, green: 0.48, blue: 0.97)),
+        (Color(red: 0.99, green: 0.62, blue: 0.45), Color(red: 0.95, green: 0.30, blue: 0.55)),
+        (Color(red: 0.98, green: 0.80, blue: 0.36), Color(red: 0.96, green: 0.48, blue: 0.31)),
+        (Color(red: 0.54, green: 0.43, blue: 0.99), Color(red: 0.28, green: 0.21, blue: 0.58)),
+        (Color(red: 0.34, green: 0.64, blue: 0.99), Color(red: 0.22, green: 0.30, blue: 0.64)),
+        (Color(red: 0.99, green: 0.45, blue: 0.69), Color(red: 0.58, green: 0.32, blue: 0.93)),
+        (Color(red: 0.46, green: 0.35, blue: 0.82), Color(red: 0.19, green: 0.18, blue: 0.38))
+    ]
 
-    static func mock(goalHours: Double,
-                     actualHours: Double,
-                     remainingHours: Double,
-                     remainingDays: Int,
-                     todayActual: Double,
-                     todayRecommended: Double,
-                     todayAdditional: Double) -> WeeklyGoalProjection {
-        let calendar = Calendar(identifier: .gregorian)
-        let today = calendar.startOfDay(for: Date())
-        let plans: [WeeklyGoalProjection.DayPlan] = (0..<7).compactMap { offset in
-            guard let day = calendar.date(byAdding: .day, value: offset - 3, to: today) else { return nil }
-            let isFuture = day > today
-            let planned = max(todayRecommended, 2.0) + Double(offset - 3) * 0.3
-            let actual = isFuture ? max(0, Double.random(in: 0.0...planned * 0.6)) : max(0, planned * Double.random(in: 0.7...1.1))
-            return WeeklyGoalProjection.DayPlan(
-                dayStart: day,
-                actualHours: offset == 3 ? todayActual : actual,
-                plannedHours: offset == 3 ? todayRecommended : planned,
-                isFuture: isFuture
-            )
+    static func gradient(at index: Int) -> (start: Color, end: Color) {
+        precondition(!gradients.isEmpty)
+        if index < gradients.count { return gradients[index] }
+        let base = gradients[index % gradients.count]
+        let cycle = max(1, index / gradients.count)
+        let lighten = min(0.10, 0.04 * Double(cycle))
+        let darken = min(0.15, 0.05 * Double(cycle))
+        return (adjust(base.start, brightnessDelta: lighten), adjust(base.end, brightnessDelta: -darken))
+    }
+
+    private static func adjust(_ color: Color, brightnessDelta: Double) -> Color {
+        let uiColor = UIColor(color)
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        if uiColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) {
+            let adjusted = max(0.0, min(1.0, brightness + brightnessDelta))
+            return Color(hue: hue, saturation: saturation, brightness: adjusted, opacity: alpha)
         }
-        return WeeklyGoalProjection(
-            goalHours: goalHours,
-            actualHours: actualHours,
-            completionFraction: goalHours > 0 ? min(1, actualHours / goalHours) : 0,
-            remainingHours: max(0, remainingHours),
-            remainingDays: remainingDays,
-            recommendedDailyHours: remainingDays > 0 ? remainingHours / Double(remainingDays) : 0,
-            todayActualHours: todayActual,
-            todayRecommendedHours: todayRecommended,
-            todayAdditionalHoursNeeded: max(0, todayAdditional),
-            primeHourLabels: ["10–11", "14–15", "20–21"],
-            dayPlans: plans
-        )
+        return color
     }
 }
 
-private final class WeekdayFormatter {
-    static let shared = WeekdayFormatter()
-    private let formatter: DateFormatter
+private extension WeeklyProjectGoalSummary {
+    static let placeholder: WeeklyProjectGoalSummary = .mock()
+    static let preview: WeeklyProjectGoalSummary = .mock()
 
-    private init() {
-        formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.setLocalizedDateFormatFromTemplate("EEE")
-    }
-
-    func string(from date: Date) -> String {
-        formatter.string(from: date)
+    static func mock() -> WeeklyProjectGoalSummary {
+        let now = Date()
+        let cap: Double = 112
+        let segments: [WeeklyProjectGoalSummary.Segment] = [
+            .init(id: UUID(), title: "Research", gradientIndex: 0, goalHours: 42, actualHours: 24),
+            .init(id: UUID(), title: "Writing", gradientIndex: 1, goalHours: 32, actualHours: 18),
+            .init(id: UUID(), title: "Planning", gradientIndex: 2, goalHours: 18, actualHours: 10),
+            .init(id: UUID(), title: "Review", gradientIndex: 3, goalHours: 12, actualHours: 5)
+        ]
+        let raw = segments.reduce(0) { $0 + $1.goalHours }
+        let scale = raw > cap ? cap / raw : 1
+        return WeeklyProjectGoalSummary(
+            weekStart: now,
+            weekEnd: now.addingTimeInterval(7 * 24 * 3600),
+            rawGoalHours: raw,
+            totalGoalHours: raw * scale,
+            scaleFactor: scale,
+            segments: segments
+        )
     }
 }

@@ -5,14 +5,20 @@ import Charts
 struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor<FocusSession>(\.startedAt, order: .reverse)]) private var sessions: [FocusSession]
-    @Query private var prefsList: [Preferences]
+    @Query(sort: [SortDescriptor<Project>(\.createdAt, order: .forward)]) private var projects: [Project]
     @State private var path: [InsightRoute] = []
 
     private let analyzer = InsightsAnalyzer()
     private let referenceNow = Date()
 
-    private var prefs: Preferences? { prefsList.first }
-    private var weeklyGoalHours: Double? { prefs?.weeklyGoalHours }
+    private var projectGoals: WeeklyProjectGoalSummary {
+        analyzer.weeklyProjectGoals(projects: projects, sessions: sessions, now: referenceNow)
+    }
+
+    private var aggregatedGoalHours: Double? {
+        let total = projectGoals.totalGoalHours
+        return total > 0 ? total : nil
+    }
 
     private var summary: TemporalInsightsSummary {
         analyzer.summarize(sessions: sessions, now: referenceNow)
@@ -21,7 +27,7 @@ struct InsightsView: View {
     private var focusScoreSnapshot: FocusScoreSnapshot {
         analyzer.focusScore(
             sessions: sessions,
-            weeklyGoalHours: weeklyGoalHours,
+            weeklyGoalHours: aggregatedGoalHours,
             now: referenceNow
         )
     }
@@ -32,6 +38,10 @@ struct InsightsView: View {
                 AnimatingBackground(base: Theme.dataBackground(), halo: Theme.dataHaloGradient)
                 ScrollView {
                     LazyVStack(spacing: InsightsLayout.verticalSpacing) {
+                        ProjectGoalsCard(summary: projectGoals)
+                            .frame(maxWidth: .infinity)
+                            .padding(.bottom, InsightsLayout.focusScoreGap)
+
                         NavigationLink(value: InsightRoute.focusScore) {
                             FocusScoreCard(model: focusScoreSnapshot, palette: InsightPalette.focusScore)
                                 .frame(maxWidth: .infinity)
@@ -42,13 +52,6 @@ struct InsightsView: View {
                         .simultaneousGesture(TapGesture().onEnded { Haptics.heavy() })
 
                         LazyVGrid(columns: gridColumns, spacing: InsightsLayout.verticalSpacing) {
-                            if let goalHours = weeklyGoalHours, goalHours > 0 {
-                                NavigationLink(value: InsightRoute.weeklyGoal) {
-                                    InsightTile(model: weeklyGoalTile(summary: summary, goalHours: goalHours))
-                                }
-                                .simultaneousGesture(TapGesture().onEnded { Haptics.heavy() })
-                            }
-
                             ForEach(tileModels(summary: summary)) { tile in
                                 NavigationLink(value: tile.route) {
                                     InsightTile(model: tile)
@@ -72,16 +75,8 @@ struct InsightsView: View {
                     FocusScoreDetailView(
                         analyzer: analyzer,
                         sessions: sessions,
-                        weeklyGoalHours: weeklyGoalHours,
+                        weeklyGoalHours: aggregatedGoalHours,
                         palette: InsightPalette.focusScore,
-                        now: referenceNow
-                    )
-                case .weeklyGoal:
-                    WeeklyGoalDetailView(
-                        sessions: sessions,
-                        analyzer: analyzer,
-                        weeklyGoalHours: weeklyGoalHours ?? 0,
-                        palette: InsightPalette.goal,
                         now: referenceNow
                     )
                 case .focus:
@@ -102,21 +97,6 @@ struct InsightsView: View {
     private var gridColumns: [GridItem] {
         [GridItem(.flexible(), spacing: InsightsLayout.verticalSpacing),
          GridItem(.flexible(), spacing: InsightsLayout.verticalSpacing)]
-    }
-
-    private func weeklyGoalTile(summary: TemporalInsightsSummary, goalHours: Double) -> InsightTileModel {
-        let totalHours = summary.totalFocusSeconds / 3600
-        let completion = goalHours > 0 ? min(max(totalHours / goalHours, 0), 1) : 0
-        let headline = String(format: "%.0f%%", completion * 100)
-        let subline = String(format: "%.1fh of %.0fh", totalHours, goalHours)
-        return InsightTileModel(
-            route: .weeklyGoal,
-            title: "Weekly Goal",
-            icon: "flag.checkered",
-            colors: InsightPalette.goal,
-            headline: headline,
-            footnote: subline
-        )
     }
 
     private func tileModels(summary: TemporalInsightsSummary) -> [InsightTileModel] {
@@ -197,7 +177,6 @@ struct InsightsView: View {
 
 private enum InsightRoute: Hashable {
     case focusScore
-    case weeklyGoal
     case focus
     case satisfaction
     case consistency
@@ -251,6 +230,188 @@ private enum InsightsLayout {
     static let bottomInset: CGFloat = 72
     static let focusScoreAspectRatio: CGFloat = 2.0
     static let focusScoreGap: CGFloat = verticalSpacing
+}
+
+private struct ProjectGoalsCard: View {
+    let summary: WeeklyProjectGoalSummary
+    private let goalCapHours: Double = 112
+
+    private var normalizedSegments: [NormalizedGoalSegment] {
+        let total = max(summary.totalGoalHours, 1)
+        var cursor: Double = 0
+        return summary.segments
+            .sorted { $0.goalHours > $1.goalHours }
+            .compactMap { segment in
+                let scaledGoal = segment.goalHours * summary.scaleFactor
+                guard scaledGoal > 0 else { return nil }
+                let goalFraction = min(max(scaledGoal / total, 0), 1)
+                defer { cursor += goalFraction }
+                return NormalizedGoalSegment(
+                    id: segment.id,
+                    title: segment.title,
+                    gradientIndex: segment.gradientIndex,
+                    startFraction: cursor,
+                    goalFraction: goalFraction,
+                    fillFraction: goalFraction * segment.progressFraction,
+                    goalHours: segment.goalHours,
+                    actualHours: segment.actualHours
+                )
+            }
+    }
+
+    private var remainingCapacity: Double {
+        max(0, goalCapHours - summary.rawGoalHours)
+    }
+
+    private var totalLine: String {
+        guard summary.hasGoals else { return "No project goals yet" }
+        return String(format: "%.1fh of %.0fh planned", summary.totalActualHours, summary.totalGoalHours)
+    }
+
+    private var capLine: String {
+        if summary.rawGoalHours > goalCapHours {
+            return "Capped at \(Int(goalCapHours))h"
+        }
+        return "\(Int(remainingCapacity))h free"
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(InsightPalette.gradient(for: InsightPalette.goal))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .shadow(color: InsightPalette.goal.primary.opacity(0.22), radius: 14, x: 0, y: 8)
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Label("Project Goals", systemImage: "chart.bar.fill")
+                        .font(.headline)
+                        .foregroundStyle(Color.white.opacity(0.94))
+                    Spacer()
+                    Text(totalLine)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.9))
+                }
+
+                if summary.hasGoals, !normalizedSegments.isEmpty {
+                    ProjectGoalBar(segments: normalizedSegments)
+                        .frame(height: 18)
+
+                    HStack(spacing: 12) {
+                        Text(capLine)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.white.opacity(0.82))
+                        Spacer()
+                        Text("Weekly cap \(Int(goalCapHours))h")
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.65))
+                    }
+
+                    ProjectGoalLegend(segments: normalizedSegments)
+                } else {
+                    Text("Set weekly goals on projects to see a color-coded scaffold for your perfect week.")
+                        .font(.footnote)
+                        .foregroundStyle(Color.white.opacity(0.78))
+                }
+            }
+            .padding(.vertical, 18)
+            .padding(.horizontal, 20)
+        }
+    }
+}
+
+private struct NormalizedGoalSegment: Identifiable {
+    let id: UUID
+    let title: String
+    let gradientIndex: Int
+    let startFraction: Double
+    let goalFraction: Double
+    let fillFraction: Double
+    let goalHours: Double
+    let actualHours: Double
+
+    var progressPercent: Int {
+        guard goalHours > 0 else { return 0 }
+        let ratio = min(max(actualHours / goalHours, 0), 1)
+        return Int(round(ratio * 100))
+    }
+}
+
+private struct ProjectGoalBar: View {
+    let segments: [NormalizedGoalSegment]
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let height = proxy.size.height
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+                ForEach(segments) { segment in
+                    let gradient = ProjectGradientPalette.gradient(at: segment.gradientIndex)
+                    RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                        .fill(LinearGradient(colors: [gradient.start.opacity(0.35), gradient.end.opacity(0.28)], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: width * segment.goalFraction)
+                        .offset(x: width * segment.startFraction)
+                }
+                ForEach(segments) { segment in
+                    let gradient = ProjectGradientPalette.gradient(at: segment.gradientIndex)
+                    RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                        .fill(LinearGradient(colors: [gradient.start, gradient.end], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: width * segment.fillFraction)
+                        .offset(x: width * segment.startFraction)
+                }
+            }
+        }
+    }
+}
+
+private struct ProjectGoalLegend: View {
+    let segments: [NormalizedGoalSegment]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(segments.prefix(4)) { segment in
+                ProjectGoalLegendItem(segment: segment)
+            }
+            if segments.count > 4 {
+                Text("+\(segments.count - 4) more projects")
+                    .font(.caption)
+                    .foregroundStyle(Color.white.opacity(0.65))
+            }
+        }
+    }
+}
+
+private struct ProjectGoalLegendItem: View {
+    let segment: NormalizedGoalSegment
+
+    var body: some View {
+        HStack(spacing: 10) {
+            let gradient = ProjectGradientPalette.gradient(at: segment.gradientIndex)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(LinearGradient(colors: [gradient.start, gradient.end], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 16, height: 16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(segment.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .lineLimit(1)
+                Text(String(format: "%.1fh of %.0fh • %d%%", segment.actualHours, segment.goalHours, segment.progressPercent))
+                    .font(.caption)
+                    .foregroundStyle(Color.white.opacity(0.72))
+            }
+            Spacer(minLength: 0)
+        }
+    }
 }
 
 private struct FocusScoreCard: View {
@@ -591,131 +752,6 @@ private enum InsightPalette {
 }
 
 // MARK: - Detail surfaces, selectors, and shared views
-
-private struct WeeklyGoalDetailView: View {
-    let sessions: [FocusSession]
-    let analyzer: InsightsAnalyzer
-    let weeklyGoalHours: Double
-    let palette: InsightPalette.Colors
-    private let weekOffsets: [Int]
-    private let baseNow: Date
-    @State private var selectedWeek: Int
-
-    init(sessions: [FocusSession], analyzer: InsightsAnalyzer, weeklyGoalHours: Double, palette: InsightPalette.Colors, now: Date = .now) {
-        self.sessions = sessions
-        self.analyzer = analyzer
-        self.weeklyGoalHours = weeklyGoalHours
-        self.palette = palette
-        self.baseNow = now
-        self.weekOffsets = analyzer.availableWeekOffsets(sessions: sessions, now: now)
-        _selectedWeek = State(initialValue: 0)
-    }
-
-    private var summary: TemporalInsightsSummary {
-        analyzer.summary(forWeekOffset: selectedWeek, sessions: sessions, now: baseNow)
-    }
-
-    var body: some View {
-        let gradient = InsightPalette.gradient(for: palette)
-        let dailySnapshots = summary.dailySnapshots
-        let dailyTarget = weeklyGoalHours / Double(summary.lookbackDays)
-
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                WeekSelector(selectedWeek: $selectedWeek, weekOffsets: weekOffsets, summary: summary)
-
-                MetricCapsules(metrics: [
-                    Metric(title: "Total", value: String(format: "%.1fh", summary.totalFocusSeconds / 3600)),
-                    Metric(title: "Goal", value: String(format: "%.0fh", weeklyGoalHours)),
-                    Metric(title: "Progress", value: String(format: "%.0f%%", progress * 100))
-                ])
-
-                ProgressView(value: min(progress, 1))
-                    .progressViewStyle(.linear)
-                    .tint(.white)
-
-                Text(String(format: "You are %@ schedule.", pacingText))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.white.opacity(0.8))
-
-                Chart {
-                    ForEach(dailySnapshots) { snapshot in
-                        BarMark(
-                            x: .value("Day", snapshot.dayStart),
-                            y: .value("Focus", snapshot.totalSeconds / 3600)
-                        )
-                        .foregroundStyle(Color.white.opacity(0.75))
-                    }
-                    if dailyTarget > 0 {
-                        RuleMark(y: .value("Target", dailyTarget))
-                            .foregroundStyle(Color.white.opacity(0.45))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4]))
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisValueLabel(String(format: "%.0fh", value.as(Double.self) ?? 0))
-                            .foregroundStyle(Color.white.opacity(0.7))
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks(values: dailySnapshots.map(\.dayStart)) { value in
-                        if let date = value.as(Date.self) {
-                            AxisValueLabel {
-                                Text(date, format: .dateTime.weekday(.abbreviated))
-                            }
-                            .foregroundStyle(Color.white.opacity(0.7))
-                        }
-                    }
-                }
-                .frame(height: 200)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Daily breakdown")
-                        .font(.headline)
-                        .foregroundStyle(Color.white.opacity(0.9))
-                    ForEach(dailySnapshots) { snapshot in
-                        GoalDayRow(
-                            label: weekdayLabel(snapshot.dayStart),
-                            actualHours: snapshot.totalSeconds / 3600,
-                            targetHours: dailyTarget
-                        )
-                    }
-                }
-            }
-            .padding(20)
-        }
-        .background(gradient.ignoresSafeArea())
-        .navigationTitle("Weekly Goal")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var progress: Double {
-        guard weeklyGoalHours > 0 else { return 0 }
-        return (summary.totalFocusSeconds / 3600) / weeklyGoalHours
-    }
-
-    private var pacingText: String {
-        let elapsed = summary.weekEnd.timeIntervalSince(summary.weekStart)
-        guard elapsed > 0 else { return "on" }
-        let fraction = min(1, max(0, baseNow.timeIntervalSince(summary.weekStart) / elapsed))
-        let expected = weeklyGoalHours * fraction
-        let delta = (summary.totalFocusSeconds / 3600) - expected
-        if abs(delta) < 0.25 { return "on" }
-        return delta > 0 ? String(format: "%.1fh ahead of", delta) : String(format: "%.1fh behind", abs(delta))
-    }
-
-    private func weekdayLabel(_ date: Date) -> String {
-        WeeklyGoalDetailView.dayFormatter.string(from: date)
-    }
-
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        formatter.setLocalizedDateFormatFromTemplate("EEE")
-        return formatter
-    }()
-}
 
 private struct FocusScoreDetailView: View {
     let analyzer: InsightsAnalyzer

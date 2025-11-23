@@ -811,6 +811,7 @@ private struct ProjectDetailView: View {
     @State private var hasWeeklyGoal: Bool = false
     @State private var weeklyGoalHoursInput: Double = 10
     @State private var didLoadGoalState = false
+    @Query private var allProjects: [Project]
 
     private var totalHours: Double { focus.totalDuration(for: project) / 3600 }
     private var sessionCount: Int { project.sessions?.count ?? 0 }
@@ -932,19 +933,39 @@ private struct ProjectDetailView: View {
                                         .foregroundStyle(.white)
                                 }
                                 .tint(Color.cyan)
+                                .disabled(goalCapReachedForNewHours)
+
+                                if goalCapReachedForNewHours && !hasWeeklyGoal {
+                                    Text("Total weekly goals are capped at \(Int(goalCapHours))h. Lower another project's goal to add one here.")
+                                        .font(.footnote)
+                                        .foregroundStyle(.white.opacity(0.7))
+                                }
 
                                 if hasWeeklyGoal {
                                     VStack(alignment: .leading, spacing: 10) {
-                                        Slider(value: $weeklyGoalHoursInput, in: 1...80, step: 1)
-                                            .tint(.white)
-                                            .onChange(of: weeklyGoalHoursInput) { _, newValue in
-                                                Haptics.soft()
+                                        if sliderUpperBound < 1 {
+                                            Text("Weekly goal cap reached. Lower another project's goal to add hours here.")
+                                                .font(.footnote)
+                                                .foregroundStyle(.white.opacity(0.7))
+                                        } else {
+                                            Slider(value: $weeklyGoalHoursInput, in: 1...sliderUpperBound, step: 1)
+                                                .tint(.white)
+                                                .onChange(of: weeklyGoalHoursInput) { _, newValue in
+                                                    let clamped = clampedGoalInput(newValue)
+                                                    if clamped != weeklyGoalHoursInput {
+                                                        weeklyGoalHoursInput = clamped
+                                                    }
+                                                    Haptics.soft()
+                                                }
+                                            HStack {
+                                                Text("Goal: \(Int(weeklyGoalHoursInput)) h / week")
+                                                    .font(.footnote.weight(.semibold))
+                                                    .foregroundStyle(.white)
+                                                Spacer()
+                                                Text("\(Int(remainingBudgetAfterSelection))h capacity left")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.white.opacity(0.6))
                                             }
-                                        HStack {
-                                            Text("Goal: \(Int(weeklyGoalHoursInput)) h / week")
-                                                .font(.footnote.weight(.semibold))
-                                                .foregroundStyle(.white)
-                                            Spacer()
                                             Text("Auto-saved")
                                                 .font(.caption)
                                                 .foregroundStyle(.white.opacity(0.6))
@@ -1099,7 +1120,11 @@ private struct ProjectDetailView: View {
         }
         .onChange(of: weeklyGoalHoursInput) { _, newValue in
             guard hasWeeklyGoal else { return }
-            project.weeklyGoalHours = newValue
+            let clamped = clampedGoalInput(newValue)
+            if clamped != weeklyGoalHoursInput {
+                weeklyGoalHoursInput = clamped
+            }
+            project.weeklyGoalHours = clamped >= 1 ? clamped : nil
             modelContext.saveOrRollback()
         }
     }
@@ -1155,7 +1180,7 @@ private struct ProjectDetailView: View {
             weeklyGoalHoursInput = stored
             hasWeeklyGoal = true
         } else {
-            weeklyGoalHoursInput = max(1, weeklyGoalHoursInput)
+            weeklyGoalHoursInput = clampedGoalInput(weeklyGoalHoursInput)
             hasWeeklyGoal = false
         }
         didLoadGoalState = true
@@ -1163,11 +1188,52 @@ private struct ProjectDetailView: View {
 
     private func applyGoalToggle(_ isEnabled: Bool) {
         if isEnabled {
-            project.weeklyGoalHours = weeklyGoalHoursInput
+            let clamped = clampedGoalInput(weeklyGoalHoursInput > 0 ? weeklyGoalHoursInput : 1)
+            guard clamped >= 1 else {
+                hasWeeklyGoal = false
+                return
+            }
+            weeklyGoalHoursInput = clamped
+            project.weeklyGoalHours = clamped
         } else {
             project.weeklyGoalHours = nil
         }
         modelContext.saveOrRollback()
+    }
+
+    private var goalCapHours: Double { 112 }
+
+    private var otherGoalHours: Double {
+        allProjects
+            .filter { $0.id != project.id }
+            .compactMap { $0.weeklyGoalHours }
+            .filter { $0 > 0 }
+            .reduce(0, +)
+    }
+
+    private var availableGoalBudget: Double {
+        max(0, goalCapHours - otherGoalHours)
+    }
+
+    private var sliderUpperBound: Double {
+        let current = max(0, project.weeklyGoalHours ?? 0)
+        let allowed = min(goalCapHours, availableGoalBudget)
+        return max(current, allowed)
+    }
+
+    private func clampedGoalInput(_ value: Double) -> Double {
+        let upper = sliderUpperBound
+        guard upper >= 1 else { return 0 }
+        return min(max(1, value), upper)
+    }
+
+    private var remainingBudgetAfterSelection: Double {
+        let selected = hasWeeklyGoal ? max(0, weeklyGoalHoursInput) : 0
+        return max(0, goalCapHours - otherGoalHours - selected)
+    }
+
+    private var goalCapReachedForNewHours: Bool {
+        sliderUpperBound < 1 && (project.weeklyGoalHours ?? 0) <= 0
     }
 
     private func goalStatusText(for progress: ProjectGoalProgress) -> String {
@@ -1575,7 +1641,7 @@ private struct CompletedSessionView: View {
     }
 }
 
-private enum ProjectGradientPalette {
+enum ProjectGradientPalette {
     private static let baseGradients: [(start: Color, end: Color)] = [
         (Color(red: 0.27, green: 0.56, blue: 0.99), Color(red: 0.60, green: 0.28, blue: 0.98)),
         (Color(red: 0.33, green: 0.76, blue: 0.86), Color(red: 0.20, green: 0.48, blue: 0.97)),

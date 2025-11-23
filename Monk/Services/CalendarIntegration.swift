@@ -57,38 +57,45 @@ actor CalendarIntegration {
         }
     }
 
-    func purgeMonkEvents(in calendarIdentifier: String) async {
+    func purgeMonkEvents(in calendarIdentifier: String) async -> Int {
         guard await requestAccessIfNeeded(),
-              let calendar = eventStore.calendar(withIdentifier: calendarIdentifier) else { return }
+              let calendar = eventStore.calendar(withIdentifier: calendarIdentifier),
+              calendar.allowsContentModifications else { return 0 }
         let start = Date(timeIntervalSince1970: 0)
         let end = Date(timeIntervalSinceNow: 60 * 60 * 24 * 365 * 5)
         let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: [calendar])
-        let events = eventStore.events(matching: predicate)
-        for event in events where isMonkEvent(event) {
+        let events = eventStore.events(matching: predicate).filter(isMonkEvent)
+        var removed = 0
+        for event in events {
             do {
                 try eventStore.remove(event, span: .thisEvent)
+                removed += 1
             } catch {
                 print("Failed to remove event \(event.eventIdentifier ?? "nil"): \(error.localizedDescription)")
             }
         }
+        return removed
     }
 
-    func purgeAllMonkEvents() async {
-        guard await requestAccessIfNeeded() else { return }
-        let allCalendars = eventStore.calendars(for: .event)
+    func purgeAllMonkEvents() async -> Int {
+        guard await requestAccessIfNeeded() else { return 0 }
+        let allCalendars = eventStore.calendars(for: .event).filter { $0.allowsContentModifications }
+        let start = Date(timeIntervalSince1970: 0)
+        let end = Date(timeIntervalSinceNow: 60 * 60 * 24 * 365 * 5)
+        var totalRemoved = 0
         for calendar in allCalendars {
-            let start = Date(timeIntervalSince1970: 0)
-            let end = Date(timeIntervalSinceNow: 60 * 60 * 24 * 365 * 5)
             let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: [calendar])
-            let events = eventStore.events(matching: predicate)
-            for event in events where isMonkEvent(event) {
+            let events = eventStore.events(matching: predicate).filter(isMonkEvent)
+            for event in events {
                 do {
                     try eventStore.remove(event, span: .thisEvent)
+                    totalRemoved += 1
                 } catch {
                     print("Failed to purge event \(event.eventIdentifier ?? "nil") from \(calendar.title): \(error.localizedDescription)")
                 }
             }
         }
+        return totalRemoved
     }
 
     private func requestAccessIfNeeded() async -> Bool {
@@ -145,11 +152,14 @@ actor CalendarIntegration {
     }
 
     private func isMonkEvent(_ event: EKEvent) -> Bool {
-        if let notes = event.notes, notes.hasPrefix("MonkSession:") {
+        if let notes = event.notes,
+           notes.range(of: "MonkSession:", options: [.caseInsensitive]) != nil {
             return true
         }
-        if let title = event.title?.lowercased(), title.hasPrefix("[monk]") {
-            return true
+        if let title = event.title?.lowercased() {
+            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("[monk]") { return true }
+            if trimmed.contains("[monk") { return true }
         }
         return false
     }

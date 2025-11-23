@@ -166,6 +166,36 @@ struct WeeklyGoalProjection {
     let dayPlans: [DayPlan]
 }
 
+struct WeeklyProjectGoalSummary {
+    struct Segment: Identifiable {
+        let id: UUID
+        let title: String
+        let gradientIndex: Int
+        let goalHours: Double
+        let actualHours: Double
+
+        var progressFraction: Double {
+            guard goalHours > 0 else { return 0 }
+            return min(max(actualHours / goalHours, 0), 1)
+        }
+    }
+
+    let weekStart: Date
+    let weekEnd: Date
+    let rawGoalHours: Double
+    let totalGoalHours: Double
+    let scaleFactor: Double
+    let segments: [Segment]
+
+    var totalActualHours: Double {
+        segments.reduce(0) { $0 + $1.actualHours }
+    }
+
+    var hasGoals: Bool {
+        totalGoalHours > 0 && !segments.isEmpty
+    }
+}
+
 struct TemporalInsightsConfig {
     var lookbackDays: Int = 7
     var bestWindowWidthHours: Int = 2
@@ -321,9 +351,13 @@ struct InsightsAnalyzer {
     func focusScore(sessions: [FocusSession],
                     weeklyGoalHours: Double?,
                     now: Date = .now,
-                    fallbackWeeklyGoal: Double = 40) -> FocusScoreSnapshot {
+                    fallbackWeeklyGoal: Double = 0) -> FocusScoreSnapshot {
         let config = TemporalInsightsConfig(lookbackDays: 14)
-        let summary = summarize(sessions: sessions, now: now, config: config)
+        let hasGoal = (weeklyGoalHours ?? 0) > 0
+        let goalSessions = hasGoal
+            ? sessions.filter { ($0.project?.weeklyGoalHours ?? 0) > 0 }
+            : sessions
+        let summary = summarize(sessions: goalSessions, now: now, config: config)
         let dailyTargetHours = max((weeklyGoalHours ?? fallbackWeeklyGoal) / 7, 0)
         let dailyTargetSeconds = dailyTargetHours * 3600
         let activeDayDivisor = max(1, summary.activeDayCount)
@@ -431,7 +465,7 @@ struct InsightsAnalyzer {
             components = []
         }
 
-        let weeklyProjection = weeklyGoalProjection(sessions: sessions, weeklyGoalHours: weeklyGoalHours, now: now)
+        let weeklyProjection = weeklyGoalProjection(sessions: goalSessions, weeklyGoalHours: weeklyGoalHours, now: now)
         let dynamicTodayGoalHours = weeklyProjection.flatMap { projection -> Double? in
             guard let weeklyGoalHours else { return nil }
             let remainingHours = max(0, weeklyGoalHours - projection.actualHours)
@@ -550,6 +584,60 @@ struct InsightsAnalyzer {
             todayAdditionalHoursNeeded: todayAdditionalHoursNeeded,
             primeHourLabels: primeHourLabels,
             dayPlans: dayPlans
+        )
+    }
+
+    func weeklyProjectGoals(projects: [Project],
+                            sessions: [FocusSession],
+                            now: Date = .now,
+                            capHours: Double = 112) -> WeeklyProjectGoalSummary {
+        let weekStart = lookbackAnchor(for: now, days: 7)
+        let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? now
+
+        let goalProjects: [(project: Project, goalHours: Double)] = projects.compactMap { project in
+            guard let goal = project.weeklyGoalHours, goal > 0 else { return nil }
+            return (project, goal)
+        }
+        let goalProjectIDs = Set(goalProjects.map { $0.project.id })
+
+        var actualSeconds: [UUID: TimeInterval] = [:]
+        for session in sessions {
+            guard let projectID = session.project?.id,
+                  goalProjectIDs.contains(projectID) else { continue }
+            let sessionEnd = session.endedAt ?? now
+            if sessionEnd <= weekStart || session.startedAt >= weekEnd { continue }
+            let clippedStart = max(session.startedAt, weekStart)
+            let clippedEnd = min(sessionEnd, weekEnd)
+            guard clippedEnd > clippedStart else { continue }
+            actualSeconds[projectID, default: 0] += clippedEnd.timeIntervalSince(clippedStart)
+        }
+
+        var segments: [WeeklyProjectGoalSummary.Segment] = []
+        for entry in goalProjects {
+            let project = entry.project
+            let goalHours = entry.goalHours
+            let hours = (actualSeconds[project.id] ?? 0) / 3600
+            let segment = WeeklyProjectGoalSummary.Segment(
+                id: project.id,
+                title: project.title,
+                gradientIndex: project.gradientIndex,
+                goalHours: goalHours,
+                actualHours: hours
+            )
+            segments.append(segment)
+        }
+
+        let rawGoalHours = segments.reduce(0) { $0 + $1.goalHours }
+        let scaleFactor = rawGoalHours > capHours && capHours > 0 ? capHours / rawGoalHours : 1
+        let totalGoalHours = rawGoalHours * scaleFactor
+
+        return WeeklyProjectGoalSummary(
+            weekStart: weekStart,
+            weekEnd: weekEnd,
+            rawGoalHours: rawGoalHours,
+            totalGoalHours: totalGoalHours,
+            scaleFactor: scaleFactor,
+            segments: segments
         )
     }
 

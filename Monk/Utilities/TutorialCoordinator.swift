@@ -1,7 +1,6 @@
 import SwiftUI
 
 enum TutorialStage: CaseIterable, Identifiable {
-    case weeklyGoal
     case createProject
     case addWidgets
     case startSession
@@ -10,8 +9,6 @@ enum TutorialStage: CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .weeklyGoal:
-            return "Set your weekly goal"
         case .createProject:
             return "Create your first project"
         case .addWidgets:
@@ -23,8 +20,6 @@ enum TutorialStage: CaseIterable, Identifiable {
 
     var message: String {
         switch self {
-        case .weeklyGoal:
-            return "Open the Settings tab and adjust the Weekly Goal card to set your target hours."
         case .createProject:
             return "Jump to Home and use the plus button to add a project for what you’re working on."
         case .addWidgets:
@@ -36,7 +31,7 @@ enum TutorialStage: CaseIterable, Identifiable {
 
     var preferredTab: AppTab {
         switch self {
-        case .weeklyGoal, .addWidgets:
+        case .addWidgets:
             return .settings
         case .createProject, .startSession:
             return .home
@@ -64,7 +59,7 @@ final class TutorialCoordinator: ObservableObject {
 
     var tabSelectionHandler: ((AppTab) -> Void)?
 
-    func start(at stage: TutorialStage = .weeklyGoal) {
+    func start(at stage: TutorialStage = .createProject) {
         activeStage = stage
         tabSelectionHandler?(stage.preferredTab)
     }

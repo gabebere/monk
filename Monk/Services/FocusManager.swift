@@ -160,9 +160,9 @@ final class FocusManager: ObservableObject {
     private func currentFocusScoreSnapshot(now: Date = .now) -> FocusScoreSnapshot? {
         let sessions = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? []
         guard !sessions.isEmpty else { return nil }
-        let prefs = (try? modelContext.fetch(FetchDescriptor<Preferences>()))
-            .flatMap { $0.first }
-        let weeklyGoal = prefs?.weeklyGoalHours
+        let projects = (try? modelContext.fetch(FetchDescriptor<Project>())) ?? []
+        let projectGoals = insightsAnalyzer.weeklyProjectGoals(projects: projects, sessions: sessions, now: now)
+        let weeklyGoal = projectGoals.totalGoalHours > 0 ? projectGoals.totalGoalHours : nil
         return insightsAnalyzer.focusScore(sessions: sessions, weeklyGoalHours: weeklyGoal, now: now)
     }
 

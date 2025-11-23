@@ -13,12 +13,12 @@
 		74F1E0602FFF5FE500784214 /* HardBlockShieldDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F1E0002FFF5FE100784214 /* HardBlockShieldDataSource.swift */; };
 		74F1E0612FFF5FE500784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
 		74F1E0622FFF5FE500784214 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */; };
-		74F1E0632FFF5FE500784214 /* HardBlockShieldUIExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 74F1E0022FFF5FE100784214 /* HardBlockShieldUIExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		74F1E0632FFF5FE500784214 /* HardBlockShieldUIExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 74F1E0022FFF5FE100784214 /* HardBlockShieldUIExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		74F5A1363000C00000784214 /* FamilyControls.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0403000C00000784214 /* FamilyControls.framework */; };
 		74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0413000C00000784214 /* DeviceActivity.framework */; };
 		74F5A1383000C00000784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
 		74F7A0803000D00000784214 /* MonkLiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F7A0003000D00000784214 /* MonkLiveActivities.swift */; };
-		74F7A0903000D00000784214 /* MonkLiveActivitiesExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		74F7A0903000D00000784214 /* MonkLiveActivitiesExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		74F7A0A03000D00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F6B0003000C00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift */; };
 		74F7A0B23000D00000784214 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 74F7A0B03000D00000784214 /* Assets.xcassets */; };
 		76F20E2A94E547EA83E2DC12 /* Monk/Models/Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CAA36B6431243A0B9E653FD /* Monk/Models/Project.swift */; };
@@ -44,16 +44,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		74F1E0522FFF5FE300784214 /* Embed App Extensions */ = {
+		74F1E0522FFF5FE300784214 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				74F1E0632FFF5FE500784214 /* HardBlockShieldUIExtension.appex in Embed App Extensions */,
-				74F7A0903000D00000784214 /* MonkLiveActivitiesExtension.appex in Embed App Extensions */,
+				74F1E0632FFF5FE500784214 /* HardBlockShieldUIExtension.appex in Embed Foundation Extensions */,
+				74F7A0903000D00000784214 /* MonkLiveActivitiesExtension.appex in Embed Foundation Extensions */,
 			);
-			name = "Embed App Extensions";
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -198,7 +198,7 @@
 				7420C2422E5CE57200784214 /* Sources */,
 				7420C2432E5CE57200784214 /* Frameworks */,
 				7420C2442E5CE57200784214 /* Resources */,
-				74F1E0522FFF5FE300784214 /* Embed App Extensions */,
+				74F1E0522FFF5FE300784214 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
@@ -270,7 +270,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1640;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2610;
 				TargetAttributes = {
 					7420C2452E5CE57200784214 = {
 						CreatedOnToolsVersion = 16.4;
@@ -450,6 +450,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -508,6 +509,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};

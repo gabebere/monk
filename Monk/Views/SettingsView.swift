@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject private var focus: FocusManager
     @Query private var prefsList: [Preferences]
     @Query(sort: [SortDescriptor(\FocusSession.startedAt, order: .forward)]) private var allSessions: [FocusSession]
+    @Query(sort: [SortDescriptor(\Project.createdAt, order: .forward)]) private var projects: [Project]
 
     @State private var calendarOptions: [CalendarDisplayInfo] = []
     @State private var calendarStatusMessage: String?
@@ -61,34 +62,32 @@ struct SettingsView: View {
 
 private extension SettingsView {
     var goalCard: some View {
-        SettingsCard(title: "Weekly Goal",
-                     subtitle: "Choose how many hours you aim to focus each week.",
+        SettingsCard(title: "Project Goals",
+                     subtitle: "Weekly targets now come from the sum of all project goals (capped at 112h).",
                      icon: "flag.fill") {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("\(selectedGoal) hours")
+                    Text(String(format: "%.0fh planned", projectGoalTotal))
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("Currently targeted each week")
+                    Text("Across all projects this week")
                         .font(.footnote)
                         .foregroundStyle(.white.opacity(0.7))
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Slider(value: goalSliderBinding, in: 0...80, step: 1)
-                        .onChange(of: selectedGoal) { _, _ in
-                            Haptics.soft()
-                        }
-                        .tint(.white)
                     HStack {
-                        Text("Goal: \(selectedGoal) h / week")
+                        Label("\(String(format: "%.0fh remaining", remainingGoalBudget))", systemImage: "speedometer")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.white)
                         Spacer()
-                        Text("Auto-saved")
+                        Text("Cap: 112h/week")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(.white.opacity(0.65))
                     }
+                    Text("Adjust goals per project from the Home tab. New goals are blocked once the 112h cap is reached.")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.7))
                 }
             }
         }
@@ -204,16 +203,6 @@ private extension SettingsView {
         }
     }
 
-    var goalSliderBinding: Binding<Double> {
-        Binding(
-            get: { prefs.weeklyGoalHours },
-            set: { newValue in
-                prefs.weeklyGoalHours = max(0, min(80, newValue))
-                modelContext.saveOrRollback()
-            }
-        )
-    }
-
     var discardShortBinding: Binding<Bool> {
         Binding(
             get: { prefs.discardShortSessions ?? false },
@@ -226,8 +215,6 @@ private extension SettingsView {
             }
         )
     }
-
-    var selectedGoal: Int { Int(prefs.weeklyGoalHours.rounded()) }
 
     var calendarEnabledBinding: Binding<Bool> {
         Binding(
@@ -254,6 +241,19 @@ private extension SettingsView {
                 }
             }
         )
+    }
+
+    var rawProjectGoalTotal: Double {
+        projects
+            .compactMap { $0.weeklyGoalHours }
+            .filter { $0 > 0 }
+            .reduce(0, +)
+    }
+
+    var projectGoalTotal: Double { min(rawProjectGoalTotal, 112) }
+
+    var remainingGoalBudget: Double {
+        max(0, 112 - rawProjectGoalTotal)
     }
 
 }
@@ -334,8 +334,9 @@ private extension SettingsView {
             calendarBusy = true
             calendarStatusMessage = "Updating calendar selection…"
         }
+        var removedCount = 0
         if let previous, !previous.isEmpty {
-            await CalendarIntegration.shared.purgeMonkEvents(in: previous)
+            removedCount = await CalendarIntegration.shared.purgeMonkEvents(in: previous)
         }
         if let newValue, !newValue.isEmpty {
             await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: newValue)
@@ -343,6 +344,11 @@ private extension SettingsView {
         await MainActor.run {
             calendarBusy = false
             updateSelectionStatus()
+            if removedCount > 0 {
+                calendarStatusMessage = "Moved calendar. Removed \(removedCount) old events."
+            } else {
+                calendarStatusMessage = "Calendar updated. (Some accounts only allow adding events.)"
+            }
         }
     }
 
@@ -351,10 +357,14 @@ private extension SettingsView {
             calendarBusy = true
             calendarStatusMessage = "Deleting Monk events…"
         }
-        await CalendarIntegration.shared.purgeAllMonkEvents()
+        let removed = await CalendarIntegration.shared.purgeAllMonkEvents()
         await MainActor.run {
             calendarBusy = false
-            calendarStatusMessage = "Removed all Monk-tagged events."
+            if removed > 0 {
+                calendarStatusMessage = "Removed \(removed) Monk-tagged events."
+            } else {
+                calendarStatusMessage = "No removable Monk events found (account may be write-only)."
+            }
         }
     }
 }
