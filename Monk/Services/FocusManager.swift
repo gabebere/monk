@@ -40,7 +40,6 @@ final class FocusManager: ObservableObject {
         guard currentSession == nil else { return }
         let session = FocusSession(startedAt: Date(),
                                    endedAt: nil,
-                                   moodScore: mood,
                                    project: project)
         modelContext.insert(session)
         guard modelContext.saveOrRollback() else { return }
@@ -74,13 +73,6 @@ final class FocusManager: ObservableObject {
         let calendarIdentifier = preferences?.calendarCalendarIdentifier
 
         guard modelContext.saveOrRollback() else { return }
-        if !discardSession, shouldLogCalendar,
-           let calendarIdentifier,
-           !calendarIdentifier.isEmpty {
-            Task {
-                await calendarIntegration.logSession(session, calendarIdentifier: calendarIdentifier)
-            }
-        }
         currentSession = nil
         recalcTodayTotal()
         Haptics.success()
@@ -94,7 +86,13 @@ final class FocusManager: ObservableObject {
         }
 #endif
         focusScoreTickCounter = 0
-        
+
+        if !discardSession {
+            Task { @MainActor in
+                print("[FocusManager] Capturing location and syncing calendar (enabled: \(shouldLogCalendar))")
+                await captureLocationAndSync(for: session, calendarIdentifier: calendarIdentifier, shouldLogCalendar: shouldLogCalendar)
+            }
+        }
     }
 
     func recalcTodayTotal(now: Date = .now) {
@@ -157,14 +155,7 @@ final class FocusManager: ObservableObject {
             }
     }
 
-    private func currentFocusScoreSnapshot(now: Date = .now) -> FocusScoreSnapshot? {
-        let sessions = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? []
-        guard !sessions.isEmpty else { return nil }
-        let projects = (try? modelContext.fetch(FetchDescriptor<Project>())) ?? []
-        let projectGoals = insightsAnalyzer.weeklyProjectGoals(projects: projects, sessions: sessions, now: now)
-        let weeklyGoal = projectGoals.totalGoalHours > 0 ? projectGoals.totalGoalHours : nil
-        return insightsAnalyzer.focusScore(sessions: sessions, weeklyGoalHours: weeklyGoal, now: now)
-    }
+    private func currentFocusScoreSnapshot(now: Date = .now) -> FocusScoreSnapshot? { nil }
 
 }
 // MARK: - Short session handling
@@ -195,6 +186,26 @@ extension FocusManager {
         }
         if didDelete, modelContext.saveOrRollback() {
             recalcTodayTotal(now: now)
+        }
+    }
+
+    private func captureLocationAndSync(for session: FocusSession,
+                                        calendarIdentifier: String?,
+                                        shouldLogCalendar: Bool) async {
+        if let result = await LocationProvider.shared.requestLocation() {
+            session.locationName = result.displayName
+            session.locationLatitude = result.location.coordinate.latitude
+            session.locationLongitude = result.location.coordinate.longitude
+            _ = modelContext.saveOrRollback()
+            print("[FocusManager] Saved location \(session.locationName ?? "nil") (\(session.locationLatitude ?? 0), \(session.locationLongitude ?? 0))")
+        } else {
+            print("[FocusManager] Location unavailable or permission denied")
+        }
+
+        if shouldLogCalendar,
+           let calendarIdentifier,
+           !calendarIdentifier.isEmpty {
+            await CalendarIntegration.shared.logSession(session, calendarIdentifier: calendarIdentifier)
         }
     }
 }

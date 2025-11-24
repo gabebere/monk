@@ -7,5 +7,9 @@
 		<key>EXExtensionPointIdentifier</key>
 		<string>com.apple.deviceactivityui.report-extension</string>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

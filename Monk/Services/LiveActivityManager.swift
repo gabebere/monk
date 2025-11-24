@@ -57,27 +57,54 @@ final class LiveActivityManager {
     private func makeState(for session: FocusSession, snapshot: FocusScoreSnapshot?, now: Date = .now) -> FocusSessionActivityAttributes.ContentState {
         let isPaused = session.endedAt != nil
         let timerEnd = session.endedAt ?? now
-        let weeklyProjection = snapshot?.weeklyProjection
-        let dynamicTodayGoalHours = snapshot?.dynamicTodayGoalHours
-        let todayActualHours = snapshot?.todayActualHours ?? 0
+        let project = session.project
+        let goalSeconds = project?.weeklyGoalHours.map { max(0, $0) * 3600 }
+
+        let weeklyCompletedSeconds: TimeInterval? = {
+            guard let sessions = project?.sessions else { return nil }
+            let (weekStart, weekEnd) = weekBounds(containing: now)
+            var total: TimeInterval = 0
+            for s in sessions {
+                let start = s.startedAt
+                let end = s.endedAt ?? now
+                if end <= weekStart || start >= weekEnd { continue }
+                let clippedStart = max(start, weekStart)
+                let clippedEnd = min(end, weekEnd)
+                if clippedEnd > clippedStart {
+                    total += clippedEnd.timeIntervalSince(clippedStart)
+                }
+            }
+            return total
+        }()
 
         return FocusSessionActivityAttributes.ContentState(
             projectName: session.project?.title,
-            focusScore: snapshot?.score,
-            focusScoreDelta: snapshot?.delta,
-            focusScoreLabel: snapshot?.rating.rawValue,
-            weeklyGoalSeconds: weeklyProjection.map { $0.goalHours * 3600 },
-            weeklyCompletedSeconds: weeklyProjection.map { $0.actualHours * 3600 },
-            weeklyRemainingSeconds: weeklyProjection.map { $0.remainingHours * 3600 },
-            dailyTargetSeconds: snapshot.map { $0.dailyTargetHours * 3600 },
-            todayGoalSeconds: dynamicTodayGoalHours.map { max(0, $0) * 3600 },
-            todayCompletedSeconds: snapshot.map { $0.todayActualHours * 3600 },
-            todayRemainingSeconds: dynamicTodayGoalHours.map { goal in
-                max(0, goal - todayActualHours) * 3600
-            },
+            weeklyGoalSeconds: goalSeconds,
+            weeklyCompletedSeconds: weeklyCompletedSeconds,
+            weeklyRemainingSeconds: {
+                if let goal = goalSeconds, let completed = weeklyCompletedSeconds {
+                    return max(0, goal - completed)
+                }
+                return nil
+            }(),
+            dailyTargetSeconds: nil,
+            todayGoalSeconds: nil,
+            todayCompletedSeconds: nil,
+            todayRemainingSeconds: nil,
             timerInterval: session.startedAt...timerEnd,
             isPaused: isPaused
         )
+    }
+
+    private func weekBounds(containing date: Date) -> (Date, Date) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 1 // Sunday
+        calendar.minimumDaysInFirstWeek = 1
+        let startOfDay = calendar.startOfDay(for: date)
+        let interval = calendar.dateInterval(of: .weekOfYear, for: startOfDay)
+        let start = interval?.start ?? startOfDay
+        let end = calendar.date(byAdding: .day, value: 7, to: start) ?? startOfDay
+        return (start, end)
     }
 
     private static var activitiesAvailable: Bool {

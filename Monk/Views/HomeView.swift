@@ -1526,9 +1526,11 @@ private struct CompletedSessionView: View {
     @Bindable var session: FocusSession
     var onStop: () -> Void
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
+    @Query private var prefsList: [Preferences]
 
-    @State private var moodValue: Int = 1
     @State private var selectedProjectID: UUID?
+
+    private var prefs: Preferences? { prefsList.first }
 
     var body: some View {
         NavigationStack {
@@ -1570,11 +1572,11 @@ private struct CompletedSessionView: View {
                             .tint(.white)
                         }
 
-                        ProjectFormCard(title: "Mood",
-                                        subtitle: "How did this session feel overall?",
-                                        icon: "face.smiling.fill") {
-                            MoodSlider(value: $moodValue)
-                        }
+                        CalendarPreviewCard(session: session,
+                                            projectTitle: selectedProjectTitle,
+                                            calendarIdentifier: prefs?.calendarCalendarIdentifier,
+                                            calendarEnabled: prefs?.calendarIntegrationEnabled == true,
+                                            locationStatus: "Location will be added if allowed")
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 32)
@@ -1605,13 +1607,11 @@ private struct CompletedSessionView: View {
         }
         .tint(.white)
         .onAppear {
-            moodValue = session.moodScore ?? 1
             selectedProjectID = session.project?.id
         }
     }
 
     private func saveAndFinish() {
-        session.moodScore = moodValue
         if let selectedProjectID,
            let matched = projects.first(where: { $0.id == selectedProjectID }) {
             session.project = matched
@@ -1622,6 +1622,14 @@ private struct CompletedSessionView: View {
             onStop()
             dismiss()
         }
+    }
+
+    private var selectedProjectTitle: String? {
+        if let id = selectedProjectID,
+           let project = projects.first(where: { $0.id == id }) {
+            return project.title
+        }
+        return session.project?.title
     }
 
     private func congratulationText(now: Date = .now) -> String {

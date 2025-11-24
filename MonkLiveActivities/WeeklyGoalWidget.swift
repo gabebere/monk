@@ -31,9 +31,9 @@ struct WeeklyGoalWidgetProvider: TimelineProvider {
         let entries: [WeeklyGoalWidgetEntry]
         if let summary {
             if shouldRotate {
-                let steps = max(summary.segments.count, capacity) * 3 // ~3s cadence covering multiple rotations
+                let steps = max(summary.segments.count, capacity) * 3 // cadence multiplier; actual interval below
                 entries = (0..<steps).map { idx in
-                    WeeklyGoalWidgetEntry(date: now.addingTimeInterval(Double(idx) * 3), summary: summary, rotation: idx)
+                    WeeklyGoalWidgetEntry(date: now.addingTimeInterval(Double(idx) * 5), summary: summary, rotation: idx)
                 }
             } else {
                 entries = [WeeklyGoalWidgetEntry(date: now, summary: summary, rotation: 0)]
@@ -41,7 +41,7 @@ struct WeeklyGoalWidgetProvider: TimelineProvider {
         } else {
             entries = [WeeklyGoalWidgetEntry(date: now, summary: nil, rotation: 0)]
         }
-        let refreshDate = entries.last?.date.addingTimeInterval(3) ?? now.addingTimeInterval(3600)
+        let refreshDate = entries.last?.date.addingTimeInterval(5) ?? now.addingTimeInterval(3600)
         completion(Timeline(entries: entries, policy: .after(refreshDate)))
     }
 }
@@ -91,21 +91,21 @@ private struct WeeklyGoalWidgetLayout {
         switch family {
         case .systemSmall:
             return WeeklyGoalWidgetLayout(
-                outerPadding: 12,
-                verticalPadding: 12,
-                sectionSpacing: 10,
-                headerSpacing: 6,
-                legendSpacing: 6,
-                progressHeight: 12
+                outerPadding: 10,
+                verticalPadding: 8,
+                sectionSpacing: 6,
+                headerSpacing: 4,
+                legendSpacing: 5,
+                progressHeight: 9
             )
         case .systemMedium:
             return WeeklyGoalWidgetLayout(
-                outerPadding: 16,
-                verticalPadding: 12,
-                sectionSpacing: 12,
-                headerSpacing: 8,
-                legendSpacing: 8,
-                progressHeight: 12
+                outerPadding: 14,
+                verticalPadding: 8,
+                sectionSpacing: 6,
+                headerSpacing: 4,
+                legendSpacing: 6,
+                progressHeight: 9
             )
         case .systemLarge:
             return WeeklyGoalWidgetLayout(
@@ -149,6 +149,9 @@ private struct ProjectGoalsWidgetContent: View {
     let rotation: Int
     private let capHours: Double = 112
     private var maxRows: Int { WeeklyGoalWidgetLayout.maxRows(for: family) }
+    private var totalLabel: String { "\(hoursLabel(summary.totalActualHours))h of \(hoursLabel(summary.totalGoalHours))h" }
+    private var isSmall: Bool { family == .systemSmall }
+    private var isMedium: Bool { family == .systemMedium }
 
     private var normalizedSegments: [WidgetGoalSegment] {
         let total = max(summary.totalGoalHours, 1)
@@ -159,6 +162,7 @@ private struct ProjectGoalsWidgetContent: View {
                 let scaledGoal = segment.goalHours * summary.scaleFactor
                 guard scaledGoal > 0 else { return nil }
                 let goalFraction = min(max(scaledGoal / total, 0), 1)
+                let progress = segment.goalHours > 0 ? min(max(segment.actualHours / segment.goalHours, 0), 1) : 0
                 defer { cursor += goalFraction }
                 return WidgetGoalSegment(
                     id: segment.id,
@@ -166,7 +170,7 @@ private struct ProjectGoalsWidgetContent: View {
                     gradientIndex: segment.gradientIndex,
                     startFraction: cursor,
                     goalFraction: goalFraction,
-                    fillFraction: goalFraction * segment.progressFraction,
+                    fillFraction: goalFraction * progress,
                     goalHours: segment.goalHours,
                     actualHours: segment.actualHours
                 )
@@ -218,6 +222,8 @@ private struct ProjectGoalsWidgetContent: View {
         Group {
             if family == .systemSmall {
                 smallLayout
+            } else if family == .systemMedium {
+                mediumLayout
             } else {
                 regularLayout
             }
@@ -226,77 +232,111 @@ private struct ProjectGoalsWidgetContent: View {
 
     private var regularLayout: some View {
         VStack(alignment: .leading, spacing: layout.sectionSpacing) {
-            header
+            header(percentSize: regularPercentSize)
             WidgetGoalBar(segments: normalizedSegments)
                 .frame(height: layout.progressHeight)
             WidgetProjectRows(rows: rotatingRows, spacing: layout.legendSpacing)
-            Spacer(minLength: 0)
+            footerLine
+        }
+    }
+
+    private var mediumLayout: some View {
+        VStack(alignment: .leading, spacing: layout.sectionSpacing) {
+            header(percentSize: regularPercentSize)
+            WidgetProjectRows(rows: rotatingRows, spacing: layout.legendSpacing)
+            footerLine
         }
     }
 
     private var smallLayout: some View {
         VStack(alignment: .leading, spacing: layout.sectionSpacing) {
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Project Goals")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                    Text("\(hoursLabel(summary.totalActualHours))h of \(hoursLabel(summary.totalGoalHours))h")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                Spacer()
-                Text("\(completionPercent)%")
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-            }
-
+            header(percentSize: 0, hidePercent: true, compactSubtitle: true)
             if rotatingRows.isEmpty {
-                WidgetGoalBar(segments: normalizedSegments)
-                    .frame(height: layout.progressHeight + 2)
                 Text("Set weekly goals on projects to see them here.")
                     .font(.caption2)
                     .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
             } else {
-                VStack(spacing: 8) {
-                    ForEach(rotatingRows) { row in
-                        WidgetProjectRow(row: row)
-                    }
-                }
-                HStack {
-                    Text(remainingText)
-                        .font(.caption2)
-                        .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
-                    Spacer()
-                }
+                WidgetProjectRows(rows: rotatingRows, spacing: 6)
+                footerLine
             }
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: layout.headerSpacing) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Project Goals")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text("\(hoursLabel(summary.totalActualHours))h of \(hoursLabel(summary.totalGoalHours))h")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+    private var footerLine: some View {
+        HStack {
+            Text(remainingText)
+                .font(.caption2)
+                .foregroundStyle(WeeklyGoalWidgetPalette.bodyMuted)
+            Spacer()
+        }
+    }
+
+    private func header(percentSize: CGFloat, hidePercent: Bool = false, compactSubtitle: Bool = false) -> some View {
+        let inlineSubtitle = isMedium && !isSmall && !compactSubtitle
+
+        return HStack(alignment: .firstTextBaseline, spacing: layout.headerSpacing) {
+            VStack(alignment: .leading, spacing: inlineSubtitle ? 0 : 2) {
+                if inlineSubtitle {
+                    HStack(spacing: 6) {
+                        Text("Project Goals")
+                            .font(headerTitleFont)
+                            .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                        Text(totalLabel)
+                            .font(headerSubtitleFont)
+                            .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                } else {
+                    Text("Project Goals")
+                        .font(headerTitleFont)
+                        .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text(totalLabel)
+                        .font(compactSubtitle ? headerSubtitleFontSmall : headerSubtitleFont)
+                        .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
             }
             Spacer()
-            Text("\(completionPercent)%")
-                .font(.system(size: family == .systemLarge ? 32 : 26, weight: .heavy, design: .rounded))
-                .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+            if !hidePercent {
+                Text("\(completionPercent)%")
+                    .font(.system(size: percentSize, weight: .heavy, design: .rounded))
+                    .foregroundStyle(WeeklyGoalWidgetPalette.accentHigh)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+    }
+
+    private var headerTitleFont: Font {
+        if isSmall { return .headline.weight(.semibold) }
+        if isMedium { return .headline.weight(.semibold) }
+        return .headline.weight(.semibold)
+    }
+
+    private var headerSubtitleFont: Font {
+        if isSmall { return .caption.weight(.medium) }
+        if isMedium { return .footnote.weight(.medium) }
+        return .subheadline.weight(.medium)
+    }
+
+    private var headerSubtitleFontSmall: Font {
+        if isSmall { return .caption2.weight(.medium) }
+        if isMedium { return .caption.weight(.medium) }
+        return .footnote.weight(.medium)
+    }
+
+    private var regularPercentSize: CGFloat {
+        switch family {
+        case .systemSmall: return 20
+        case .systemMedium: return 22
+        case .systemLarge: return 32
+        default: return 22
         }
     }
 
@@ -410,7 +450,7 @@ private struct WidgetProjectRow: View {
                         .frame(width: width * row.progressClamped)
                 }
             }
-            .frame(height: 8)
+            .frame(height: 7)
         }
     }
 }

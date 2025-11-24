@@ -33,65 +33,25 @@ struct InsightsView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            ZStack {
-                AnimatingBackground(base: Theme.dataBackground(), halo: Theme.dataHaloGradient)
-                ScrollView {
-                    LazyVStack(spacing: InsightsLayout.verticalSpacing) {
-                        ProjectGoalsCard(summary: projectGoals)
-                            .frame(maxWidth: .infinity)
-                            .padding(.bottom, InsightsLayout.focusScoreGap)
+        ZStack {
+            AnimatingBackground(base: Theme.dataBackground(), halo: Theme.dataHaloGradient)
+            ScrollView {
+                VStack(spacing: InsightsLayout.verticalSpacing) {
+                    ProjectGoalsCard(summary: projectGoals)
+                        .frame(maxWidth: .infinity)
 
-                        NavigationLink(value: InsightRoute.focusScore) {
-                            FocusScoreCard(model: focusScoreSnapshot, palette: InsightPalette.focusScore)
-                                .frame(maxWidth: .infinity)
-                                .aspectRatio(InsightsLayout.focusScoreAspectRatio, contentMode: .fit)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.bottom, InsightsLayout.focusScoreGap)
-                        .simultaneousGesture(TapGesture().onEnded { Haptics.heavy() })
-
-                        LazyVGrid(columns: gridColumns, spacing: InsightsLayout.verticalSpacing) {
-                            ForEach(tileModels(summary: summary)) { tile in
-                                NavigationLink(value: tile.route) {
-                                    InsightTile(model: tile)
-                                }
-                                .simultaneousGesture(TapGesture().onEnded { Haptics.heavy() })
-                            }
-                        }
-                    }
-                    .padding(.horizontal, InsightsLayout.horizontalPadding)
-                    .padding(.top, InsightsLayout.topPadding)
-                    .padding(.bottom, InsightsLayout.bottomPadding)
+                    TotalHoursCard(totalHours: summary.totalFocusSeconds / 3600)
+                        .frame(maxWidth: .infinity)
                 }
-                .safeAreaInset(edge: .bottom) {
-                    Color.clear.frame(height: InsightsLayout.bottomInset)
-                }
+                .padding(.horizontal, InsightsLayout.horizontalPadding)
+                .padding(.top, InsightsLayout.topPadding)
+                .padding(.bottom, InsightsLayout.bottomPadding)
             }
-            .navigationTitle("Insights")
-            .navigationDestination(for: InsightRoute.self) { route in
-                switch route {
-                case .focusScore:
-                    FocusScoreDetailView(
-                        analyzer: analyzer,
-                        sessions: sessions,
-                        weeklyGoalHours: aggregatedGoalHours,
-                        palette: InsightPalette.focusScore,
-                        now: referenceNow
-                    )
-                case .focus:
-                    InsightDetailView(kind: .focusTotals, palette: InsightPalette.focus, sessions: sessions, analyzer: analyzer, now: referenceNow)
-                case .satisfaction:
-                    InsightDetailView(kind: .satisfaction, palette: InsightPalette.satisfaction, sessions: sessions, analyzer: analyzer, now: referenceNow)
-                case .consistency:
-                    InsightDetailView(kind: .consistency, palette: InsightPalette.consistency, sessions: sessions, analyzer: analyzer, now: referenceNow)
-                case .primeHours:
-                    InsightDetailView(kind: .primeHours, palette: InsightPalette.prime, sessions: sessions, analyzer: analyzer, now: referenceNow)
-                case .rhythm:
-                    InsightDetailView(kind: .rhythm, palette: InsightPalette.rhythm, sessions: sessions, analyzer: analyzer, now: referenceNow)
-                }
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: InsightsLayout.bottomInset)
             }
         }
+        .navigationTitle("Insights")
     }
 
     private var gridColumns: [GridItem] {
@@ -230,6 +190,31 @@ private enum InsightsLayout {
     static let bottomInset: CGFloat = 72
     static let focusScoreAspectRatio: CGFloat = 2.0
     static let focusScoreGap: CGFloat = verticalSpacing
+}
+
+private struct TotalHoursCard: View {
+    let totalHours: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Total Focus (last \(Int(TemporalInsightsConfig().lookbackDays)) days)")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.9))
+            Text(String(format: "%.1f hours", totalHours))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+    }
 }
 
 private struct ProjectGoalsCard: View {

@@ -6,19 +6,25 @@ final class FocusSession {
     var id: UUID = Foundation.UUID()
     var startedAt: Date = Foundation.Date()
     var endedAt: Date?
-    var moodScore: Int?
     var project: Project?
+    var locationName: String?
+    var locationLatitude: Double?
+    var locationLongitude: Double?
 
     init(id: UUID = UUID(),
          startedAt: Date = .now,
          endedAt: Date? = nil,
-         moodScore: Int? = nil,
-         project: Project? = nil) {
+         project: Project? = nil,
+         locationName: String? = nil,
+         locationLatitude: Double? = nil,
+         locationLongitude: Double? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
-        self.moodScore = moodScore
         self.project = project
+        self.locationName = locationName
+        self.locationLatitude = locationLatitude
+        self.locationLongitude = locationLongitude
     }
 }
 

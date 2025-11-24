@@ -1,5 +1,6 @@
 import EventKit
 import Foundation
+import CoreLocation
 
 struct CalendarDisplayInfo: Identifiable, Hashable {
     let id: String
@@ -32,6 +33,7 @@ actor CalendarIntegration {
         guard let end = session.endedAt else { return }
         guard await requestAccessIfNeeded(),
               let calendar = eventStore.calendar(withIdentifier: calendarIdentifier) else {
+            print("[CalendarIntegration] Calendar unavailable or access denied for \(calendarIdentifier)")
             return
         }
 
@@ -42,7 +44,19 @@ actor CalendarIntegration {
             event.title = "[Monk] \(session.project?.title ?? "Focus Session")"
             event.startDate = session.startedAt
             event.endDate = end
-            event.notes = eventMarker(for: session)
+            // Avoid leaving internal markers in user-visible notes
+            if let location = session.locationName {
+                event.location = location
+                print("[CalendarIntegration] Attaching location name to event: \(location)")
+            }
+            if let lat = session.locationLatitude, let lon = session.locationLongitude {
+                let structured = EKStructuredLocation(title: session.locationName ?? "Focus Session")
+                structured.geoLocation = CLLocation(latitude: lat, longitude: lon)
+                event.structuredLocation = structured
+                print("[CalendarIntegration] Attaching coordinates \(lat), \(lon)")
+            } else {
+                print("[CalendarIntegration] No coordinates available for session \(session.id)")
+            }
             try eventStore.save(event, span: .thisEvent)
         } catch {
             print("CalendarIntegration log error: \(error.localizedDescription)")

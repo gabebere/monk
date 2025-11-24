@@ -7,7 +7,6 @@ struct EditSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var session: FocusSession
 
-    @State private var moodValue: Int = 1
     @State private var selectedProjectID: UUID?
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
 
@@ -29,7 +28,6 @@ struct EditSessionView: View {
                         header
                         timingCard
                         projectCard
-                        moodCard
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 32) 
@@ -55,7 +53,6 @@ struct EditSessionView: View {
         }
         .tint(.white)
         .onAppear {
-            moodValue = session.moodScore ?? 1
             selectedProjectID = session.project?.id
         }
         // no sheet needed
@@ -66,7 +63,7 @@ struct EditSessionView: View {
             Text("Session details")
                 .font(.largeTitle.bold())
                 .foregroundStyle(.white)
-            Text("Review and update how this focus session felt.")
+            Text("Review and update this focus session.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.7))
         }
@@ -147,14 +144,6 @@ struct EditSessionView: View {
         }
     }
 
-    private var moodCard: some View {
-        DetailCard(icon: "face.smiling.fill",
-                   title: "Mood",
-                   subtitle: "How did this session feel overall?") {
-            MoodSlider(value: $moodValue)
-        }
-    }
-
     private var currentProject: Project? {
         guard let id = selectedProjectID else { return nil }
         return projects.first { $0.id == id }
@@ -172,7 +161,6 @@ struct EditSessionView: View {
     }
 
     private func saveAndClose() {
-        session.moodScore = moodValue
         if let id = selectedProjectID,
            let project = projects.first(where: { $0.id == id }) {
             session.project = project

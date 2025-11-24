@@ -82,9 +82,22 @@
 		8CAA36B6431243A0B9E653FD /* Monk/Models/Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/Project.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		743099112ED438F7005BBC52 /* Exceptions for "Monk" folder in "Monk" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7420C2452E5CE57200784214 /* Monk */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7420C2482E5CE57200784214 /* Monk */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				743099112ED438F7005BBC52 /* Exceptions for "Monk" folder in "Monk" target */,
+			);
 			path = Monk;
 			sourceTree = "<group>";
 		};
@@ -527,7 +540,9 @@
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Monk/Info.plist;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Monk uses your location at session end to tag calendar events with where you were.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -562,7 +577,9 @@
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Monk/Info.plist;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Monk uses your location at session end to tag calendar events with where you were.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

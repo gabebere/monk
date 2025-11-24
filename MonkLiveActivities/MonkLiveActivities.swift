@@ -60,9 +60,7 @@ private struct FocusDynamicIslandExpanded: View {
         TimelineView(.periodic(from: context.state.timerInterval.lowerBound, by: 1)) { timeline in
             let metrics = FocusLiveMetrics(state: context.state, now: timeline.date)
             HStack(spacing: 16) {
-                FocusScoreColumn(metrics: metrics, decorated: false)
-                Divider()
-                    .background(Color.white.opacity(0.2))
+                ProjectGoalProgress(metrics: metrics)
                 FocusIslandStatusContent(metrics: metrics)
             }
             .padding(.vertical, 12)
@@ -97,7 +95,7 @@ private struct FocusDynamicIslandMinimal: View {
     var body: some View {
         TimelineView(.periodic(from: context.state.timerInterval.lowerBound, by: 1)) { timeline in
             let metrics = FocusLiveMetrics(state: context.state, now: timeline.date)
-            Text(metrics.shortScore)
+            Text(metrics.compactTimeRemaining)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(FocusLiveActivityPalette.primaryText)
         }
@@ -112,7 +110,10 @@ private struct FocusLockScreenContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
-            if let progress = metrics.progress {
+            if metrics.weeklyGoalProgress != nil {
+                ProjectGoalProgress(metrics: metrics)
+                    .frame(height: 10)
+            } else if let progress = metrics.progress {
                 FocusActivityProgressBar(progress: progress)
                     .frame(height: 8)
             }
@@ -135,22 +136,12 @@ private struct FocusLockScreenContent: View {
                     .minimumScaleFactor(0.75)
             }
             Spacer()
-            FocusScoreColumn(metrics: metrics)
+            ProjectWeekStats(metrics: metrics, showDetailLine: false)
         }
     }
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 8) {
-                FocusMetricTile(title: metrics.timeHeadline,
-                                value: metrics.primaryTimeValue,
-                                footnote: metrics.secondaryTimeValue)
-                if let target = metrics.targetHoursText {
-                    FocusMetricTile(title: "Today",
-                                    value: target,
-                                    footnote: metrics.targetStatusText)
-                }
-            }
             if metrics.isPaused {
                 FocusStatusBadge(label: "Paused")
             }
@@ -163,48 +154,7 @@ private struct FocusScoreColumn: View {
     var decorated: Bool = true
 
     var body: some View {
-        Group {
-            if decorated {
-                column
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                    .padding(.horizontal, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                            )
-                    )
-                    .frame(minWidth: 130, alignment: .trailing)
-            } else {
-                column
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-            }
-        }
-        .layoutPriority(1)
-    }
-
-    private var column: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text(metrics.scoreText)
-                .font(.system(size: 30, weight: .heavy, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(FocusLiveActivityPalette.primaryText)
-                .minimumScaleFactor(0.8)
-            VStack(alignment: .leading, spacing: 4) {
-                if let delta = metrics.scoreDeltaText {
-                    FocusScoreDeltaBadge(delta: delta)
-                }
-                if let label = metrics.scoreLabelText {
-                    Text(label)
-                        .font(.caption2)
-                        .foregroundStyle(FocusLiveActivityPalette.captionText)
-                }
-            }
-        }
+        EmptyView()
     }
 }
 
@@ -273,36 +223,67 @@ private struct FocusStatusBadge: View {
     }
 }
 
-private struct FocusScoreDeltaBadge: View {
-    let delta: String
+private struct ProjectGoalProgress: View {
+    let metrics: FocusLiveMetrics
+
+    private var fraction: Double {
+        metrics.weeklyGoalProgress ?? 0
+    }
+
+    private var label: String {
+        if let completed = metrics.weekCompletedSeconds, let goal = metrics.weekGoalSeconds {
+            return "\(FocusLiveMetrics.formatHours(completed)) / \(FocusLiveMetrics.formatHours(goal))"
+        }
+        return ""
+    }
 
     var body: some View {
-        let fill = delta.starts(with: "+")
-            ? LinearGradient(
-                colors: [
-                    Color(red: 0.47, green: 0.43, blue: 0.96),
-                    Color(red: 0.24, green: 0.57, blue: 0.98)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            : LinearGradient(
-                colors: [
-                    Color(red: 0.93, green: 0.27, blue: 0.35).opacity(0.45),
-                    Color(red: 0.85, green: 0.22, blue: 0.31).opacity(0.35)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        Text(delta)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(
-                Capsule()
-                    .fill(fill)
-            )
-            .foregroundStyle(Color.white)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Weekly")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(FocusLiveActivityPalette.captionText)
+                Spacer()
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(FocusLiveActivityPalette.captionText)
+            }
+            FocusActivityProgressBar(progress: fraction)
+                .frame(height: 8)
+        }
+    }
+}
+
+private struct ProjectWeekStats: View {
+    let metrics: FocusLiveMetrics
+    var showDetailLine: Bool = true
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if let goal = metrics.weekGoalSeconds, goal > 0, let completed = metrics.weekCompletedSeconds {
+                Text("\(metrics.weeklyPercent)%")
+                    .font(.title3.weight(.heavy))
+                    .foregroundStyle(FocusLiveActivityPalette.primaryText)
+                if showDetailLine {
+                    Text("\(FocusLiveMetrics.formatHours(completed)) of \(FocusLiveMetrics.formatHours(goal))")
+                        .font(.caption2)
+                        .foregroundStyle(FocusLiveActivityPalette.captionText)
+                }
+            } else if let completed = metrics.weekCompletedSeconds {
+                Text(FocusLiveMetrics.formatHours(completed))
+                    .font(.title3.weight(.heavy))
+                    .foregroundStyle(FocusLiveActivityPalette.primaryText)
+                if showDetailLine {
+                    Text("This week")
+                        .font(.caption2)
+                        .foregroundStyle(FocusLiveActivityPalette.captionText)
+                }
+            } else {
+                Text("No goal")
+                    .font(.caption2)
+                    .foregroundStyle(FocusLiveActivityPalette.captionText)
+            }
+        }
     }
 }
 
@@ -327,9 +308,6 @@ private struct FocusActivityProgressBar: View {
 
 private struct FocusLiveMetrics {
     let projectTitle: String
-    let focusScore: Int?
-    let focusScoreDelta: Int?
-    let scoreLabelText: String?
     let progress: Double?
     let elapsedSeconds: Int
     let weekGoalSeconds: Int?
@@ -342,10 +320,6 @@ private struct FocusLiveMetrics {
 
     init(state: FocusSessionActivityAttributes.ContentState, now: Date) {
         projectTitle = state.projectName?.isEmpty == false ? state.projectName! : "Focus Session"
-        focusScore = state.focusScore
-        focusScoreDelta = state.focusScoreDelta
-        scoreLabelText = state.focusScoreLabel
-
         weekGoalSeconds = state.weeklyGoalSeconds.map { max(0, Int(round($0))) }
         weekCompletedSeconds = state.weeklyCompletedSeconds.map { max(0, Int(round($0))) }
         if let explicit = state.weeklyRemainingSeconds {
@@ -377,12 +351,8 @@ private struct FocusLiveMetrics {
         let effectiveNow = state.isPaused ? state.timerInterval.upperBound : now
         elapsedSeconds = max(0, Int(effectiveNow.timeIntervalSince(start)))
 
-        if let goal = todayGoalSeconds, let completed = todayCompletedSeconds {
-            if goal > 0 {
-                progress = min(max(Double(completed) / Double(goal), 0), 1)
-            } else {
-                progress = completed > 0 ? 1.0 : nil
-            }
+        if let goal = weekGoalSeconds, goal > 0, let completed = weekCompletedSeconds {
+            progress = min(max(Double(completed) / Double(goal), 0), 1)
         } else {
             progress = nil
         }
@@ -390,11 +360,14 @@ private struct FocusLiveMetrics {
 
     var statusText: String { isPaused ? "Session Paused" : "Focus Session" }
 
-    var scoreText: String { focusScore.map(String.init) ?? "--" }
+    var weeklyGoalProgress: Double? {
+        guard let goal = weekGoalSeconds, goal > 0, let completed = weekCompletedSeconds else { return nil }
+        return min(max(Double(completed) / Double(goal), 0), 1)
+    }
 
-    var scoreDeltaText: String? {
-        guard let focusScoreDelta, focusScoreDelta != 0 else { return nil }
-        return focusScoreDelta > 0 ? "+\(focusScoreDelta)" : "\(focusScoreDelta)"
+    var weeklyPercent: Int {
+        guard let fraction = weeklyGoalProgress else { return 0 }
+        return Int(round(fraction * 100))
     }
 
     var timeHeadline: String {
@@ -451,8 +424,6 @@ private struct FocusLiveMetrics {
         }
         return FocusLiveMetrics.formatShort(elapsedSeconds)
     }
-
-    var shortScore: String { focusScore.map(String.init) ?? "--" }
 
     static func formatDuration(_ seconds: Int) -> String {
         let hours = seconds / 3600

@@ -230,17 +230,10 @@ struct InsightsAnalyzer {
 
         var totalSeconds: TimeInterval = 0
         var sampleCount = 0
-        var satisfactionWeightedSum: Double = 0
-        var satisfactionWeight: TimeInterval = 0
-
         var hourlyTotals: [Int: TimeInterval] = [:]
-        var hourlyMoodSums: [Int: Double] = [:]
-        var hourlyMoodWeights: [Int: TimeInterval] = [:]
         var dailyHourlyTotals: [Date: [Int: TimeInterval]] = [:]
 
         var dailyTotals: [Date: TimeInterval] = [:]
-        var dailyMoodSums: [Date: Double] = [:]
-        var dailyMoodWeights: [Date: TimeInterval] = [:]
         var dailySessionIds: [Date: Set<UUID>] = [:]
 
         for session in sessions {
@@ -256,41 +249,23 @@ struct InsightsAnalyzer {
             totalSeconds += duration
             sampleCount += 1
 
-            if let mood = session.moodScore {
-                let score = satisfactionScore(for: mood)
-                satisfactionWeightedSum += score * duration
-                satisfactionWeight += duration
-            }
-
             accumulateHourlyMetrics(
                 start: clippedStart,
                 end: clippedEnd,
-                moodScore: session.moodScore,
                 totals: &hourlyTotals,
-                moodSums: &hourlyMoodSums,
-                moodWeights: &hourlyMoodWeights,
                 dailyHourTotals: &dailyHourlyTotals
             )
 
             for part in DateUtils.splitByDay(start: clippedStart, end: clippedEnd, calendar: calendar) {
                 guard part.seconds > 0 else { continue }
                 dailyTotals[part.dayStart, default: 0] += part.seconds
-                if let mood = session.moodScore {
-                    let score = satisfactionScore(for: mood)
-                    dailyMoodSums[part.dayStart, default: 0] += score * part.seconds
-                    dailyMoodWeights[part.dayStart, default: 0] += part.seconds
-                }
                 dailySessionIds[part.dayStart, default: []].insert(session.id)
             }
         }
 
-        let averageSatisfaction = satisfactionWeight > 0 ? satisfactionWeightedSum / satisfactionWeight : nil
         let hourlyMetrics = (0..<24).map { hour -> TemporalInsightsSummary.HourMetric in
             let total = hourlyTotals[hour] ?? 0
-            let moodSum = hourlyMoodSums[hour] ?? 0
-            let moodWeight = hourlyMoodWeights[hour] ?? 0
-            let average = moodWeight > 0 ? moodSum / moodWeight : nil
-            return TemporalInsightsSummary.HourMetric(hour: hour, totalSeconds: total, averageSatisfaction: average)
+            return TemporalInsightsSummary.HourMetric(hour: hour, totalSeconds: total, averageSatisfaction: nil)
         }
 
         let bestWindow = selectBestWindow(from: hourlyMetrics, hours: config.bestWindowWidthHours)
@@ -305,14 +280,11 @@ struct InsightsAnalyzer {
 
         let dailySnapshots: [TemporalInsightsSummary.DaySnapshot] = allDayStarts.map { dayStart in
             let total = dailyTotals[dayStart] ?? 0
-            let moodWeight = dailyMoodWeights[dayStart] ?? 0
-            let moodSum = dailyMoodSums[dayStart] ?? 0
-            let moodAverage = moodWeight > 0 ? moodSum / moodWeight : nil
             let sessionCount = dailySessionIds[dayStart]?.count ?? 0
             return TemporalInsightsSummary.DaySnapshot(
                 dayStart: dayStart,
                 totalSeconds: total,
-                averageSatisfaction: moodAverage,
+                averageSatisfaction: nil,
                 sessionCount: sessionCount
             )
         }
@@ -327,7 +299,7 @@ struct InsightsAnalyzer {
             lookbackDays: config.lookbackDays,
             totalFocusSeconds: totalSeconds,
             sampleSessionCount: sampleCount,
-            averageSatisfaction: averageSatisfaction,
+            averageSatisfaction: nil,
             dailyStreakCount: streak,
             hourlyMetrics: hourlyMetrics,
             topHourMetrics: Array(topHourMetrics),
@@ -675,17 +647,9 @@ private extension InsightsAnalyzer {
         return calendar.date(byAdding: .day, value: -days + 1, to: dayStart) ?? dayStart
     }
 
-    func satisfactionScore(for mood: Int) -> Double {
-        let clamped = max(0, min(2, mood))
-        return (Double(clamped) / 2.0) * 10.0
-    }
-
     func accumulateHourlyMetrics(start: Date,
                                  end: Date,
-                                 moodScore: Int?,
                                  totals: inout [Int: TimeInterval],
-                                 moodSums: inout [Int: Double],
-                                 moodWeights: inout [Int: TimeInterval],
                                  dailyHourTotals: inout [Date: [Int: TimeInterval]]) {
         var cursor = start
         while cursor < end {
@@ -699,11 +663,6 @@ private extension InsightsAnalyzer {
             var dayHours = dailyHourTotals[dayStart] ?? [:]
             dayHours[hour, default: 0] += seconds
             dailyHourTotals[dayStart] = dayHours
-            if let mood = moodScore {
-                let score = satisfactionScore(for: mood)
-                moodSums[hour, default: 0] += score * seconds
-                moodWeights[hour, default: 0] += seconds
-            }
             cursor = segmentEnd
         }
     }
