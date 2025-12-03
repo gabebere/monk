@@ -12,6 +12,8 @@ struct HomeView: View {
     @State private var projectDetail: Project?
     @State private var projectHighlight: TutorialHighlightInfo?
     @State private var startHighlight: TutorialHighlightInfo?
+    @State private var stopHighlight: TutorialHighlightInfo?
+    @State private var pendingStopTutorialCompletion = false
 
     private var prefs: Preferences {
         if let existing = prefsList.first { return existing }
@@ -48,7 +50,12 @@ struct HomeView: View {
                 case .createProject:
                     projectHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
                 case .startSession:
-                    startHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
+                    var frame = value.frame.insetBy(dx: -12, dy: 0)
+                    let extraHeight = frame.height * 0.33
+                    frame = frame.insetBy(dx: 0, dy: -extraHeight / 2)
+                    startHighlight = TutorialHighlightInfo(stage: value.stage, frame: frame, cornerRadius: value.cornerRadius)
+                case .stopSession:
+                    stopHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
                 default:
                     break
                 }
@@ -57,12 +64,14 @@ struct HomeView: View {
         .overlay {
             Group {
                 if let stage = tutorial.activeStage,
-                   stage == .createProject || stage == .startSession {
+                   stage != .welcome,
+                   (stage == .createProject || stage == .startSession || stage == .stopSession) {
                     TutorialOverlayView(
                         stage: stage,
                         highlight: highlightInfo(for: stage),
-                        onNext: tutorial.advance,
-                        onSkip: tutorial.skip
+                        onNext: { handleOnboardingNext(for: stage) },
+                        onSkip: tutorial.skip,
+                        showActions: false
                     )
                 }
             }
@@ -73,13 +82,21 @@ struct HomeView: View {
 private extension HomeView {
     func highlightInfo(for stage: TutorialStage) -> TutorialHighlightInfo? {
         switch stage {
+        case .welcome:
+            return nil
         case .createProject:
             return projectHighlight
         case .startSession:
             return startHighlight
+        case .stopSession:
+            return stopHighlight
         default:
             return nil
         }
+    }
+
+    func handleOnboardingNext(for stage: TutorialStage) {
+        tutorial.complete()
     }
 }
 
@@ -99,6 +116,7 @@ private struct TimerCard: View {
     @State private var pressDown: Bool = false
     @State private var outerLoopTask: Task<Void, Never>? = nil
     @State private var innerLoopTask: Task<Void, Never>? = nil
+    @State private var pendingStopTutorialCompletion = false
     @State private var showStopDetails: Bool = false
     @State private var stoppedSession: FocusSession? = nil
     @State private var showingProjectPicker: Bool = false
@@ -119,6 +137,10 @@ private struct TimerCard: View {
                             .animation(.easeOut(duration: 0.6), value: rippleOpacity)
                             .animation(.easeOut(duration: 0.6), value: rippleScale)
 
+                        let isTutorialHighlight = tutorial.activeStage == .startSession
+                        let cyanShadowRadius: CGFloat = isTutorialHighlight ? 18 : 36
+                        let blueShadowRadius: CGFloat = isTutorialHighlight ? 24 : 54
+
                         Text("Time to focus?")
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
@@ -132,8 +154,8 @@ private struct TimerCard: View {
                                     .stroke(Color.white.opacity(0.25), lineWidth: 1)
                                     .blendMode(.overlay)
                             )
-                            .shadow(color: Color.cyan.opacity(0.5), radius: 36, x: 0, y: 10)
-                            .shadow(color: Color.blue.opacity(0.35), radius: 54, x: 0, y: 0)
+                            .shadow(color: Color.cyan.opacity(0.5), radius: cyanShadowRadius, x: 0, y: 10)
+                            .shadow(color: Color.blue.opacity(0.35), radius: blueShadowRadius, x: 0, y: 0)
                             .scaleEffect(pressDown ? 0.96 : 1.0)
                             .animation(.spring(response: 0.25, dampingFraction: 0.8), value: pressDown)
                     }
@@ -209,6 +231,7 @@ private struct TimerCard: View {
                             }
                         }
                         .accessibilityLabel("Stop")
+                        .tutorialAnchor(.stopSession, cornerRadius: 52)
                     }
                     .padding(.bottom, 0)
                 }
@@ -219,7 +242,12 @@ private struct TimerCard: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.88), value: focus.currentSession != nil)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .sheet(isPresented: $showStopDetails) {
+        .sheet(isPresented: $showStopDetails, onDismiss: {
+            if pendingStopTutorialCompletion {
+                tutorial.complete()
+                pendingStopTutorialCompletion = false
+            }
+        }) {
             if let session = stoppedSession {
                 CompletedSessionView(session: session) {
                     // No-op; stop already occurred
@@ -247,7 +275,7 @@ private struct TimerCard: View {
     private func startSession(with project: Project?) {
         focus.start(project: project)
         if tutorial.activeStage == .startSession {
-            tutorial.advance()
+            tutorial.complete()
         }
     }
 
@@ -260,11 +288,14 @@ private struct TimerCard: View {
         if let s = session, let start = startTime {
             let discardShort = prefsList.first?.discardShortSessions == true
             let duration = Date().timeIntervalSince(start)
-            let willDiscard = discardShort && duration < 120
+            let willDiscard = (tutorial.activeStage == .stopSession) ? false : (discardShort && duration < 120)
             if !willDiscard {
                 stoppedSession = s
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showStopDetails = true }
             }
+        }
+        if tutorial.activeStage == .stopSession {
+            pendingStopTutorialCompletion = true
         }
     }
 
@@ -341,6 +372,14 @@ private struct ProjectSelectionSheet: View {
 
     private var columns: [GridItem] { [GridItem(.flexible(), spacing: 18), GridItem(.flexible(), spacing: 18)] }
 
+    private var sortedProjects: [Project] {
+        projects.sorted { lhs, rhs in
+            let leftDate = focus.lastActivityDate(for: lhs) ?? lhs.createdAt
+            let rightDate = focus.lastActivityDate(for: rhs) ?? rhs.createdAt
+            return leftDate > rightDate
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -369,7 +408,7 @@ private struct ProjectSelectionSheet: View {
                             EmptyProjectsView()
                         } else {
                             LazyVGrid(columns: columns, spacing: 18) {
-                                ForEach(projects) { project in
+                                ForEach(sortedProjects) { project in
                                     let gradient = ProjectGradientPalette.gradient(at: project.gradientIndex)
                                     let info = projectProgress(for: project)
                                     ProjectSelectionTile(
@@ -588,11 +627,14 @@ private struct NewProjectView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
     @EnvironmentObject private var tutorial: TutorialCoordinator
+    @Query private var allProjects: [Project]
     @State private var title: String = ""
     @State private var hardBlockEnabled: Bool = false
     @State private var hardBlockSelection = FamilyActivitySelection()
     @State private var showingHardBlockPicker = false
     @State private var authorizationDenied = false
+    @State private var hasWeeklyGoal: Bool = false
+    @State private var weeklyGoalHoursInput: Double = 10
 
     private var isSaveDisabled: Bool {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -645,6 +687,49 @@ private struct NewProjectView: View {
                                 Text("This will appear on your home screen and insights.")
                                     .font(.footnote)
                                     .foregroundStyle(.white.opacity(0.65))
+                            }
+                        }
+
+                        ProjectFormCard(title: "Weekly goal",
+                                        subtitle: "Optional target for this project (resets every Sunday).",
+                                        icon: "flag.fill") {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Toggle(isOn: $hasWeeklyGoal) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Track a weekly goal")
+                                            .font(.headline.weight(.medium))
+                                            .foregroundStyle(.white)
+                                        Text("Goals across projects are capped at 112h/week.")
+                                            .font(.footnote)
+                                            .foregroundStyle(.white.opacity(0.7))
+                                    }
+                                }
+                                .tint(Color.cyan)
+                                .disabled(!canAddGoal)
+
+                                if !canAddGoal {
+                                    Text("You’ve reached the 112h/week cap. Lower another project’s goal to add one here.")
+                                        .font(.footnote)
+                                        .foregroundStyle(.white.opacity(0.7))
+                                } else if hasWeeklyGoal {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Slider(value: $weeklyGoalHoursInput, in: 1...sliderUpperBound, step: 1)
+                                            .tint(.white)
+                                            .onChange(of: weeklyGoalHoursInput) { _, newValue in
+                                                weeklyGoalHoursInput = clampedGoalInput(newValue)
+                                                Haptics.soft()
+                                            }
+                                        HStack {
+                                            Text("Goal: \(Int(weeklyGoalHoursInput)) h / week")
+                                                .font(.footnote.weight(.semibold))
+                                                .foregroundStyle(.white)
+                                            Spacer()
+                                            Text("\(Int(remainingGoalBudget))h left in budget")
+                                                .font(.caption)
+                                                .foregroundStyle(.white.opacity(0.6))
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -750,15 +835,20 @@ private struct NewProjectView: View {
     private func save() {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        let goalHours: Double? = {
+            guard hasWeeklyGoal, canAddGoal else { return nil }
+            return clampedGoalInput(weeklyGoalHoursInput)
+        }()
         let selectionData = HardBlockManager.shared.encodeSelection(hardBlockSelection)
         let project = Project(title: trimmed,
                               gradientIndex: nextGradientIndex(),
+                              weeklyGoalHours: goalHours,
                               hardBlockEnabled: hardBlockEnabled,
                               hardBlockSelectionData: hardBlockEnabled ? selectionData : nil)
         modelContext.insert(project)
         if modelContext.saveOrRollback() {
             if tutorial.activeStage == .createProject {
-                tutorial.advance()
+                tutorial.complete()
             }
             dismiss()
         }
@@ -768,6 +858,31 @@ private struct NewProjectView: View {
         let existing = (try? modelContext.fetch(FetchDescriptor<Project>())) ?? []
         let next = (existing.map { $0.gradientIndex }.max() ?? -1) + 1
         return next
+    }
+
+    private var goalCapHours: Double { 112 }
+
+    private var existingGoalHours: Double {
+        allProjects
+            .compactMap { $0.weeklyGoalHours }
+            .filter { $0 > 0 }
+            .reduce(0, +)
+    }
+
+    private var remainingGoalBudget: Double {
+        max(0, goalCapHours - existingGoalHours)
+    }
+
+    private var canAddGoal: Bool { remainingGoalBudget >= 1 }
+
+    private var sliderUpperBound: Double {
+        guard remainingGoalBudget > 0 else { return 1 }
+        return remainingGoalBudget
+    }
+
+    private func clampedGoalInput(_ value: Double) -> Double {
+        guard remainingGoalBudget > 0 else { return 0 }
+        return min(max(1, value), remainingGoalBudget)
     }
 
     private var hardBlockSummary: String {
@@ -1042,14 +1157,6 @@ private struct ProjectDetailView: View {
                                     .font(.footnote)
                                     .foregroundStyle(authorizationDenied ? .red : Color.white.opacity(0.7))
                             }
-                        }
-
-                        ProjectFormCard(title: "Coming soon",
-                                        subtitle: "We’re sketching deeper insights and automation per project.",
-                                        icon: "sparkles") {
-                            Text("Soon you’ll see per-session breakdowns, focus streaks, and custom blocking presets tailored to this project.")
-                                .font(.footnote)
-                                .foregroundStyle(.white.opacity(0.75))
                         }
 
                         ProjectFormCard(title: "Danger zone",

@@ -13,6 +13,14 @@ actor CalendarIntegration {
 
     private let eventStore = EKEventStore()
 
+    /// Shared cleanup window (±1 year)
+    private func cleanupWindow() -> (start: Date, end: Date) {
+        let now = Date()
+        let start = Calendar.current.date(byAdding: .year, value: -1, to: now) ?? now.addingTimeInterval(-365 * 24 * 3600)
+        let end = Calendar.current.date(byAdding: .year, value: 1, to: now) ?? now.addingTimeInterval(365 * 24 * 3600)
+        return (start, end)
+    }
+
     func requestAccess() async -> Bool {
         return await requestAccessIfNeeded()
     }
@@ -33,7 +41,6 @@ actor CalendarIntegration {
         guard let end = session.endedAt else { return }
         guard await requestAccessIfNeeded(),
               let calendar = eventStore.calendar(withIdentifier: calendarIdentifier) else {
-            print("[CalendarIntegration] Calendar unavailable or access denied for \(calendarIdentifier)")
             return
         }
 
@@ -47,19 +54,42 @@ actor CalendarIntegration {
             // Avoid leaving internal markers in user-visible notes
             if let location = session.locationName {
                 event.location = location
-                print("[CalendarIntegration] Attaching location name to event: \(location)")
             }
             if let lat = session.locationLatitude, let lon = session.locationLongitude {
                 let structured = EKStructuredLocation(title: session.locationName ?? "Focus Session")
                 structured.geoLocation = CLLocation(latitude: lat, longitude: lon)
                 event.structuredLocation = structured
-                print("[CalendarIntegration] Attaching coordinates \(lat), \(lon)")
-            } else {
-                print("[CalendarIntegration] No coordinates available for session \(session.id)")
             }
             try eventStore.save(event, span: .thisEvent)
         } catch {
-            print("CalendarIntegration log error: \(error.localizedDescription)")
+        }
+    }
+
+    func updateEventLocation(for session: FocusSession, calendarIdentifier: String) async {
+        guard let end = session.endedAt else { return }
+        guard await requestAccessIfNeeded(),
+              let calendar = eventStore.calendar(withIdentifier: calendarIdentifier) else {
+            return
+        }
+
+        let predicate = eventStore.predicateForEvents(withStart: session.startedAt.addingTimeInterval(-60),
+                                                      end: end.addingTimeInterval(60),
+                                                      calendars: [calendar])
+        let events = eventStore.events(matching: predicate).filter(isMonkEvent)
+        guard let event = events.first else { return }
+
+        if let locationName = session.locationName {
+            event.location = locationName
+        }
+        if let lat = session.locationLatitude, let lon = session.locationLongitude {
+            let structured = EKStructuredLocation(title: session.locationName ?? "Focus Session")
+            structured.geoLocation = CLLocation(latitude: lat, longitude: lon)
+            event.structuredLocation = structured
+        }
+
+        do {
+            try eventStore.save(event, span: .thisEvent)
+        } catch {
         }
     }
 
@@ -72,42 +102,46 @@ actor CalendarIntegration {
     }
 
     func purgeMonkEvents(in calendarIdentifier: String) async -> Int {
-        guard await requestAccessIfNeeded(),
-              let calendar = eventStore.calendar(withIdentifier: calendarIdentifier),
-              calendar.allowsContentModifications else { return 0 }
-        let start = Date(timeIntervalSince1970: 0)
-        let end = Date(timeIntervalSinceNow: 60 * 60 * 24 * 365 * 5)
-        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: [calendar])
-        let events = eventStore.events(matching: predicate).filter(isMonkEvent)
+        guard await requestAccessIfNeeded() else { return 0 }
+        guard let calendar = eventStore.calendar(withIdentifier: calendarIdentifier) else { return 0 }
+
+        let window = cleanupWindow()
+        let events = monkEvents(in: [calendar], window: window)
+
         var removed = 0
         for event in events {
-            do {
-                try eventStore.remove(event, span: .thisEvent)
-                removed += 1
-            } catch {
-                print("Failed to remove event \(event.eventIdentifier ?? "nil"): \(error.localizedDescription)")
+            guard calendar.allowsContentModifications else {
+                continue
             }
+            try? eventStore.remove(event, span: .thisEvent, commit: false)
+            removed += 1
         }
+        if removed > 0 {
+            try? eventStore.commit()
+        }
+
+        // Extra sweep across all calendars in case events landed elsewhere
+        removed += await purgeAllMonkEvents()
         return removed
     }
 
     func purgeAllMonkEvents() async -> Int {
         guard await requestAccessIfNeeded() else { return 0 }
-        let allCalendars = eventStore.calendars(for: .event).filter { $0.allowsContentModifications }
-        let start = Date(timeIntervalSince1970: 0)
-        let end = Date(timeIntervalSinceNow: 60 * 60 * 24 * 365 * 5)
+        let allCalendars = eventStore.calendars(for: .event)
+        await logMonkDiagnostics(context: "purgeAllMonkEvents", calendars: allCalendars)
+        let window = cleanupWindow()
         var totalRemoved = 0
-        for calendar in allCalendars {
-            let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: [calendar])
-            let events = eventStore.events(matching: predicate).filter(isMonkEvent)
-            for event in events {
-                do {
-                    try eventStore.remove(event, span: .thisEvent)
-                    totalRemoved += 1
-                } catch {
-                    print("Failed to purge event \(event.eventIdentifier ?? "nil") from \(calendar.title): \(error.localizedDescription)")
-                }
+
+        let events = monkEvents(in: allCalendars, window: window)
+        for event in events {
+            guard event.calendar.allowsContentModifications else {
+                continue
             }
+            try? eventStore.remove(event, span: .thisEvent, commit: false)
+            totalRemoved += 1
+        }
+        if totalRemoved > 0 {
+            try? eventStore.commit()
         }
         return totalRemoved
     }
@@ -118,7 +152,7 @@ actor CalendarIntegration {
             case .fullAccess, .authorized:
                 return true
             case .writeOnly:
-                return true
+                return false // write-only cannot read/delete
             case .denied, .restricted:
                 return false
             case .notDetermined:
@@ -132,12 +166,10 @@ actor CalendarIntegration {
             }
         } else {
             switch EKEventStore.authorizationStatus(for: .event) {
-            case .authorized:
-                return true
-            case .fullAccess:
+            case .authorized, .fullAccess:
                 return true
             case .writeOnly:
-                return true
+                return false
             case .denied, .restricted:
                 return false
             case .notDetermined:
@@ -158,11 +190,18 @@ actor CalendarIntegration {
                                                       end: end.addingTimeInterval(60),
                                                       calendars: [calendar])
         let events = eventStore.events(matching: predicate)
-        return events.contains { $0.notes == eventMarker(for: session) }
-    }
-
-    private func eventMarker(for session: FocusSession) -> String {
-        "MonkSession:\(session.id.uuidString)"
+        let tolerance: TimeInterval = 120
+        let expectedTitle = "[monk] \(session.project?.title ?? "focus session")".lowercased()
+        return events.contains { event in
+            guard isMonkEvent(event) else { return false }
+            let startDiff = abs(event.startDate.timeIntervalSince(session.startedAt))
+            let endDiff = abs(event.endDate.timeIntervalSince(end))
+            if startDiff > tolerance || endDiff > tolerance { return false }
+            if let title = event.title?.lowercased(), title == expectedTitle {
+                return true
+            }
+            return true
+        }
     }
 
     private func isMonkEvent(_ event: EKEvent) -> Bool {
@@ -174,7 +213,17 @@ actor CalendarIntegration {
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("[monk]") { return true }
             if trimmed.contains("[monk") { return true }
+            if trimmed.contains("monk") { return true }
         }
         return false
+    }
+
+    private func logMonkDiagnostics(context: String, targetCalendar: EKCalendar? = nil, calendars: [EKCalendar]? = nil) async {
+        // Diagnostics removed
+    }
+
+    private func monkEvents(in calendars: [EKCalendar], window: (start: Date, end: Date)) -> [EKEvent] {
+        let predicate = eventStore.predicateForEvents(withStart: window.start, end: window.end, calendars: calendars)
+        return  eventStore.events(matching: predicate).filter(isMonkEvent)
     }
 }

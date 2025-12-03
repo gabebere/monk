@@ -250,7 +250,7 @@ private struct ProjectGoalsWidgetContent: View {
 
     private var smallLayout: some View {
         VStack(alignment: .leading, spacing: layout.sectionSpacing) {
-            header(percentSize: 0, hidePercent: true, compactSubtitle: true)
+            header(percentSize: 0, hidePercent: true, compactSubtitle: true, hidePlanLine: true)
             if rotatingRows.isEmpty {
                 Text("Set weekly goals on projects to see them here.")
                     .font(.caption2)
@@ -271,7 +271,7 @@ private struct ProjectGoalsWidgetContent: View {
         }
     }
 
-    private func header(percentSize: CGFloat, hidePercent: Bool = false, compactSubtitle: Bool = false) -> some View {
+    private func header(percentSize: CGFloat, hidePercent: Bool = false, compactSubtitle: Bool = false, hidePlanLine: Bool = false) -> some View {
         let inlineSubtitle = isMedium && !isSmall && !compactSubtitle
 
         return HStack(alignment: .firstTextBaseline, spacing: layout.headerSpacing) {
@@ -283,11 +283,13 @@ private struct ProjectGoalsWidgetContent: View {
                             .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
-                        Text(totalLabel)
-                            .font(headerSubtitleFont)
-                            .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
+                        if !hidePlanLine {
+                            Text(totalLabel)
+                                .font(headerSubtitleFont)
+                                .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
                     }
                 } else {
                     Text("Project Goals")
@@ -295,11 +297,13 @@ private struct ProjectGoalsWidgetContent: View {
                         .foregroundStyle(WeeklyGoalWidgetPalette.titlePrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                    Text(totalLabel)
-                        .font(compactSubtitle ? headerSubtitleFontSmall : headerSubtitleFont)
-                        .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                    if !hidePlanLine {
+                        Text(totalLabel)
+                            .font(compactSubtitle ? headerSubtitleFontSmall : headerSubtitleFont)
+                            .foregroundStyle(WeeklyGoalWidgetPalette.titleSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
                 }
             }
             Spacer()

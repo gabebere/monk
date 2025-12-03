@@ -9,6 +9,12 @@ import OSLog
 import SwiftData
 import SwiftUI
 import UIKit
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
+#if canImport(UserJot)
+import UserJot
+#endif
 
 @main
 struct MonkApp: App {
@@ -16,6 +22,10 @@ struct MonkApp: App {
 
     init() {
         HardBlockStateStore.bootstrap()
+        PaywallManager.shared.configure()
+#if canImport(UserJot)
+        UserJot.setup(projectId: "cmiptfvv400yb15lbz1dzqbey")
+#endif
         // Global UINavigationBar appearance: white titles and buttons, transparent background
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
@@ -76,5 +86,14 @@ final class MonkAppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         print("Failed to register for remote notifications: \(error.localizedDescription)")
+    }
+
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+#if canImport(GoogleSignIn)
+        if GIDSignIn.sharedInstance.handle(url) {
+            return true
+        }
+#endif
+        return false
     }
 }

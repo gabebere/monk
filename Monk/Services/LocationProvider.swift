@@ -17,11 +17,9 @@ final class LocationProvider: NSObject {
     func requestLocation() async -> LocationResult? {
         let status = manager.authorizationStatus
         if status == .denied || status == .restricted {
-            print("[LocationProvider] Authorization denied/restricted")
             return nil
         }
         if status == .notDetermined {
-            print("[LocationProvider] Requesting when-in-use authorization")
             manager.requestWhenInUseAuthorization()
         }
 
@@ -43,19 +41,16 @@ extension LocationProvider: CLLocationManagerDelegate {
             guard let cont = continuation else { return }
             continuation = nil
             guard let location = locations.first else {
-                print("[LocationProvider] No locations returned")
                 cont.resume(returning: nil)
                 return
             }
             let placemark = await reverseGeocode(location: location)
-            print("[LocationProvider] Got location \(location.coordinate.latitude), \(location.coordinate.longitude); placemark=\(placemark?.name ?? "nil")")
             cont.resume(returning: LocationResult(location: location, placemark: placemark))
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            print("[LocationProvider] Location error: \(error.localizedDescription)")
             continuation?.resume(returning: nil)
             continuation = nil
         }

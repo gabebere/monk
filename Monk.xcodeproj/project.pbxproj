@@ -10,6 +10,10 @@
 		24ED5865A2BC49CEA6853EBA /* Monk/Services/InsightsAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FAA5013001060000784214 /* Monk/Services/InsightsAnalyzer.swift */; };
 		36B9113F98084EA99379D668 /* WeeklyGoalWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */; };
 		6ABE5BDF611B4C24A81857B7 /* Monk/Models/FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DFBEB3FDC443799326FBEF /* Monk/Models/FocusSession.swift */; };
+		740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 740996632EE058A9009DF533 /* GoogleSignIn */; };
+		740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 740996652EE058A9009DF533 /* GoogleSignInSwift */; };
+		740996692EE05BFF009DF533 /* UserJot in Frameworks */ = {isa = PBXBuildFile; productRef = 740996682EE05BFF009DF533 /* UserJot */; };
+		743099A02ED511EA005BBC52 /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7430999F2ED511EA005BBC52 /* SuperwallKit */; };
 		74F1E0602FFF5FE500784214 /* HardBlockShieldDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F1E0002FFF5FE100784214 /* HardBlockShieldDataSource.swift */; };
 		74F1E0612FFF5FE500784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
 		74F1E0622FFF5FE500784214 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */; };
@@ -108,9 +112,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */,
 				74F5A1383000C00000784214 /* ManagedSettings.framework in Frameworks */,
 				74F5A1363000C00000784214 /* FamilyControls.framework in Frameworks */,
+				740996692EE05BFF009DF533 /* UserJot in Frameworks */,
+				740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */,
 				74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */,
+				743099A02ED511EA005BBC52 /* SuperwallKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -226,6 +234,10 @@
 			);
 			name = Monk;
 			packageProductDependencies = (
+				7430999F2ED511EA005BBC52 /* SuperwallKit */,
+				740996632EE058A9009DF533 /* GoogleSignIn */,
+				740996652EE058A9009DF533 /* GoogleSignInSwift */,
+				740996682EE05BFF009DF533 /* UserJot */,
 			);
 			productName = Monk;
 			productReference = 7420C2462E5CE57200784214 /* Monk.app */;
@@ -313,6 +325,11 @@
 			);
 			mainGroup = 7420C23D2E5CE57200784214;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7430999E2ED511EA005BBC52 /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
+				740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7420C2472E5CE57200784214 /* Products */;
 			projectDirPath = "";
@@ -746,6 +763,56 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
+		740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/UserJot/userjot-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
+		7430999E2ED511EA005BBC52 /* XCRemoteSwiftPackageReference "Superwall-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/superwall/Superwall-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.10.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		740996632EE058A9009DF533 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		740996652EE058A9009DF533 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+		740996682EE05BFF009DF533 /* UserJot */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */;
+			productName = UserJot;
+		};
+		7430999F2ED511EA005BBC52 /* SuperwallKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7430999E2ED511EA005BBC52 /* XCRemoteSwiftPackageReference "Superwall-iOS" */;
+			productName = SuperwallKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7420C23E2E5CE57200784214 /* Project object */;
 }

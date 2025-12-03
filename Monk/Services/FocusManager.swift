@@ -69,8 +69,8 @@ final class FocusManager: ObservableObject {
         }
 
         let preferences = (try? modelContext.fetch(FetchDescriptor<Preferences>()))?.first
-        let shouldLogCalendar = preferences?.calendarIntegrationEnabled == true
         let calendarIdentifier = preferences?.calendarCalendarIdentifier
+        let shouldLogCalendar = calendarIdentifier?.isEmpty == false
 
         guard modelContext.saveOrRollback() else { return }
         currentSession = nil
@@ -89,7 +89,6 @@ final class FocusManager: ObservableObject {
 
         if !discardSession {
             Task { @MainActor in
-                print("[FocusManager] Capturing location and syncing calendar (enabled: \(shouldLogCalendar))")
                 await captureLocationAndSync(for: session, calendarIdentifier: calendarIdentifier, shouldLogCalendar: shouldLogCalendar)
             }
         }
@@ -197,15 +196,17 @@ extension FocusManager {
             session.locationLatitude = result.location.coordinate.latitude
             session.locationLongitude = result.location.coordinate.longitude
             _ = modelContext.saveOrRollback()
-            print("[FocusManager] Saved location \(session.locationName ?? "nil") (\(session.locationLatitude ?? 0), \(session.locationLongitude ?? 0))")
-        } else {
-            print("[FocusManager] Location unavailable or permission denied")
         }
 
         if shouldLogCalendar,
            let calendarIdentifier,
            !calendarIdentifier.isEmpty {
             await CalendarIntegration.shared.logSession(session, calendarIdentifier: calendarIdentifier)
+            let allSessions = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? [session]
+            await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: calendarIdentifier)
+            if session.locationName != nil || (session.locationLatitude != nil && session.locationLongitude != nil) {
+                await CalendarIntegration.shared.updateEventLocation(for: session, calendarIdentifier: calendarIdentifier)
+            }
         }
     }
 }

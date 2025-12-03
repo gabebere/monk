@@ -1,49 +1,80 @@
 import SwiftUI
 
-enum TutorialStage: CaseIterable, Identifiable {
+enum TutorialStage: String, CaseIterable, Identifiable {
+    case welcome
     case createProject
-    case addWidgets
     case startSession
+    case stopSession
+    case calendar
+    case location
+    case insights
+    case paywall
+
+    static var ordered: [TutorialStage] {
+        [.welcome, .createProject, .startSession, .stopSession, .calendar, .location, .insights, .paywall]
+    }
 
     var id: Self { self }
 
     var title: String {
         switch self {
+        case .welcome:
+            return "Welcome to Monk"
         case .createProject:
             return "Create your first project"
-        case .addWidgets:
-            return "Add progress widgets"
         case .startSession:
-            return "Start a focus session"
+            return "Start your first focus session"
+        case .stopSession:
+            return "Finish your session"
+        case .calendar:
+            return "Sync your calendar"
+        case .location:
+            return "Add location context"
+        case .insights:
+            return "See your insights"
+        case .paywall:
+            return "Unlock Monk Pro"
         }
     }
 
     var message: String {
         switch self {
+        case .welcome:
+            return "We’ll build Monk together on the real screens."
         case .createProject:
-            return "Jump to Home and use the plus button to add a project for what you’re working on."
-        case .addWidgets:
-            return "Head back to Settings, then open the widget guide to pin Monk where you need it."
+            return "Tap + on Home to add a real project."
         case .startSession:
-            return "Return to Home and tap the focus button when you’re ready to start your first session."
+            return "Use the Time to focus button to start."
+        case .stopSession:
+            return "Tap stop when you’re ready to wrap; we’ll show the summary."
+        case .calendar:
+            return "Pick the calendar Monk should save sessions to."
+        case .location:
+            return "Allow location to add where you worked."
+        case .insights:
+            return "Open Insights to review your plan and progress."
+        case .paywall:
+            return "Finish onboarding with Monk Pro."
         }
     }
 
     var preferredTab: AppTab {
         switch self {
-        case .addWidgets:
-            return .settings
-        case .createProject, .startSession:
+        case .welcome, .createProject, .startSession, .stopSession:
             return .home
+        case .calendar, .location:
+            return .settings
+        case .insights, .paywall:
+            return .insights
         }
     }
 
     var isLast: Bool { self == TutorialStage.allCases.last }
 
     func next() -> TutorialStage? {
-        guard let idx = TutorialStage.allCases.firstIndex(of: self),
-              idx + 1 < TutorialStage.allCases.count else { return nil }
-        return TutorialStage.allCases[idx + 1]
+        guard let idx = TutorialStage.ordered.firstIndex(of: self),
+              idx + 1 < TutorialStage.ordered.count else { return nil }
+        return TutorialStage.ordered[idx + 1]
     }
 }
 
@@ -75,6 +106,10 @@ final class TutorialCoordinator: ObservableObject {
     }
 
     func skip() {
+        activeStage = nil
+    }
+
+    func complete() {
         activeStage = nil
     }
 }

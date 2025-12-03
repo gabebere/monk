@@ -5,63 +5,43 @@ import ManagedSettingsUI
 import UIKit
 
 private enum HardBlockShieldPalette {
-    static let gradientStart = UIColor(red: 32 / 255, green: 24 / 255, blue: 68 / 255, alpha: 1)
-    static let gradientEnd = UIColor(red: 10 / 255, green: 56 / 255, blue: 120 / 255, alpha: 1)
     static let primaryText = UIColor(white: 0.98, alpha: 1)
-    static let secondaryText = UIColor(white: 0.88, alpha: 0.82)
-    static let buttonBackground = UIColor(red: 248 / 255, green: 113 / 255, blue: 62 / 255, alpha: 1)
+    static let secondaryText = UIColor(white: 0.86, alpha: 1)
+    static let buttonBackground = UIColor.systemIndigo
     static let buttonText = UIColor.white
-    static let secondaryButtonText = UIColor(white: 0.95, alpha: 0.85)
 
-    static func gradientBackground() -> UIColor {
-        let size = CGSize(width: 1, height: 512)
-        UIGraphicsBeginImageContextWithOptions(size, true, 0)
-        defer { UIGraphicsEndImageContext() }
-
-        guard let context = UIGraphicsGetCurrentContext() else { return gradientStart }
-        let colors = [gradientStart.cgColor, gradientEnd.cgColor] as CFArray
-        guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) else {
-            return gradientStart
-        }
-        context.drawLinearGradient(gradient,
-                                   start: CGPoint(x: 0, y: 0),
-                                   end: CGPoint(x: 0, y: size.height),
-                                   options: [])
-        if let image = UIGraphicsGetImageFromCurrentImageContext() {
-            return UIColor(patternImage: image)
-        }
-        return gradientStart
-    }
+    // Use a single solid color to avoid any memory churn in the extension.
+    static let backgroundColor = UIColor(red: 0.12, green: 0.07, blue: 0.26, alpha: 1)
 
     static func emblemIcon() -> UIImage? {
-        let configuration = UIImage.SymbolConfiguration(pointSize: 72, weight: .semibold)
-        return UIImage(systemName: "brain.head.profile", withConfiguration: configuration)?.withTintColor(UIColor(white: 1.0, alpha: 0.9), renderingMode: .alwaysOriginal)
+        let configuration = UIImage.SymbolConfiguration(pointSize: 48, weight: .semibold)
+        return UIImage(systemName: "sparkles", withConfiguration: configuration)?.withTintColor(UIColor(white: 1.0, alpha: 0.9), renderingMode: .alwaysOriginal)
     }
 }
 
 private enum HardBlockShieldCopy {
     static func title(projectTitle: String?) -> String {
         if let projectTitle, !projectTitle.isEmpty {
-            return "Deep focus for \(projectTitle)"
+            return "Enjoy your focus on \(projectTitle)"
         }
-        return "Eyes on your focus"
+        return "Enjoy your focus"
     }
 
     static func subtitle(appName: String, projectTitle: String?) -> String {
         if let projectTitle, !projectTitle.isEmpty {
-            return "\(appName) is resting while you power through \(projectTitle)."
+            return "Stay present; \(appName) is paused for \(projectTitle)."
         }
-        return "\(appName) returns when your current focus session wraps up."
+        return "Stay present; distractions are paused."
     }
 
     static func subtitle(domain: String, projectTitle: String?) -> String {
         if let projectTitle, !projectTitle.isEmpty {
-            return "Stay with \(projectTitle) for now—\(domain) will wait."
+            return "Focus first; \(domain) is paused for \(projectTitle)."
         }
-        return "\(domain) is paused until this focus session ends."
+        return "Focus first; this site is paused."
     }
 
-    static let primaryButton = "Back to focus"
+    static let primaryButton = "Back to Monk"
 }
 
 private struct HardBlockShieldState: Codable {
@@ -147,45 +127,37 @@ private enum HardBlockShieldStore {
 
     override func configuration(shielding application: ManagedSettings.Application) -> ShieldConfiguration {
         let displayName = application.localizedDisplayName ?? "This app"
-        if HardBlockShieldStore.contains(application: application.token) || HardBlockShieldStore.isActive {
-            return hardBlockConfiguration(title: displayName, subtitle: HardBlockShieldCopy.subtitle(appName: displayName, projectTitle: HardBlockShieldStore.projectTitle))
-        }
-        return placeholderConfiguration(title: displayName)
+        return baseConfiguration(title: displayName)
     }
 
     override func configuration(shielding application: ManagedSettings.Application, in category: ManagedSettings.ActivityCategory) -> ShieldConfiguration {
-        if HardBlockShieldStore.contains(category: category.token) || HardBlockShieldStore.isActive {
-            let displayName = application.localizedDisplayName ?? "This app"
-            return hardBlockConfiguration(title: displayName, subtitle: HardBlockShieldCopy.subtitle(appName: displayName, projectTitle: HardBlockShieldStore.projectTitle))
-        }
-        return configuration(shielding: application)
+        let displayName = application.localizedDisplayName ?? "This app"
+        return baseConfiguration(title: displayName)
     }
 
     override func configuration(shielding webDomain: ManagedSettings.WebDomain) -> ShieldConfiguration {
         let domain = webDomain.domain ?? "This site"
-        if HardBlockShieldStore.contains(webDomain: webDomain.token) || HardBlockShieldStore.isActive {
-            return hardBlockConfiguration(title: domain, subtitle: HardBlockShieldCopy.subtitle(domain: domain, projectTitle: HardBlockShieldStore.projectTitle))
-        }
-        return placeholderConfiguration(title: domain)
+        return baseConfiguration(title: domain)
     }
 
     override func configuration(shielding webDomain: ManagedSettings.WebDomain, in category: ManagedSettings.ActivityCategory) -> ShieldConfiguration {
-        if HardBlockShieldStore.contains(category: category.token) || HardBlockShieldStore.contains(webDomain: webDomain.token) || HardBlockShieldStore.isActive {
-            let domain = webDomain.domain ?? "This site"
-            return hardBlockConfiguration(title: domain, subtitle: HardBlockShieldCopy.subtitle(domain: domain, projectTitle: HardBlockShieldStore.projectTitle))
-        }
-        return configuration(shielding: webDomain)
+        let domain = webDomain.domain ?? "This site"
+        return baseConfiguration(title: domain)
     }
 }
 
 private extension HardBlockShieldUIExtension {
+    func baseConfiguration(title: String) -> ShieldConfiguration {
+        hardBlockConfiguration(title: title, subtitle: "")
+    }
+
     func hardBlockConfiguration(title: String, subtitle: String) -> ShieldConfiguration {
         ShieldConfiguration(
-            backgroundBlurStyle: nil,
-            backgroundColor: HardBlockShieldPalette.gradientBackground(),
+            backgroundBlurStyle: .systemUltraThinMaterial,
+            backgroundColor: HardBlockShieldPalette.backgroundColor,
             icon: HardBlockShieldPalette.emblemIcon(),
-            title: .init(text: HardBlockShieldCopy.title(projectTitle: HardBlockShieldStore.projectTitle), color: HardBlockShieldPalette.primaryText),
-            subtitle: .init(text: subtitle, color: HardBlockShieldPalette.secondaryText),
+            title: .init(text: "Enjoy your focus", color: HardBlockShieldPalette.primaryText),
+            subtitle: .init(text: "", color: HardBlockShieldPalette.secondaryText),
             primaryButtonLabel: .init(text: HardBlockShieldCopy.primaryButton, color: HardBlockShieldPalette.buttonText),
             primaryButtonBackgroundColor: HardBlockShieldPalette.buttonBackground
         )
@@ -193,11 +165,11 @@ private extension HardBlockShieldUIExtension {
 
     func placeholderConfiguration(title: String) -> ShieldConfiguration {
         ShieldConfiguration(
-            backgroundBlurStyle: nil,
-            backgroundColor: HardBlockShieldPalette.gradientBackground(),
+            backgroundBlurStyle: .systemUltraThinMaterial,
+            backgroundColor: HardBlockShieldPalette.backgroundColor,
             icon: HardBlockShieldPalette.emblemIcon(),
-            title: .init(text: "You’re in focus mode", color: HardBlockShieldPalette.primaryText),
-            subtitle: .init(text: "\(title) is currently unavailable while Monk keeps distractions away.", color: HardBlockShieldPalette.secondaryText),
+            title: .init(text: "Enjoy your focus", color: HardBlockShieldPalette.primaryText),
+            subtitle: .init(text: "", color: HardBlockShieldPalette.secondaryText),
             primaryButtonLabel: .init(text: HardBlockShieldCopy.primaryButton, color: HardBlockShieldPalette.buttonText),
             primaryButtonBackgroundColor: HardBlockShieldPalette.buttonBackground
         )

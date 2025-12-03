@@ -6,6 +6,8 @@ struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor<FocusSession>(\.startedAt, order: .reverse)]) private var sessions: [FocusSession]
     @Query(sort: [SortDescriptor<Project>(\.createdAt, order: .forward)]) private var projects: [Project]
+    @EnvironmentObject private var tutorial: TutorialCoordinator
+    @State private var insightsHighlight: TutorialHighlightInfo?
     @State private var path: [InsightRoute] = []
 
     private let analyzer = InsightsAnalyzer()
@@ -18,6 +20,14 @@ struct InsightsView: View {
     private var aggregatedGoalHours: Double? {
         let total = projectGoals.totalGoalHours
         return total > 0 ? total : nil
+    }
+
+    private var goalPlannedHours: Double { projectGoals.totalGoalHours }
+    private var goalActualHours: Double { projectGoals.totalActualHours }
+    private var goalRemainingHours: Double { max(0, goalPlannedHours - goalActualHours) }
+    private var goalCompletionFraction: Double {
+        guard goalPlannedHours > 0 else { return 0 }
+        return min(max(goalActualHours / goalPlannedHours, 0), 1)
     }
 
     private var summary: TemporalInsightsSummary {
@@ -37,11 +47,16 @@ struct InsightsView: View {
             AnimatingBackground(base: Theme.dataBackground(), halo: Theme.dataHaloGradient)
             ScrollView {
                 VStack(spacing: InsightsLayout.verticalSpacing) {
+                    GoalSummaryCard(plannedHours: goalPlannedHours,
+                                    actualHours: goalActualHours,
+                                    remainingHours: goalRemainingHours,
+                                    fraction: goalCompletionFraction)
+                        .frame(maxWidth: .infinity)
+                        .tutorialAnchor(.insights, cornerRadius: 24)
+
                     ProjectGoalsCard(summary: projectGoals)
                         .frame(maxWidth: .infinity)
 
-                    TotalHoursCard(totalHours: summary.totalFocusSeconds / 3600)
-                        .frame(maxWidth: .infinity)
                 }
                 .padding(.horizontal, InsightsLayout.horizontalPadding)
                 .padding(.top, InsightsLayout.topPadding)
@@ -52,11 +67,23 @@ struct InsightsView: View {
             }
         }
         .navigationTitle("Insights")
-    }
-
-    private var gridColumns: [GridItem] {
-        [GridItem(.flexible(), spacing: InsightsLayout.verticalSpacing),
-         GridItem(.flexible(), spacing: InsightsLayout.verticalSpacing)]
+        .overlay {
+            if let stage = tutorial.activeStage,
+               stage == .insights {
+                TutorialOverlayView(
+                    stage: stage,
+                    highlight: insightsHighlight,
+                    onNext: tutorial.complete,
+                    onSkip: tutorial.skip,
+                    showActions: true
+                )
+            }
+        }
+        .onPreferenceChange(TutorialAnchorPreferenceKey.self) { values in
+            for value in values where value.stage == .insights {
+                insightsHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
+            }
+        }
     }
 
     private func tileModels(summary: TemporalInsightsSummary) -> [InsightTileModel] {
@@ -184,12 +211,99 @@ private enum InsightKind: CaseIterable {
 
 private enum InsightsLayout {
     static let horizontalPadding: CGFloat = 20
-    static let verticalSpacing: CGFloat = 16
-    static let topPadding: CGFloat = 32
-    static let bottomPadding: CGFloat = 48
+    static let verticalSpacing: CGFloat = 18
+    static let topPadding: CGFloat = 28
+    static let bottomPadding: CGFloat = 52
     static let bottomInset: CGFloat = 72
     static let focusScoreAspectRatio: CGFloat = 2.0
     static let focusScoreGap: CGFloat = verticalSpacing
+}
+
+private struct GoalSummaryCard: View {
+    let plannedHours: Double
+    let actualHours: Double
+    let remainingHours: Double
+    let fraction: Double
+    private var unallocatedHours: Double {
+        max(0, 112 - plannedHours)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Weekly Plan")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                    Text(String(format: "%.1fh planned", plannedHours))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                Spacer()
+                Text("\(Int(round(fraction * 100)))%")
+                    .font(.system(size: 36, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Color.white)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.18))
+                        Capsule()
+                            .fill(LinearGradient(colors: [
+                                Color(red: 0.62, green: 0.79, blue: 1.00),
+                                Color(red: 0.42, green: 0.67, blue: 0.99),
+                                Color(red: 0.31, green: 0.85, blue: 0.90)
+                            ], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: proxy.size.width * CGFloat(min(max(fraction, 0), 1)))
+                    }
+                }
+                .frame(height: 12)
+
+                HStack {
+                    MetricChip(label: "Actual", value: String(format: "%.1fh", actualHours))
+                    MetricChip(label: "Remaining", value: String(format: "%.1fh", remainingHours))
+                    MetricChip(label: "Unallocated", value: String(format: "%.0fh", max(0, unallocatedHours)))
+                    Spacer()
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(LinearGradient(colors: [
+                    Color(red: 0.24, green: 0.31, blue: 0.80),
+                    Color(red: 0.15, green: 0.55, blue: 0.88),
+                    Color(red: 0.15, green: 0.70, blue: 0.86)
+                ], startPoint: .topLeading, endPoint: .bottomTrailing))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 16, x: 0, y: 10)
+    }
+}
+
+private struct MetricChip: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.78))
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.12), in: Capsule())
+    }
 }
 
 private struct TotalHoursCard: View {
@@ -358,14 +472,9 @@ private struct ProjectGoalLegend: View {
     let segments: [NormalizedGoalSegment]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(segments.prefix(4)) { segment in
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(segments) { segment in
                 ProjectGoalLegendItem(segment: segment)
-            }
-            if segments.count > 4 {
-                Text("+\(segments.count - 4) more projects")
-                    .font(.caption)
-                    .foregroundStyle(Color.white.opacity(0.65))
             }
         }
     }

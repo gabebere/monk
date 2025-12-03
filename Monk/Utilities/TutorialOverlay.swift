@@ -47,6 +47,7 @@ struct TutorialOverlayView: View {
     let highlight: TutorialHighlightInfo?
     let onNext: () -> Void
     let onSkip: () -> Void
+    var showActions: Bool = true
 
     var body: some View {
         GeometryReader { proxy in
@@ -69,44 +70,72 @@ struct TutorialOverlayView: View {
                 Text(stage.title)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
+                .multilineTextAlignment(.center)
                 Text(stage.message)
                     .font(.callout)
                     .foregroundStyle(.white.opacity(0.82))
                     .multilineTextAlignment(.center)
             }
-            HStack(spacing: 12) {
-                Button(action: {
-                    Haptics.heavy()
-                    onSkip()
-                }) {
-                    Text("Skip tutorial")
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 11)
-                        .background(Color.white.opacity(0.18), in: Capsule())
-                }
-                .buttonStyle(.plain)
+            if showActions {
+                HStack(spacing: 12) {
+                    if !stage.isLast {
+                        Button(action: {
+                            Haptics.heavy()
+                            onSkip()
+                        }) {
+                            Text("Skip tutorial")
+                                .font(.footnote.weight(.semibold))
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 11)
+                                .background(
+                                    LinearGradient(colors: [
+                                        Color(red: 0.32, green: 0.52, blue: 0.94),
+                                        Color(red: 0.22, green: 0.34, blue: 0.66)
+                                    ], startPoint: .leading, endPoint: .trailing)
+                                )
+                                .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
 
-                Button(action: {
-                    Haptics.heavy()
-                    onNext()
-                }) {
-                    Text(stage.isLast ? "Finish" : "Next")
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.9), in: Capsule())
-                        .foregroundStyle(.black)
+                    Button(action: {
+                        Haptics.heavy()
+                        onNext()
+                    }) {
+                        Text(stage.isLast ? "Finish" : "Next")
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 12)
+                            .background(
+                                LinearGradient(colors: [
+                                    Color(red: 0.32, green: 0.52, blue: 0.94),
+                                    Color(red: 0.22, green: 0.34, blue: 0.66)
+                                ], startPoint: .leading, endPoint: .trailing)
+                            )
+                            .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(24)
-        .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(
+                    LinearGradient(colors: [
+                        Color(red: 0.20, green: 0.24, blue: 0.48),
+                        Color(red: 0.12, green: 0.32, blue: 0.62),
+                        Color(red: 0.07, green: 0.54, blue: 0.68)
+                    ], startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                .stroke(Color.white.opacity(0.22), lineWidth: 1)
         )
     }
 
