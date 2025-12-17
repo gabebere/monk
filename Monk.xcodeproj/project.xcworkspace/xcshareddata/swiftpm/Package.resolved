@@ -1,5 +1,5 @@
 {
-  "originHash" : "a9dcce2ee9c3816291cb95247f548c65d7fae8f3cfc537e06577406772177025",
+  "originHash" : "7ed9d133b9bf87839f84eb8a05d60fe4b85480e2de0fa489f6cd46fded132db0",
   "pins" : [
     {
       "identity" : "app-check",
@@ -65,21 +65,12 @@
       }
     },
     {
-      "identity" : "superscript-ios",
+      "identity" : "purchases-ios",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/superwall/Superscript-iOS",
+      "location" : "https://github.com/RevenueCat/purchases-ios",
       "state" : {
-        "revision" : "bde42f1c7652a69a469677978ed97cba92c4dd2c",
-        "version" : "1.0.10"
-      }
-    },
-    {
-      "identity" : "superwall-ios",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/superwall/Superwall-iOS",
-      "state" : {
-        "revision" : "886c35c556bdac8f8fda6c765239aa908c16e4e5",
-        "version" : "4.10.6"
+        "revision" : "2d95eedc59c06fa6349aab7a506f0950ac0a563b",
+        "version" : "5.50.1"
       }
     },
     {
@@ -87,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/UserJot/userjot-ios",
       "state" : {
-        "revision" : "640882c334ec68126d2b64bb269544b6ca002301",
-        "version" : "0.1.0"
+        "revision" : "b2f17fd0eb109359a6309e8d182f4969a0e889bc",
+        "version" : "0.2.0"
       }
     }
   ],

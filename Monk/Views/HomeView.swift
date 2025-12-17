@@ -5,15 +5,10 @@ import UIKit
 
 struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
-    @EnvironmentObject private var tutorial: TutorialCoordinator
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
     @State private var showingNewProject: Bool = false
     @State private var projectDetail: Project?
-    @State private var projectHighlight: TutorialHighlightInfo?
-    @State private var startHighlight: TutorialHighlightInfo?
-    @State private var stopHighlight: TutorialHighlightInfo?
-    @State private var pendingStopTutorialCompletion = false
 
     private var prefs: Preferences {
         if let existing = prefsList.first { return existing }
@@ -44,65 +39,10 @@ struct HomeView: View {
         .sheet(item: $projectDetail) { project in
             ProjectDetailView(project: project)
         }
-        .onPreferenceChange(TutorialAnchorPreferenceKey.self) { values in
-            for value in values {
-                switch value.stage {
-                case .createProject:
-                    projectHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
-                case .startSession:
-                    var frame = value.frame.insetBy(dx: -12, dy: 0)
-                    let extraHeight = frame.height * 0.33
-                    frame = frame.insetBy(dx: 0, dy: -extraHeight / 2)
-                    startHighlight = TutorialHighlightInfo(stage: value.stage, frame: frame, cornerRadius: value.cornerRadius)
-                case .stopSession:
-                    stopHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
-                default:
-                    break
-                }
-            }
-        }
-        .overlay {
-            Group {
-                if let stage = tutorial.activeStage,
-                   stage != .welcome,
-                   (stage == .createProject || stage == .startSession || stage == .stopSession) {
-                    TutorialOverlayView(
-                        stage: stage,
-                        highlight: highlightInfo(for: stage),
-                        onNext: { handleOnboardingNext(for: stage) },
-                        onSkip: tutorial.skip,
-                        showActions: false
-                    )
-                }
-            }
-        }
     }
 }
-
-private extension HomeView {
-    func highlightInfo(for stage: TutorialStage) -> TutorialHighlightInfo? {
-        switch stage {
-        case .welcome:
-            return nil
-        case .createProject:
-            return projectHighlight
-        case .startSession:
-            return startHighlight
-        case .stopSession:
-            return stopHighlight
-        default:
-            return nil
-        }
-    }
-
-    func handleOnboardingNext(for stage: TutorialStage) {
-        tutorial.complete()
-    }
-}
-
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
-    @EnvironmentObject private var tutorial: TutorialCoordinator
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
 
@@ -116,7 +56,6 @@ private struct TimerCard: View {
     @State private var pressDown: Bool = false
     @State private var outerLoopTask: Task<Void, Never>? = nil
     @State private var innerLoopTask: Task<Void, Never>? = nil
-    @State private var pendingStopTutorialCompletion = false
     @State private var showStopDetails: Bool = false
     @State private var stoppedSession: FocusSession? = nil
     @State private var showingProjectPicker: Bool = false
@@ -137,9 +76,8 @@ private struct TimerCard: View {
                             .animation(.easeOut(duration: 0.6), value: rippleOpacity)
                             .animation(.easeOut(duration: 0.6), value: rippleScale)
 
-                        let isTutorialHighlight = tutorial.activeStage == .startSession
-                        let cyanShadowRadius: CGFloat = isTutorialHighlight ? 18 : 36
-                        let blueShadowRadius: CGFloat = isTutorialHighlight ? 24 : 54
+                        let cyanShadowRadius: CGFloat = 36
+                        let blueShadowRadius: CGFloat = 54
 
                         Text("Time to focus?")
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
@@ -161,7 +99,6 @@ private struct TimerCard: View {
                     }
                 }
                 .accessibilityLabel("Start focusing")
-                .tutorialAnchor(.startSession, cornerRadius: 32)
                 .background(
                     ZStack {
                         Ellipse()
@@ -231,7 +168,6 @@ private struct TimerCard: View {
                             }
                         }
                         .accessibilityLabel("Stop")
-                        .tutorialAnchor(.stopSession, cornerRadius: 52)
                     }
                     .padding(.bottom, 0)
                 }
@@ -242,12 +178,7 @@ private struct TimerCard: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.88), value: focus.currentSession != nil)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .sheet(isPresented: $showStopDetails, onDismiss: {
-            if pendingStopTutorialCompletion {
-                tutorial.complete()
-                pendingStopTutorialCompletion = false
-            }
-        }) {
+        .sheet(isPresented: $showStopDetails) {
             if let session = stoppedSession {
                 CompletedSessionView(session: session) {
                     // No-op; stop already occurred
@@ -274,9 +205,6 @@ private struct TimerCard: View {
 
     private func startSession(with project: Project?) {
         focus.start(project: project)
-        if tutorial.activeStage == .startSession {
-            tutorial.complete()
-        }
     }
 
     private func stopSession() {
@@ -288,14 +216,11 @@ private struct TimerCard: View {
         if let s = session, let start = startTime {
             let discardShort = prefsList.first?.discardShortSessions == true
             let duration = Date().timeIntervalSince(start)
-            let willDiscard = (tutorial.activeStage == .stopSession) ? false : (discardShort && duration < 120)
+            let willDiscard = discardShort && duration < 120
             if !willDiscard {
                 stoppedSession = s
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showStopDetails = true }
             }
-        }
-        if tutorial.activeStage == .stopSession {
-            pendingStopTutorialCompletion = true
         }
     }
 
@@ -470,7 +395,6 @@ private struct ProjectSelectionSheet: View {
 
 private struct ProjectsSection: View {
     @EnvironmentObject private var focus: FocusManager
-    @EnvironmentObject private var tutorial: TutorialCoordinator
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
 
     let onAdd: () -> Void
@@ -505,7 +429,6 @@ private struct ProjectsSection: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Create project")
-                .tutorialAnchor(.createProject, cornerRadius: 28)
             }
 
             if sortedProjects.isEmpty {
@@ -626,7 +549,6 @@ private struct NewProjectView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
-    @EnvironmentObject private var tutorial: TutorialCoordinator
     @Query private var allProjects: [Project]
     @State private var title: String = ""
     @State private var hardBlockEnabled: Bool = false
@@ -847,9 +769,6 @@ private struct NewProjectView: View {
                               hardBlockSelectionData: hardBlockEnabled ? selectionData : nil)
         modelContext.insert(project)
         if modelContext.saveOrRollback() {
-            if tutorial.activeStage == .createProject {
-                tutorial.complete()
-            }
             dismiss()
         }
     }
@@ -963,21 +882,6 @@ private struct ProjectDetailView: View {
                                     .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                                     .foregroundColor(.white)
                                     .onSubmit { commitRename() }
-
-                                HStack {
-                                    Button {
-                                        commitRename()
-                                    } label: {
-                                        Text("Save name")
-                                            .font(.footnote.weight(.semibold))
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
-                                            .background(Color.white.opacity(canCommitName ? 0.22 : 0.08), in: Capsule())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(!canCommitName)
-                                    Spacer()
-                                }
 
                                 Text(nameHint)
                                     .font(.footnote)
@@ -1183,6 +1087,7 @@ private struct ProjectDetailView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         Haptics.heavy()
+                        commitRename()
                         dismiss()
                     }
                         .foregroundStyle(.white)
@@ -1236,13 +1141,9 @@ private struct ProjectDetailView: View {
         }
     }
 
-    private var canCommitName: Bool {
-        let trimmed = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !trimmed.isEmpty && trimmed != project.title
-    }
-
     private var nameHint: String {
-        canCommitName ? "Tap save to apply the new name." : "Names can’t be empty."
+        let trimmed = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Names can’t be empty." : "Changes save when you tap Done."
     }
 
     private func commitRename() {

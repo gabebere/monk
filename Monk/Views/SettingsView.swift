@@ -5,21 +5,20 @@ import UserJot
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
-    @EnvironmentObject private var tutorial: TutorialCoordinator
     @EnvironmentObject private var auth: AuthManager
     @Query private var prefsList: [Preferences]
     @Query(sort: [SortDescriptor(\FocusSession.startedAt, order: .forward)]) private var allSessions: [FocusSession]
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .forward)]) private var projects: [Project]
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     @State private var calendarOptions: [CalendarDisplayInfo] = []
     @State private var calendarStatusMessage: String?
     @State private var calendarBusy = false
-    @State private var calendarHighlight: TutorialHighlightInfo?
-    @State private var locationHighlight: TutorialHighlightInfo?
     @State private var feedbackStatusMessage: String?
     @State private var showingFeedback = false
     @State private var selectedBoard: String?
     @State private var showingFeedbackWeb = false
+    @State private var showingOnboardingPreview = false
 
     private var prefs: Preferences {
         if let existing = prefsList.first {
@@ -56,25 +55,15 @@ struct SettingsView: View {
                         goalCard
                         calendarCard
                         sessionsCard
-                        restartTutorialCard
+#if DEBUG
+                        debugCard
+#endif
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 36)
                 }
             }
             .navigationTitle("Settings")
-            .overlay {
-                if let stage = tutorial.activeStage,
-                   stage == .calendar || stage == .location {
-                    TutorialOverlayView(
-                        stage: stage,
-                        highlight: highlight(for: stage),
-                        onNext: tutorial.complete,
-                        onSkip: tutorial.skip,
-                        showActions: false
-                    )
-                }
-            }
         }
         .task {
             await refreshCalendars()
@@ -91,33 +80,17 @@ struct SettingsView: View {
             )
             .ignoresSafeArea()
         }
-        .onPreferenceChange(TutorialAnchorPreferenceKey.self) { values in
-            for value in values {
-                switch value.stage {
-                case .calendar:
-                    calendarHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
-                case .location:
-                    locationHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
-                default:
-                    break
-                }
+        .sheet(isPresented: $showingOnboardingPreview) {
+            OnboardingStoryView { _ in
+                showingOnboardingPreview = false
             }
+            .environmentObject(auth)
+            .environmentObject(focus)
         }
     }
 }
 
 private extension SettingsView {
-    func highlight(for stage: TutorialStage) -> TutorialHighlightInfo? {
-        switch stage {
-        case .calendar:
-            return calendarHighlight
-        case .location:
-            return locationHighlight
-        default:
-            return nil
-        }
-    }
-
     var goalCard: some View {
         SettingsCard(title: "Project Goals",
                      subtitle: "Weekly targets now come from the sum of all project goals (capped at 112h).",
@@ -172,7 +145,6 @@ private extension SettingsView {
                     .pickerStyle(.menu)
                     .labelsHidden()
                     .accentColor(.white)
-                    .tutorialAnchor(.calendar, cornerRadius: 14)
                 }
 
                 // Status text omitted per request.
@@ -188,7 +160,6 @@ private extension SettingsView {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
-                .tutorialAnchor(.location, cornerRadius: 14)
             }
         }
     }
@@ -324,30 +295,49 @@ private extension SettingsView {
         }
     }
 
-    var restartTutorialCard: some View {
-        SettingsCard(title: "Onboarding",
-                     subtitle: "Replay the guided setup anytime.",
-                     icon: "sparkles") {
-            Button {
-                Haptics.heavy()
-                preferencesResetOnboarding()
-                tutorial.skip()
-            } label: {
-                Text("Restart tutorial")
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                    )
-                    .foregroundStyle(.white)
+#if DEBUG
+    var debugCard: some View {
+        SettingsCard(title: "Debug",
+                     subtitle: "Onboarding tools for testing.",
+                     icon: "hammer.fill") {
+            VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    Haptics.heavy()
+                    showingOnboardingPreview = true
+                } label: {
+                    Text("Show onboarding (preview)")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    Haptics.heavy()
+                    hasSeenOnboarding = false
+                } label: {
+                    Text("Reset onboarding flag")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                        )
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
-
+#endif
 }
 
 private extension SettingsView {
@@ -386,9 +376,6 @@ private extension SettingsView {
         await MainActor.run {
             calendarBusy = false
             updateSelectionStatus()
-            if tutorial.activeStage == .calendar {
-                tutorial.complete()
-            }
         }
     }
 
@@ -396,18 +383,6 @@ private extension SettingsView {
         _ = await LocationProvider.shared.requestLocation()
         await MainActor.run {
             calendarStatusMessage = nil
-            if tutorial.activeStage == .location {
-                tutorial.complete()
-            }
-        }
-    }
-
-    func preferencesResetOnboarding() {
-        if let prefs = prefsList.first {
-            prefs.onboardingVersion = 0
-            prefs.onboardingPendingCardRaw = OnboardingCard.welcome.rawValue
-            prefs.onboardingActiveStageRaw = nil
-            modelContext.saveOrRollback()
         }
     }
 

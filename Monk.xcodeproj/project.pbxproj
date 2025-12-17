@@ -13,7 +13,8 @@
 		740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 740996632EE058A9009DF533 /* GoogleSignIn */; };
 		740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 740996652EE058A9009DF533 /* GoogleSignInSwift */; };
 		740996692EE05BFF009DF533 /* UserJot in Frameworks */ = {isa = PBXBuildFile; productRef = 740996682EE05BFF009DF533 /* UserJot */; };
-		743099A02ED511EA005BBC52 /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7430999F2ED511EA005BBC52 /* SuperwallKit */; };
+		744FF1842EF30FD700BF7784 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 744FF1832EF30FD700BF7784 /* RevenueCat */; };
+		744FF1862EF30FD700BF7784 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 744FF1852EF30FD700BF7784 /* RevenueCatUI */; };
 		74F1E0602FFF5FE500784214 /* HardBlockShieldDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F1E0002FFF5FE100784214 /* HardBlockShieldDataSource.swift */; };
 		74F1E0612FFF5FE500784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
 		74F1E0622FFF5FE500784214 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */; };
@@ -115,10 +116,11 @@
 				740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */,
 				74F5A1383000C00000784214 /* ManagedSettings.framework in Frameworks */,
 				74F5A1363000C00000784214 /* FamilyControls.framework in Frameworks */,
+				744FF1842EF30FD700BF7784 /* RevenueCat in Frameworks */,
+				744FF1862EF30FD700BF7784 /* RevenueCatUI in Frameworks */,
 				740996692EE05BFF009DF533 /* UserJot in Frameworks */,
 				740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */,
 				74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */,
-				743099A02ED511EA005BBC52 /* SuperwallKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -234,10 +236,11 @@
 			);
 			name = Monk;
 			packageProductDependencies = (
-				7430999F2ED511EA005BBC52 /* SuperwallKit */,
 				740996632EE058A9009DF533 /* GoogleSignIn */,
 				740996652EE058A9009DF533 /* GoogleSignInSwift */,
 				740996682EE05BFF009DF533 /* UserJot */,
+				744FF1832EF30FD700BF7784 /* RevenueCat */,
+				744FF1852EF30FD700BF7784 /* RevenueCatUI */,
 			);
 			productName = Monk;
 			productReference = 7420C2462E5CE57200784214 /* Monk.app */;
@@ -326,9 +329,9 @@
 			mainGroup = 7420C23D2E5CE57200784214;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				7430999E2ED511EA005BBC52 /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 				740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */,
+				744FF1892EF315AB00BF7784 /* XCRemoteSwiftPackageReference "purchases-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7420C2472E5CE57200784214 /* Products */;
@@ -781,12 +784,12 @@
 				minimumVersion = 0.1.0;
 			};
 		};
-		7430999E2ED511EA005BBC52 /* XCRemoteSwiftPackageReference "Superwall-iOS" */ = {
+		744FF1892EF315AB00BF7784 /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/superwall/Superwall-iOS";
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 4.10.6;
+				minimumVersion = 5.50.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -807,10 +810,15 @@
 			package = 740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */;
 			productName = UserJot;
 		};
-		7430999F2ED511EA005BBC52 /* SuperwallKit */ = {
+		744FF1832EF30FD700BF7784 /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 7430999E2ED511EA005BBC52 /* XCRemoteSwiftPackageReference "Superwall-iOS" */;
-			productName = SuperwallKit;
+			package = 744FF1892EF315AB00BF7784 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
+		};
+		744FF1852EF30FD700BF7784 /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 744FF1892EF315AB00BF7784 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCatUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

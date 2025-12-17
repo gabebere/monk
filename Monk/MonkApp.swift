@@ -6,6 +6,7 @@
 //
 
 import OSLog
+import RevenueCat
 import SwiftData
 import SwiftUI
 import UIKit
@@ -22,7 +23,7 @@ struct MonkApp: App {
 
     init() {
         HardBlockStateStore.bootstrap()
-        PaywallManager.shared.configure()
+        configureRevenueCat()
 #if canImport(UserJot)
         UserJot.setup(projectId: "cmiptfvv400yb15lbz1dzqbey")
 #endif
@@ -68,6 +69,20 @@ struct MonkApp: App {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
+    }
+}
+
+private extension MonkApp {
+    func configureRevenueCat() {
+        #if DEBUG
+        Purchases.logLevel = .debug
+        #else
+        Purchases.logLevel = .warn
+        #endif
+
+        Purchases.configure(
+            with: .init(withAPIKey: "appl_MdQJjbrjYFxzEaabiQbrRLrmDZc")
+        )
     }
 }
 

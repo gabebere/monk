@@ -6,8 +6,6 @@ struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor<FocusSession>(\.startedAt, order: .reverse)]) private var sessions: [FocusSession]
     @Query(sort: [SortDescriptor<Project>(\.createdAt, order: .forward)]) private var projects: [Project]
-    @EnvironmentObject private var tutorial: TutorialCoordinator
-    @State private var insightsHighlight: TutorialHighlightInfo?
     @State private var path: [InsightRoute] = []
 
     private let analyzer = InsightsAnalyzer()
@@ -52,7 +50,6 @@ struct InsightsView: View {
                                     remainingHours: goalRemainingHours,
                                     fraction: goalCompletionFraction)
                         .frame(maxWidth: .infinity)
-                        .tutorialAnchor(.insights, cornerRadius: 24)
 
                     ProjectGoalsCard(summary: projectGoals)
                         .frame(maxWidth: .infinity)
@@ -67,23 +64,6 @@ struct InsightsView: View {
             }
         }
         .navigationTitle("Insights")
-        .overlay {
-            if let stage = tutorial.activeStage,
-               stage == .insights {
-                TutorialOverlayView(
-                    stage: stage,
-                    highlight: insightsHighlight,
-                    onNext: tutorial.complete,
-                    onSkip: tutorial.skip,
-                    showActions: true
-                )
-            }
-        }
-        .onPreferenceChange(TutorialAnchorPreferenceKey.self) { values in
-            for value in values where value.stage == .insights {
-                insightsHighlight = TutorialHighlightInfo(stage: value.stage, frame: value.frame, cornerRadius: value.cornerRadius)
-            }
-        }
     }
 
     private func tileModels(summary: TemporalInsightsSummary) -> [InsightTileModel] {

@@ -1,57 +1,30 @@
 import Foundation
 import OSLog
+import RevenueCat
+import RevenueCatUI
 import UIKit
-#if canImport(SuperwallKit)
-import SuperwallKit
-#endif
 
-/// Lightweight wrapper around Superwall so the rest of the app can call a single API
-/// without crashing if the SDK is absent in this build environment.
+/// Temporary stub while paywall is removed. All paywall calls are no-ops and access is always granted.
 final class PaywallManager {
     static let shared = PaywallManager()
-    /// Toggle to disable paywall presentation globally.
-    static var isDisabled: Bool = false
+    static var isDisabled: Bool = true
     private let logger = Logger(subsystem: "com.gbr.Monk", category: "Paywall")
-    private let apiKey = "pk_RFn3-r1at5gu7dfidCjMc"
-    private let accessKey = "monk.paywall.unlocked"
-    private var didPresentThisSession = false
 
     private init() {}
 
-    var hasAccess: Bool {
-        UserDefaults.standard.bool(forKey: accessKey)
-    }
+    /// Paywall is effectively removed; always grant access.
+    var hasAccess: Bool { true }
 
     func markPurchased() {
-        UserDefaults.standard.set(true, forKey: accessKey)
-        didPresentThisSession = false
+        logger.info("markPurchased called while paywall is disabled.")
     }
 
     func configure() {
-        if PaywallManager.isDisabled { return }
-        #if canImport(SuperwallKit)
-        Superwall.configure(apiKey: apiKey)
-        #else
-        logger.info("SuperwallKit not present; paywall will be skipped.")
-        #endif
+        logger.info("PaywallManager.configure skipped; paywall removed.")
     }
 
     func presentPaywall(force: Bool = false) {
-        if PaywallManager.isDisabled {
-            logger.info("Paywall disabled; skipping presentation.")
-            return
-        }
-        if !force {
-            if hasAccess { return }
-            if didPresentThisSession { return }
-            didPresentThisSession = true
-        }
-        #if canImport(SuperwallKit)
-        // Trigger a paywall via placement registration (newer Superwall API).
-        Superwall.shared.register(placement: "onboarding_paywall")
-        #else
-        logger.info("SuperwallKit not available in this build; paywall call ignored.")
-        #endif
+        logger.info("presentPaywall skipped; paywall flow removed.")
     }
 
     private func topMostViewController(base: UIViewController? = UIApplication.shared.connectedScenes
@@ -68,5 +41,134 @@ final class PaywallManager {
             return topMostViewController(base: presented)
         }
         return base
+    }
+}
+
+// MARK: - RevenueCat service
+@MainActor
+final class RevenueCatService: ObservableObject {
+    @Published private(set) var offerings: Offerings?
+    @Published private(set) var customerInfo: CustomerInfo?
+    @Published private(set) var isPro: Bool = false
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String?
+
+    private var updatesTask: Task<Void, Never>?
+    private let proEntitlementKey = "Monk Subscription"
+
+    init() {
+        updatesTask = listenForCustomerUpdates()
+        refresh()
+    }
+
+    deinit {
+        updatesTask?.cancel()
+    }
+
+    func refresh() {
+        Task {
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                let offerings = try await Purchases.shared.offerings()
+                let infoValue = try await Purchases.shared.customerInfo()
+                self.offerings = offerings
+                updateCustomerInfo(infoValue)
+                if let current = offerings.current {
+                    print("RC: current offering id =", current.identifier)
+                    if current.paywall != nil {
+                        print("RC: paywall received for current offering")
+                    } else {
+                        print("RC: current.paywall is NIL (will show fallback)")
+                    }
+                    let packages = current.availablePackages.map { "\($0.identifier) -> \($0.storeProduct.productIdentifier)" }
+                    print("RC: packages =", packages)
+                } else {
+                    print("RC: offerings.current is nil")
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+                print("RC getOfferings error:", error)
+            }
+        }
+    }
+
+    func purchase(package: Package) async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let result = try await Purchases.shared.purchase(package: package)
+            updateCustomerInfo(result.customerInfo)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func restore() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let info = try await Purchases.shared.restorePurchases()
+            updateCustomerInfo(info)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func showManageSubscriptions() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await Purchases.shared.showManageSubscriptions()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func setUserIntent(_ intent: String) {
+        Purchases.shared.attribution.setAttributes(["intent": intent])
+    }
+
+    func logIn(userId: String) async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let result = try await Purchases.shared.logIn(userId)
+            updateCustomerInfo(result.customerInfo)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func logOut() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let info = try await Purchases.shared.logOut()
+            updateCustomerInfo(info)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func apply(customerInfo: CustomerInfo) {
+        updateCustomerInfo(customerInfo)
+    }
+
+    var activeOffering: Offering? {
+        offerings?.current
+    }
+
+    private func updateCustomerInfo(_ info: CustomerInfo) {
+        customerInfo = info
+        isPro = info.entitlements[proEntitlementKey]?.isActive == true
+    }
+
+    private func listenForCustomerUpdates() -> Task<Void, Never> {
+        Task { [weak self] in
+            for await info in Purchases.shared.customerInfoStream {
+                self?.updateCustomerInfo(info)
+            }
+        }
     }
 }
