@@ -10,6 +10,9 @@ import RevenueCat
 import SwiftData
 import SwiftUI
 import UIKit
+#if canImport(PostHog)
+import PostHog
+#endif
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
@@ -24,6 +27,7 @@ struct MonkApp: App {
     init() {
         HardBlockStateStore.bootstrap()
         configureRevenueCat()
+        Analytics.configure()
 #if canImport(UserJot)
         UserJot.setup(projectId: "cmiptfvv400yb15lbz1dzqbey")
 #endif
@@ -74,11 +78,7 @@ struct MonkApp: App {
 
 private extension MonkApp {
     func configureRevenueCat() {
-        #if DEBUG
-        Purchases.logLevel = .debug
-        #else
         Purchases.logLevel = .warn
-        #endif
 
         Purchases.configure(
             with: .init(withAPIKey: "appl_MdQJjbrjYFxzEaabiQbrRLrmDZc")
@@ -89,6 +89,9 @@ private extension MonkApp {
 final class MonkAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         application.registerForRemoteNotifications()
+#if canImport(PostHog)
+        configurePostHog()
+#endif
         return true
     }
 
@@ -111,4 +114,15 @@ final class MonkAppDelegate: NSObject, UIApplicationDelegate {
 #endif
         return false
     }
+
+    #if canImport(PostHog)
+    private func configurePostHog() {
+        let apiKey = "phc_RIJV9E1BDMFveINBk49EbdUWEIVjy9VkoGjoKH69xrX"
+        let host = "https://us.i.posthog.com"
+        let config = PostHogConfig(apiKey: apiKey, host: host)
+        config.captureApplicationLifecycleEvents = false
+        config.captureScreenViews = false
+        PostHogSDK.shared.setup(config)
+    }
+    #endif
 }

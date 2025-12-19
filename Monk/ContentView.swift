@@ -19,6 +19,7 @@ struct ContentView: View {
     @StateObject private var revenueCat = RevenueCatService()
     @StateObject private var entitlementSync = EntitlementSyncService()
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @AppStorage("shouldShowSetupChecklist") private var shouldShowSetupChecklist = false
     @State private var manager: FocusManager?
     @State private var selectedTab: AppTab = .home
     @State private var requirePaywall = false
@@ -27,7 +28,10 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if !hasSeenOnboarding {
+            if !authManager.isAuthenticated {
+                AuthGatewayView()
+                    .environmentObject(authManager)
+            } else if !hasSeenOnboarding {
                 OnboardingStoryView { completion in
                     hasSeenOnboarding = true
                     if completion.requestPricing {
@@ -93,6 +97,9 @@ struct ContentView: View {
                     .onChange(of: revenueCat.isPro) { _, _ in
                         entitlementSync.updateFromRevenueCat(isPro: revenueCat.isPro, userId: authManager.currentUserId)
                         updatePaywallRequirement()
+                        if revenueCat.isPro {
+                            shouldShowSetupChecklist = true
+                        }
                     }
                     .onChange(of: authManager.isAuthenticated) { _, _ in
                         updatePaywallRequirement()
@@ -105,9 +112,20 @@ struct ContentView: View {
                         }
                     }
                     .fullScreenCover(isPresented: $requirePaywall) {
-                        RevenueCatPaywallView(onClose: { requirePaywall = false })
+                        RevenueCatPaywallView(onClose: {
+                            requirePaywall = false
+                            shouldShowSetupChecklist = true
+                        })
                             .environmentObject(revenueCat)
                             .interactiveDismissDisabled(!revenueCat.isPro)
+                    }
+                    .fullScreenCover(isPresented: $shouldShowSetupChecklist) {
+                        SetupChecklistView {
+                            shouldShowSetupChecklist = false
+                        }
+                        .environmentObject(authManager)
+                        .environmentObject(revenueCat)
+                        .environmentObject(entitlementSync)
                     }
                     .onOpenURL { url in
 #if canImport(GoogleSignIn)
@@ -156,53 +174,5 @@ private extension ContentView {
             pendingOnboardingPaywall = false
         }
         requirePaywall = authManager.isAuthenticated && !(revenueCat.isPro || entitlementSync.isEntitled)
-    }
-}
-
-private struct RevenueCatPaywallView: View {
-    @EnvironmentObject private var revenueCat: RevenueCatService
-    @Environment(\.dismiss) private var dismiss
-
-    let onClose: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if let offering = revenueCat.activeOffering {
-                    PaywallView(offering: offering)
-                } else {
-                    VStack(spacing: 16) {
-                        if revenueCat.isLoading {
-                            ProgressView("Loading offers…")
-                                .tint(.white)
-                        } else {
-                            Text("Fetching offers…")
-                                .foregroundStyle(.secondary)
-                            Button {
-                                revenueCat.refresh()
-                            } label: {
-                                Text("Retry")
-                                    .font(.headline.weight(.semibold))
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
-                    .padding()
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        onClose()
-                        dismiss()
-                    }
-                }
-            }
-            .task {
-                if revenueCat.offerings == nil {
-                    revenueCat.refresh()
-                }
-            }
-        }
     }
 }

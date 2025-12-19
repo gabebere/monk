@@ -6,9 +6,12 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
     @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var revenueCat: RevenueCatService
+    @EnvironmentObject private var entitlementSync: EntitlementSyncService
     @Query private var prefsList: [Preferences]
     @Query(sort: [SortDescriptor(\FocusSession.startedAt, order: .forward)]) private var allSessions: [FocusSession]
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .forward)]) private var projects: [Project]
+    @AppStorage("telemetry_enabled") private var telemetryEnabled: Bool = true
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     @State private var calendarOptions: [CalendarDisplayInfo] = []
@@ -51,6 +54,7 @@ struct SettingsView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
                         accountCard
+                        privacyCard
                         feedbackCard
                         goalCard
                         calendarCard
@@ -295,12 +299,51 @@ private extension SettingsView {
         }
     }
 
+    var privacyCard: some View {
+        SettingsCard(title: "Privacy",
+                     subtitle: "Control analytics and diagnostics.",
+                     icon: "shield.lefthalf.fill") {
+            Toggle(isOn: $telemetryEnabled) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Share anonymous telemetry")
+                        .font(.headline.weight(.medium))
+                        .foregroundStyle(.white)
+                    Text("Helps improve Monk. No emails or names are sent.")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            .tint(Color.cyan)
+            .onChange(of: telemetryEnabled) { _, newValue in
+                Analytics.setEnabled(newValue)
+                Analytics.track("settings_toggled", ["key": "telemetry_enabled", "value": newValue])
+            }
+        }
+    }
+
 #if DEBUG
     var debugCard: some View {
         SettingsCard(title: "Debug",
                      subtitle: "Onboarding tools for testing.",
                      icon: "hammer.fill") {
             VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    Haptics.heavy()
+                    Analytics.track("debug_test_event", ["entitlement_active": revenueCat.isPro])
+                } label: {
+                    Text("Send test analytics event")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+
                 Button {
                     Haptics.heavy()
                     showingOnboardingPreview = true
@@ -332,6 +375,26 @@ private extension SettingsView {
                                 .stroke(Color.white.opacity(0.14), lineWidth: 1)
                         )
                         .foregroundStyle(.white.opacity(0.9))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    Haptics.heavy()
+                    Task {
+                        entitlementSync.clear()
+                        await revenueCat.resetForDebug()
+                    }
+                } label: {
+                    Text("Reset purchases (debug)")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.red.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
+                        .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
             }

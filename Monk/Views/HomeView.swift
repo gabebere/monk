@@ -43,6 +43,8 @@ struct HomeView: View {
 }
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
+    @EnvironmentObject private var revenueCat: RevenueCatService
+    @EnvironmentObject private var entitlementSync: EntitlementSyncService
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
 
@@ -59,13 +61,15 @@ private struct TimerCard: View {
     @State private var showStopDetails: Bool = false
     @State private var stoppedSession: FocusSession? = nil
     @State private var showingProjectPicker: Bool = false
+    @State private var showingPaywall = false
+    @AppStorage("shouldShowSetupChecklist") private var shouldShowSetupChecklist = false
 
     var body: some View {
         VStack(spacing: 20) {
             if focus.currentSession == nil {
                 Button(action: {
                     Haptics.heavy()
-                    animateStartAndBeginSession()
+                    handlePrimaryTap()
                 }) {
                     ZStack {
                         Capsule()
@@ -190,6 +194,13 @@ private struct TimerCard: View {
                 startSession(with: selection)
             }
         }
+        .fullScreenCover(isPresented: $showingPaywall) {
+            RevenueCatPaywallView(onClose: {
+                showingPaywall = false
+                shouldShowSetupChecklist = true
+            })
+                .environmentObject(revenueCat)
+        }
         .task {
             if focus.currentSession == nil { restartIdleAnimation() }
         }
@@ -204,7 +215,35 @@ private struct TimerCard: View {
     }
 
     private func startSession(with project: Project?) {
+        let sessionID = UUID().uuidString
         focus.start(project: project)
+        if let current = focus.currentSession {
+            Analytics.track("focus_started", [
+                "session_id": current.id.uuidString,
+                "project_id": project?.id.uuidString ?? "none",
+                "ts": Date().timeIntervalSince1970
+            ])
+        } else {
+            Analytics.track("focus_started", [
+                "session_id": sessionID,
+                "project_id": project?.id.uuidString ?? "none",
+                "ts": Date().timeIntervalSince1970
+            ])
+        }
+    }
+
+    private func handlePrimaryTap() {
+        // If user is entitled via RevenueCat or synced flag, proceed; otherwise show paywall.
+        if revenueCat.isPro || entitlementSync.isEntitled {
+            animateStartAndBeginSession()
+        } else {
+            Analytics.track("paywall_viewed", [
+                "offering_id": revenueCat.activeOffering?.identifier ?? "unknown",
+                "has_paywall": revenueCat.activeOffering?.paywall != nil,
+                "entitlement_active": revenueCat.isPro
+            ])
+            showingPaywall = true
+        }
     }
 
     private func stopSession() {
@@ -221,6 +260,12 @@ private struct TimerCard: View {
                 stoppedSession = s
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showStopDetails = true }
             }
+            Analytics.track("focus_stopped", [
+                "session_id": s.id.uuidString,
+                "project_id": s.project?.id.uuidString ?? "none",
+                "duration_sec": duration,
+                "ts": Date().timeIntervalSince1970
+            ])
         }
     }
 
@@ -769,6 +814,9 @@ private struct NewProjectView: View {
                               hardBlockSelectionData: hardBlockEnabled ? selectionData : nil)
         modelContext.insert(project)
         if modelContext.saveOrRollback() {
+            Analytics.track("project_created", [
+                "project_id": project.id.uuidString
+            ])
             dismiss()
         }
     }

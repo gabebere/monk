@@ -15,6 +15,7 @@
 		740996692EE05BFF009DF533 /* UserJot in Frameworks */ = {isa = PBXBuildFile; productRef = 740996682EE05BFF009DF533 /* UserJot */; };
 		744FF1842EF30FD700BF7784 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 744FF1832EF30FD700BF7784 /* RevenueCat */; };
 		744FF1862EF30FD700BF7784 /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 744FF1852EF30FD700BF7784 /* RevenueCatUI */; };
+		744FF3D82EF3F02A00BF7784 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 744FF3D72EF3F02A00BF7784 /* PostHog */; };
 		74F1E0602FFF5FE500784214 /* HardBlockShieldDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F1E0002FFF5FE100784214 /* HardBlockShieldDataSource.swift */; };
 		74F1E0612FFF5FE500784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
 		74F1E0622FFF5FE500784214 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */; };
@@ -119,6 +120,7 @@
 				744FF1842EF30FD700BF7784 /* RevenueCat in Frameworks */,
 				744FF1862EF30FD700BF7784 /* RevenueCatUI in Frameworks */,
 				740996692EE05BFF009DF533 /* UserJot in Frameworks */,
+				744FF3D82EF3F02A00BF7784 /* PostHog in Frameworks */,
 				740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */,
 				74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */,
 			);
@@ -241,6 +243,7 @@
 				740996682EE05BFF009DF533 /* UserJot */,
 				744FF1832EF30FD700BF7784 /* RevenueCat */,
 				744FF1852EF30FD700BF7784 /* RevenueCatUI */,
+				744FF3D72EF3F02A00BF7784 /* PostHog */,
 			);
 			productName = Monk;
 			productReference = 7420C2462E5CE57200784214 /* Monk.app */;
@@ -332,6 +335,7 @@
 				740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */,
 				744FF1892EF315AB00BF7784 /* XCRemoteSwiftPackageReference "purchases-ios" */,
+				744FF3D62EF3F02A00BF7784 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7420C2472E5CE57200784214 /* Products */;
@@ -792,6 +796,14 @@
 				minimumVersion = 5.50.1;
 			};
 		};
+		744FF3D62EF3F02A00BF7784 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/PostHog/posthog-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.36.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -819,6 +831,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 744FF1892EF315AB00BF7784 /* XCRemoteSwiftPackageReference "purchases-ios" */;
 			productName = RevenueCatUI;
+		};
+		744FF3D72EF3F02A00BF7784 /* PostHog */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 744FF3D62EF3F02A00BF7784 /* XCRemoteSwiftPackageReference "posthog-ios" */;
+			productName = PostHog;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

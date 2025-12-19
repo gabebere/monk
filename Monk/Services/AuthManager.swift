@@ -11,17 +11,23 @@ final class AuthManager: ObservableObject {
 @Published private(set) var isAuthenticated: Bool
 @Published private(set) var displayName: String?
 @Published private(set) var userEmail: String?
+@Published private(set) var newsletterEmail: String?
+@Published private(set) var newsletterOptIn: Bool = false
 
 private let accessKey = "auth.isAuthenticated"
 private let userIDKey = "auth.userID"
 private let nameKey = "auth.name"
 private let emailKey = "auth.email"
+private let newsletterEmailKey = "auth.newsletterEmail"
+private let newsletterOptInKey = "auth.newsletterOptIn"
 
     init() {
         let defaults = UserDefaults.standard
         self.isAuthenticated = defaults.bool(forKey: accessKey)
         self.displayName = defaults.string(forKey: nameKey)
         self.userEmail = defaults.string(forKey: emailKey)
+        self.newsletterEmail = defaults.string(forKey: newsletterEmailKey)
+        self.newsletterOptIn = defaults.bool(forKey: newsletterOptInKey)
 
 #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: googleClientID)
@@ -82,6 +88,8 @@ private let emailKey = "auth.email"
         defaults.removeObject(forKey: userIDKey)
         defaults.removeObject(forKey: nameKey)
         defaults.removeObject(forKey: emailKey)
+        defaults.removeObject(forKey: newsletterEmailKey)
+        defaults.removeObject(forKey: newsletterOptInKey)
         defaults.synchronize()
 #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.signOut()
@@ -89,7 +97,26 @@ private let emailKey = "auth.email"
         isAuthenticated = false
         displayName = nil
         userEmail = nil
+        newsletterEmail = nil
+        newsletterOptIn = false
         print("[Auth] Signed out locally")
+    }
+
+    func applyNewsletterPreference(email: String?, optedIn: Bool) {
+        let defaults = UserDefaults.standard
+        if optedIn {
+            let finalEmail = email ?? currentUserEmail
+            defaults.set(finalEmail, forKey: newsletterEmailKey)
+            defaults.set(true, forKey: newsletterOptInKey)
+            newsletterEmail = finalEmail
+            newsletterOptIn = true
+        } else {
+            defaults.removeObject(forKey: newsletterEmailKey)
+            defaults.set(false, forKey: newsletterOptInKey)
+            newsletterEmail = nil
+            newsletterOptIn = false
+        }
+        defaults.synchronize()
     }
 }
 

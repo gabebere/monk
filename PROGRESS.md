@@ -1,6 +1,6 @@
 # Project Progress and Next Steps
 
-This document is a detailed handoff for future sessions with Codex or other agents. It captures what was implemented, how the system is structured, known caveats, and prioritized next actions with acceptance criteria.
+This document is a detailed handoff for future sessions with Codex or other agents. It captures what was implemented, how the system is structured, known caveats, and prioritized next actions with acceptance criteria. The codebase is the source of truth; if a feature isn’t listed here, assume it is not implemented.
 
 ## Implemented (Detailed)
 
@@ -27,7 +27,7 @@ This document is a detailed handoff for future sessions with Codex or other agen
 - UI Shell
   - `Monk/ContentView.swift`: TabView with Home, Insights, Settings; lazily constructs `FocusManager` on main actor.
 - Home (`Monk/Views/HomeView.swift`):
-    - TimerCard with animated CTA and stop button; starting now opens a project picker sheet (including “None”).
+    - TimerCard with animated CTA and stop button; if not entitled (RevenueCat or synced flag), tap shows paywall; otherwise starts and opens project picker sheet (including “None”).
     - Completed Session sheet (`CompletedSessionView`): celebrate, assign project, capture mood.
     - Edit Session sheet (`Monk/Views/EditSessionView.swift`): view timing, adjust project, adjust mood.
     - Projects section: grid of project cards ordered by recent activity, quick create button, detail sheet with rename, hard blocking, and delete.
@@ -38,6 +38,13 @@ This document is a detailed handoff for future sessions with Codex or other agen
     - `InsightSnapshot` helper and reusable analyzer hooks pave the way for widget targets and lock-screen surfaces.
 - Settings (`Monk/Views/SettingsView.swift`):
     - Weekly goal picker (wheel), discard-short toggle.
+    - Debug card (DEBUG builds only): onboarding preview/reset, purchase reset (clears iCloud entitlement flag, logs in a fresh RevenueCat user, invalidates cache, refreshes).
+- Setup checklist (`Monk/Views/SetupChecklistView.swift`):
+  - Full-screen checklist shown after paywall close or when entitlement activates.
+  - Tasks: login, Screen Time authorization (HardBlock), calendar access with user-selected default calendar, location access for calendar context.
+  - Status icons: pending (empty circle), denied (red circle with white X), granted (green circle with check). Persisted via AppStorage flag `shouldShowSetupChecklist`.
+- Auth flow:
+  - First screen post-install is the redesigned login (matches onboarding gradient). Apple and Google sign-in; optional email capture + newsletter opt-in stored locally (`AuthManager` `newsletterEmail/newsletterOptIn`). After auth, onboarding runs if not yet seen.
 
 - Shortcuts: Not implemented (App Intents removed in current build).
   - Gallery tiles were removed due to SDK signature differences; actions still discoverable via Shortcuts search.
@@ -68,6 +75,44 @@ This document is a detailed handoff for future sessions with Codex or other agen
   - Use `proxy.plotFrame` (optional) on iOS 17+; unwrap before use.
   - `chartXScale(domain:)` expects `ClosedRange<Date>` for date axes.
   - Avoid `.position(by:)` where possible to keep type‑checking fast.
+
+## RevenueCat Implementation (Current State)
+
+- SDK: purchases-ios 5.51.0 (SPM). RevenueCatUI used for native paywalls.
+- API key: Live iOS public key `appl_MdQJjbrjYFxzEaabiQbrRLrmDZc` in `Monk/MonkApp.swift` (logLevel `.debug` in Debug, `.warn` in Release).
+- Entitlement: `"Monk Subscription"`.
+- Offering: uses `offerings.current` (dashboard default). No hardcoded ID.
+- Paywall presentation: `RevenueCatPaywallView` uses `PaywallView(offering: activeOffering)`.
+- Gating: Home CTA checks `revenueCat.isPro || entitlementSync.isEntitled`; otherwise shows paywall instead of project picker.
+- Entitlement sync: `EntitlementSyncService` mirrors entitlement flag via iCloud KVS (auxiliary, not a replacement for RC validation).
+- Debug reset: Settings debug card “Reset purchases (debug)” clears iCloud entitlement flag, logs in a fresh RC user, invalidates cache, refreshes—paywall shows again.
+- Debug logging: RevenueCatService logs current offering id, whether paywall is received, and package mappings.
+- Reset purchase flow confirmed working after fresh RC login and cache invalidation.
+
+## RevenueCat / IAP To-Do for Submission
+
+- Dashboard
+  - Ensure default/current offering (`default`/`monk_subscription`) has a published paywall attached with packages `$rc_monthly` → `monk_monthly`, `$rc_annual` → `monk_annually`.
+  - Approve products in App Store Connect (currently READY_TO_SUBMIT per RC warning); set display names to remove “Empty Product titles” warnings.
+  - Confirm paywall attaches to the same project/environment as the live key above.
+
+- SDK
+  - Keep purchases-ios at 5.51.x (or newer) to support editor paywalls.
+  - Clean build folder/reinstall after SDK bumps to avoid stale caches.
+- Products are currently READY_TO_SUBMIT; must be approved in App Store Connect and have display names to remove warnings.
+
+- App behavior
+  - Verify paywall renders natively (no web/fallback) once RC dashboard is fixed; “RC: paywall received…” should log.
+  - Continue gating access via `CustomerInfo.entitlements` (already wired); keep CTA → paywall for non-entitled users.
+
+- Compliance
+  - Restore Purchases flow present (RC UI provides Manage Subscriptions; toolbar Close provided).
+  - Terms/Privacy links opened from paywall should be mobile-responsive (if hosted).
+
+- Testing checklist
+  - Sandbox/Test Store: confirm `offerings.current` is correct, paywall delivered, purchases unlock “Monk Subscription”.
+  - Retry “Empty Product titles” after App Store Connect metadata is set.
+  - Verify the debug reset returns app to non-entitled and paywall shows on CTA.
 
 ## Usage & Validation (Manual QA)
 
@@ -155,15 +200,17 @@ This document is a detailed handoff for future sessions with Codex or other agen
 
 - App entry: `Monk/MonkApp.swift`
 - Models: `Monk/Models/*`
-- Services: `Monk/Services/FocusManager.swift`
-- Views: `Monk/Views/*` (HomeView, InsightsView, SettingsView, EditSessionView, HistoryView)
+- Services: `Monk/Services/FocusManager.swift`, `Monk/Services/PaywallManager.swift`, `Monk/Services/EntitlementSyncService.swift`
+- Views: `Monk/Views/*` (HomeView, InsightsView, SettingsView, EditSessionView, HistoryView, RevenueCatPaywallView)
 - Utilities: `Monk/Utilities/*` (DateUtils, Haptics)
 - Tests: `MonkTests/*`
 
 ## Next‑Session Kickstart
 
-1) Add a simple Privacy view and telemetry toggle in Settings.
-2) Decide if App Intents should return; if so, implement start/stop intents.
-3) Add unit tests for FocusManager (start/stop/today) and weekly aggregation.
+1) Finalize RevenueCat dashboard: paywall attached to default offering, products approved, display names set; confirm “paywall received” logs.
+2) Add a simple Privacy view and telemetry toggle in Settings.
+3) Decide if App Intents should return; if so, implement start/stop intents.
+4) Add unit tests for FocusManager (start/stop/today) and weekly aggregation.
+5) Verify PostHog setup as needed; add a minimal event client if tracking is desired (currently only configured).
 
 After that: decide if iCloud sync moves into v0.1 or stays for v1.0 per SPEC.

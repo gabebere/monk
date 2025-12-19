@@ -74,18 +74,9 @@ final class RevenueCatService: ObservableObject {
                 let infoValue = try await Purchases.shared.customerInfo()
                 self.offerings = offerings
                 updateCustomerInfo(infoValue)
-                if let current = offerings.current {
-                    print("RC: current offering id =", current.identifier)
-                    if current.paywall != nil {
-                        print("RC: paywall received for current offering")
-                    } else {
-                        print("RC: current.paywall is NIL (will show fallback)")
-                    }
-                    let packages = current.availablePackages.map { "\($0.identifier) -> \($0.storeProduct.productIdentifier)" }
-                    print("RC: packages =", packages)
-                } else {
-                    print("RC: offerings.current is nil")
-                }
+                #if DEBUG
+                logOfferingsDebug(offerings)
+                #endif
             } catch {
                 errorMessage = error.localizedDescription
                 print("RC getOfferings error:", error)
@@ -97,10 +88,25 @@ final class RevenueCatService: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
+            Analytics.track("purchase_started", [
+                "offering_id": package.offeringIdentifier,
+                "package_id": package.identifier
+            ])
             let result = try await Purchases.shared.purchase(package: package)
             updateCustomerInfo(result.customerInfo)
+            Analytics.track("purchase_completed", [
+                "offering_id": package.offeringIdentifier,
+                "package_id": package.identifier,
+                "entitlement_active": result.customerInfo.entitlements[proEntitlementKey]?.isActive == true
+            ])
         } catch {
             errorMessage = error.localizedDescription
+            let nsError = error as NSError
+            Analytics.track("purchase_failed", [
+                "offering_id": package.offeringIdentifier,
+                "package_id": package.identifier,
+                "error_code": "\(nsError.domain):\(nsError.code)"
+            ])
         }
     }
 
@@ -110,6 +116,27 @@ final class RevenueCatService: ObservableObject {
         do {
             let info = try await Purchases.shared.restorePurchases()
             updateCustomerInfo(info)
+            Analytics.track("restore_completed", [
+                "entitlement_active": info.entitlements[proEntitlementKey]?.isActive == true
+            ])
+        } catch {
+            errorMessage = error.localizedDescription
+            let nsError = error as NSError
+            Analytics.track("restore_failed", ["error_code": "\(nsError.domain):\(nsError.code)"])
+        }
+    }
+
+    func resetForDebug() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let newId = UUID().uuidString
+            _ = try await Purchases.shared.logIn(newId)
+            Purchases.shared.invalidateCustomerInfoCache()
+            customerInfo = nil
+            offerings = nil
+            isPro = false
+            refresh()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -157,6 +184,21 @@ final class RevenueCatService: ObservableObject {
 
     var activeOffering: Offering? {
         offerings?.current
+    }
+
+    private func logOfferingsDebug(_ offerings: Offerings?) {
+        guard let current = offerings?.current else {
+            print("RC: offerings.current is nil")
+            return
+        }
+        print("RC: current offering id =", current.identifier)
+        if current.paywall != nil {
+            print("RC: paywall received for current offering")
+        } else {
+            print("RC: current.paywall is NIL (will show fallback)")
+        }
+        let packages = current.availablePackages.map { "\($0.identifier) -> \($0.storeProduct.productIdentifier)" }
+        print("RC: packages =", packages)
     }
 
     private func updateCustomerInfo(_ info: CustomerInfo) {

@@ -10,24 +10,26 @@ struct AuthGatewayView: View {
     var body: some View {
         ZStack {
             AnimatingBackground(base: Theme.settingsBackground(), halo: Theme.haloGradient)
-            VStack(spacing: 28) {
-                Spacer()
-                VStack(spacing: 12) {
+            VStack(spacing: 26) {
+                VStack(spacing: 14) {
                     Image("MonkLogo")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 96, height: 96)
+                        .frame(width: 100, height: 100)
                         .shadow(color: .black.opacity(0.25), radius: 18, x: 0, y: 10)
-                    Text("Welcome to Monk")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                    Text("Enter Monk")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("Sign in to keep your focus data synced across devices.")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.8))
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
+                    Text("Sign in to keep your focus, purchases, and preferences synced.")
+                        .font(.system(size: 17, weight: .regular, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 18)
                 }
-                VStack(spacing: 14) {
+                .padding(.top, 52)
+
+                VStack(spacing: 16) {
                     SignInWithAppleButton(.signIn) { request in
                         request.requestedScopes = [.fullName, .email]
                     } onCompletion: { result in
@@ -41,8 +43,12 @@ struct AuthGatewayView: View {
                         }
                     }
                     .signInWithAppleButtonStyle(.white)
-                    .frame(height: 50)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .frame(height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.white.opacity(0.35), lineWidth: 1.2)
+                    )
 
                     Button {
                         Task { await handleGoogleSignIn() }
@@ -50,21 +56,27 @@ struct AuthGatewayView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "g.circle.fill")
                                 .font(.title2)
-                            Text("Sign in with Google")
-                                .font(.headline)
+                                .foregroundStyle(.black)
+                            Text("Continue with Google")
+                                .font(.headline.weight(.semibold))
                         }
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
-                        .padding()
+                        .padding(.vertical, 15)
                         .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
+
                 Spacer()
             }
             .padding(.horizontal, 24)
-            .padding(.vertical, 32)
+            .padding(.bottom, 32)
         }
         .preferredColorScheme(.dark)
         .alert("Google Sign-In", isPresented: $showingGoogleAlert) {

@@ -57,12 +57,15 @@ struct InsightsView: View {
                 }
                 .padding(.horizontal, InsightsLayout.horizontalPadding)
                 .padding(.top, InsightsLayout.topPadding)
-                .padding(.bottom, InsightsLayout.bottomPadding)
-            }
-            .safeAreaInset(edge: .bottom) {
-                Color.clear.frame(height: InsightsLayout.bottomInset)
+            .padding(.bottom, InsightsLayout.bottomPadding)
+            .onAppear {
+                Analytics.track("insights_viewed", ["screen": "insights_home"])
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: InsightsLayout.bottomInset)
+        }
+    }
         .navigationTitle("Insights")
     }
 
