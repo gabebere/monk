@@ -7,6 +7,12 @@
 		<key>EXExtensionPointIdentifier</key>
 		<string>com.apple.deviceactivityui.report-extension</string>
 	</dict>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Monk uses your location to add context to focus sessions on your calendar.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Monk uses your location to add context to focus sessions on your calendar.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Monk uses your location to add context to focus sessions on your calendar.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

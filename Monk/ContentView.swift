@@ -5,6 +5,7 @@
 //  Created by Gabriel Berezovsky on 25/8/25.
 //
 
+import MonkShared
 import RevenueCat
 import RevenueCatUI
 import SwiftData
@@ -20,7 +21,10 @@ struct ContentView: View {
     @StateObject private var entitlementSync = EntitlementSyncService()
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @AppStorage("shouldShowSetupChecklist") private var shouldShowSetupChecklist = false
+    @AppStorage("hasCompletedSetupChecklist") private var hasCompletedSetupChecklist = false
+    @AppStorage("hasPresentedOnboardingPaywall") private var hasPresentedOnboardingPaywall = false
     @State private var manager: FocusManager?
+    @State private var liveSessionSync: LiveSessionSyncService?
     @State private var selectedTab: AppTab = .home
     @State private var requirePaywall = false
     @State private var didSeedDemoData = false
@@ -35,9 +39,22 @@ struct ContentView: View {
                 OnboardingStoryView { completion in
                     hasSeenOnboarding = true
                     if completion.requestPricing {
-                        pendingOnboardingPaywall = true
-                        if authManager.isAuthenticated && !revenueCat.isPro {
-                            requirePaywall = true
+                        if authManager.isAuthenticated {
+                            if revenueCat.isPro || entitlementSync.isEntitled {
+                                if !hasCompletedSetupChecklist {
+                                    shouldShowSetupChecklist = true
+                                }
+                            } else {
+                                if !hasPresentedOnboardingPaywall {
+                                    requirePaywall = true
+                                    hasPresentedOnboardingPaywall = true
+                                }
+                            }
+                        }
+                    } else if authManager.isAuthenticated && (revenueCat.isPro || entitlementSync.isEntitled) {
+                        // Already entitled users should still see the setup checklist after onboarding.
+                        if !hasCompletedSetupChecklist {
+                            shouldShowSetupChecklist = true
                         }
                     }
                 }
@@ -97,7 +114,7 @@ struct ContentView: View {
                     .onChange(of: revenueCat.isPro) { _, _ in
                         entitlementSync.updateFromRevenueCat(isPro: revenueCat.isPro, userId: authManager.currentUserId)
                         updatePaywallRequirement()
-                        if revenueCat.isPro {
+                        if revenueCat.isPro && !hasCompletedSetupChecklist {
                             shouldShowSetupChecklist = true
                         }
                     }
@@ -114,7 +131,9 @@ struct ContentView: View {
                     .fullScreenCover(isPresented: $requirePaywall) {
                         RevenueCatPaywallView(onClose: {
                             requirePaywall = false
-                            shouldShowSetupChecklist = true
+                            if !hasCompletedSetupChecklist {
+                                shouldShowSetupChecklist = true
+                            }
                         })
                             .environmentObject(revenueCat)
                             .interactiveDismissDisabled(!revenueCat.isPro)
@@ -122,6 +141,7 @@ struct ContentView: View {
                     .fullScreenCover(isPresented: $shouldShowSetupChecklist) {
                         SetupChecklistView {
                             shouldShowSetupChecklist = false
+                            hasCompletedSetupChecklist = true
                         }
                         .environmentObject(authManager)
                         .environmentObject(revenueCat)
@@ -137,18 +157,35 @@ struct ContentView: View {
                             didSeedDemoData = true
                             DemoDataSeeder.seedIfNeeded(modelContext: modelContext)
                         }
+                        if liveSessionSync == nil {
+                            liveSessionSync = LiveSessionSyncService(modelContext: modelContext)
+                            print("[LiveSessionSync] created in ContentView task")
+                        }
+                        await MainActor.run {
+                            self.manager = FocusManager(modelContext: modelContext, liveSessionSync: liveSessionSync)
+                        }
+                        await DailyFocusNotificationScheduler.scheduleDailySummary(modelContext: modelContext)
                     }
                 } else {
                     ProgressView()
                         .task {
                             await MainActor.run {
-                                self.manager = FocusManager(modelContext: modelContext)
+                                if liveSessionSync == nil {
+                                    liveSessionSync = LiveSessionSyncService(modelContext: modelContext)
+                                    print("[LiveSessionSync] created in ProgressView task")
+                                }
+                                self.manager = FocusManager(modelContext: modelContext, liveSessionSync: liveSessionSync)
                             }
                     }
                 }
             } else {
                 AuthGatewayView()
                     .environmentObject(authManager)
+            }
+        }
+        .onAppear {
+            if hasCompletedSetupChecklist {
+                shouldShowSetupChecklist = false
             }
         }
     }
@@ -165,14 +202,9 @@ struct ContentView: View {
 
 private extension ContentView {
     func updatePaywallRequirement() {
-        if pendingOnboardingPaywall && authManager.isAuthenticated && !(revenueCat.isPro || entitlementSync.isEntitled) {
-            pendingOnboardingPaywall = false
-            requirePaywall = true
-            return
+        // Only clear a pending paywall when the user becomes entitled; never force-present here.
+        if revenueCat.isPro || entitlementSync.isEntitled {
+            requirePaywall = false
         }
-        if revenueCat.isPro {
-            pendingOnboardingPaywall = false
-        }
-        requirePaywall = authManager.isAuthenticated && !(revenueCat.isPro || entitlementSync.isEntitled)
     }
 }

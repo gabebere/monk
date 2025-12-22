@@ -5,6 +5,7 @@
 //  Created by Gabriel Berezovsky on 25/8/25.
 //
 
+import MonkShared
 import OSLog
 import RevenueCat
 import SwiftData

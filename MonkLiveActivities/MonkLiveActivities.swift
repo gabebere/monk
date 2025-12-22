@@ -1,6 +1,7 @@
 import ActivityKit
 import WidgetKit
 import SwiftUI
+import MonkShared
 
 @main
 struct MonkLiveActivitiesBundle: WidgetBundle {
