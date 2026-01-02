@@ -2,7 +2,6 @@ import WidgetKit
 import SwiftUI
 import SwiftData
 import UIKit
-import MonkShared
 
 struct WeeklyGoalWidgetEntry: TimelineEntry {
     let date: Date

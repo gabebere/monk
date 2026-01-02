@@ -566,8 +566,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Monk/Info.plist;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Monk uses your location to add context to focus sessions on your calendar.";
-				INFOPLIST_KEY_NSLocationUsageDescription = "Monk uses your location to add context to focus sessions on your calendar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Monk uses your location at session end to tag calendar events with where you were.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -584,9 +583,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -607,8 +603,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Monk/Info.plist;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Monk uses your location to add context to focus sessions on your calendar.";
-				INFOPLIST_KEY_NSLocationUsageDescription = "Monk uses your location to add context to focus sessions on your calendar.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Monk uses your location at session end to tag calendar events with where you were.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -625,9 +620,6 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
