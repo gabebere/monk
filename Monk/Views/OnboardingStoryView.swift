@@ -27,10 +27,6 @@ struct OnboardingStoryView: View {
             GeometryReader { proxy in
                 if let slide = slide(for: step) {
                     ZStack(alignment: .topLeading) {
-                        halo(for: slide)
-                            .allowsHitTesting(false)
-                            .padding(.top, slide.haloTopInset)
-
                         VStack(alignment: .center, spacing: 14) {
                             Text(slide.headline)
                                 .font(.system(size: 30, weight: .bold, design: .rounded))
@@ -86,11 +82,7 @@ private extension OnboardingStoryView {
     struct Slide {
         let headline: String
         let body: String
-        let haloColor: Color
-        let haloOffset: CGSize
-        let haloScale: CGSize
         let titleTopPadding: CGFloat
-        let haloTopInset: CGFloat
     }
 
     func slide(for step: Step) -> Slide? {
@@ -103,11 +95,7 @@ Everyone has the same amount of time in a week, but how you spend it shapes your
 
 To become the person you want, there are two things you can change: your attention and your focus.
 """,
-                haloColor: Color.cyan.opacity(0.18),
-                haloOffset: CGSize(width: 140, height: 40),
-                haloScale: CGSize(width: 300, height: 220),
-                titleTopPadding: 130,
-                haloTopInset: 40
+                titleTopPadding: 130
             )
         case .attentionConstraint:
             return Slide(
@@ -117,11 +105,7 @@ What we pay attention to is what our time is spent on, often without us noticing
 
 Many things compete for our attention, and when they take it, time is pulled away from the work, relationships, and pursuits that matter most.
 """,
-                haloColor: Color.purple.opacity(0.16),
-                haloOffset: CGSize(width: -60, height: 80),
-                haloScale: CGSize(width: 320, height: 240),
-                titleTopPadding: 120,
-                haloTopInset: 20
+                titleTopPadding: 120
             )
         case .focusSkill:
             return Slide(
@@ -131,24 +115,11 @@ Once your attention is on something, focus is what allows you to stay with it. N
 
 It isn’t something you either have or don’t. It’s a skill that develops with practice, and one that shapes how your time is lived.
 """,
-                haloColor: Color.blue.opacity(0.16),
-                haloOffset: CGSize(width: 110, height: 70),
-                haloScale: CGSize(width: 300, height: 230),
-                titleTopPadding: 120,
-                haloTopInset: 34
+                titleTopPadding: 120
             )
         case .paywall:
             return nil
         }
-    }
-
-    @ViewBuilder
-    func halo(for slide: Slide) -> some View {
-        Circle()
-            .fill(slide.haloColor)
-            .blur(radius: 100)
-            .frame(width: slide.haloScale.width, height: slide.haloScale.height)
-            .offset(slide.haloOffset)
     }
 
     @ViewBuilder

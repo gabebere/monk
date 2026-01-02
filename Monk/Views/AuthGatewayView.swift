@@ -8,75 +8,75 @@ struct AuthGatewayView: View {
     @State private var googleError: String?
 
     var body: some View {
-        ZStack {
-            AnimatingBackground(base: Theme.settingsBackground(), halo: Theme.haloGradient)
-            VStack(spacing: 26) {
-                VStack(spacing: 14) {
-                    Image("MonkLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 100, height: 100)
-                        .shadow(color: .black.opacity(0.25), radius: 18, x: 0, y: 10)
-                    Text("Enter Monk")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                    Text("Sign in to keep your focus, purchases, and preferences synced.")
-                        .font(.system(size: 17, weight: .regular, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 18)
-                }
-                .padding(.top, 52)
+        GeometryReader { proxy in
+            ZStack {
+                AnimatingBackground() // matches the Home screen gradient/halo
 
-                VStack(spacing: 16) {
-                    SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = [.fullName, .email]
-                    } onCompletion: { result in
-                        Task {
-                            switch result {
-                            case .success(let authResult):
-                                auth.handleAppleAuthorization(authResult)
-                            case .failure:
-                                break
+                VStack(spacing: 0) {
+                    Spacer(minLength: proxy.safeAreaInsets.top + proxy.size.height * 0.14)
+
+                    VStack(spacing: 14) {
+                        Image("MonkLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 240, height: 240)
+                            .shadow(color: .black.opacity(0.25), radius: 18, x: 0, y: 10)
+                    }
+                    .frame(maxWidth: 520)
+
+                    Spacer(minLength: 32)
+
+                    VStack(spacing: 16) {
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            Task {
+                                switch result {
+                                case .success(let authResult):
+                                    auth.handleAppleAuthorization(authResult)
+                                case .failure:
+                                    break
+                                }
                             }
                         }
-                    }
-                    .signInWithAppleButtonStyle(.white)
-                    .frame(height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.white.opacity(0.35), lineWidth: 1.2)
-                    )
-
-                    Button {
-                        Task { await handleGoogleSignIn() }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "g.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.black)
-                            Text("Continue with Google")
-                                .font(.headline.weight(.semibold))
-                        }
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(Color.white)
+                        .signInWithAppleButtonStyle(.white)
+                        .frame(height: 56)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                .stroke(Color.white.opacity(0.35), lineWidth: 1.2)
                         )
-                    }
-                    .buttonStyle(.plain)
-                }
 
-                Spacer()
+                        Button {
+                            Task { await handleGoogleSignIn() }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image("googlelogo")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 22, height: 22)
+                                Text("Continue with Google")
+                                    .font(.headline.weight(.semibold))
+                            }
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .frame(maxWidth: 520)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, max(proxy.safeAreaInsets.bottom + 24, 32))
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
         }
         .preferredColorScheme(.dark)
         .alert("Google Sign-In", isPresented: $showingGoogleAlert) {

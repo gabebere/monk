@@ -19,7 +19,7 @@ struct ContentView: View {
     @StateObject private var revenueCat = RevenueCatService()
     @StateObject private var entitlementSync = EntitlementSyncService()
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
-    @AppStorage("shouldShowSetupChecklist") private var shouldShowSetupChecklist = false
+    @AppStorage("hasCompletedSetupChecklist") private var hasCompletedSetupChecklist = false
     @State private var manager: FocusManager?
     @State private var selectedTab: AppTab = .home
     @State private var requirePaywall = false
@@ -31,6 +31,12 @@ struct ContentView: View {
             if !authManager.isAuthenticated {
                 AuthGatewayView()
                     .environmentObject(authManager)
+            } else if !hasCompletedSetupChecklist && !hasSeenOnboarding {
+                SetupChecklistView {
+                    hasCompletedSetupChecklist = true
+                }
+                .environmentObject(authManager)
+                .environmentObject(revenueCat)
             } else if !hasSeenOnboarding {
                 OnboardingStoryView { completion in
                     hasSeenOnboarding = true
@@ -97,9 +103,6 @@ struct ContentView: View {
                     .onChange(of: revenueCat.isPro) { _, _ in
                         entitlementSync.updateFromRevenueCat(isPro: revenueCat.isPro, userId: authManager.currentUserId)
                         updatePaywallRequirement()
-                        if revenueCat.isPro {
-                            shouldShowSetupChecklist = true
-                        }
                     }
                     .onChange(of: authManager.isAuthenticated) { _, _ in
                         updatePaywallRequirement()
@@ -114,18 +117,9 @@ struct ContentView: View {
                     .fullScreenCover(isPresented: $requirePaywall) {
                         RevenueCatPaywallView(onClose: {
                             requirePaywall = false
-                            shouldShowSetupChecklist = true
                         })
                             .environmentObject(revenueCat)
                             .interactiveDismissDisabled(!revenueCat.isPro)
-                    }
-                    .fullScreenCover(isPresented: $shouldShowSetupChecklist) {
-                        SetupChecklistView {
-                            shouldShowSetupChecklist = false
-                        }
-                        .environmentObject(authManager)
-                        .environmentObject(revenueCat)
-                        .environmentObject(entitlementSync)
                     }
                     .onOpenURL { url in
 #if canImport(GoogleSignIn)

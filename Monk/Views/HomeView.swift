@@ -62,7 +62,6 @@ private struct TimerCard: View {
     @State private var stoppedSession: FocusSession? = nil
     @State private var showingProjectPicker: Bool = false
     @State private var showingPaywall = false
-    @AppStorage("shouldShowSetupChecklist") private var shouldShowSetupChecklist = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -197,7 +196,6 @@ private struct TimerCard: View {
         .fullScreenCover(isPresented: $showingPaywall) {
             RevenueCatPaywallView(onClose: {
                 showingPaywall = false
-                shouldShowSetupChecklist = true
             })
                 .environmentObject(revenueCat)
         }
