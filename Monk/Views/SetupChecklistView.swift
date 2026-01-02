@@ -89,11 +89,12 @@ struct SetupChecklistView: View {
                             showCalendarPicker = false
                         }
                         .font(.headline.weight(.semibold))
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .contentShape(Rectangle())
                         .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, 0)
                         .padding(.bottom, 12)
                     }
                     .padding(.horizontal, 12)

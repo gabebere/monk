@@ -53,11 +53,10 @@ struct SettingsView: View {
                 AnimatingBackground(base: Theme.settingsBackground(), halo: Theme.settingsHaloGradient)
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
-                        accountCard
-                        privacyCard
                         feedbackCard
-                        goalCard
+                        accountCard
                         calendarCard
+                        goalCard
                         sessionsCard
 #if DEBUG
                         debugCard
@@ -96,49 +95,37 @@ struct SettingsView: View {
 
 private extension SettingsView {
     var goalCard: some View {
-        SettingsCard(title: "Project Goals",
-                     subtitle: "Weekly targets now come from the sum of all project goals (capped at 112h).",
+        SettingsCard(title: "Project goals",
+                     subtitle: nil,
                      icon: "flag.fill") {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(String(format: "%.0fh planned", projectGoalTotal))
-                        .font(.system(size: 30, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text("Across all projects this week")
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Label("\(String(format: "%.0fh remaining", remainingGoalBudget))", systemImage: "speedometer")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Text("Cap: 112h/week")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.65))
-                    }
-                }
+            HStack {
+                Text(String(format: "%.0fh planned", projectGoalTotal))
+                    .font(.system(size: 28, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text(String(format: "%.0fh left", remainingGoalBudget))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.8))
             }
+            Text("Goals come from projects (max 112h/week).")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.6))
         }
     }
 
     var calendarCard: some View {
-        SettingsCard(title: "Calendar sync",
-                     subtitle: "Sessions are always written to your calendar. Pick which one.",
+        SettingsCard(title: "Calendar",
+                     subtitle: nil,
                      icon: "calendar") {
             VStack(alignment: .leading, spacing: 16) {
                 if calendarOptions.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if calendarBusy {
-                            ProgressView()
-                                .tint(.white)
-                        }
-                        Text("No writable calendars available. Make sure the account is added in Settings › Calendar and allows edits.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.75))
+                    if calendarBusy {
+                        ProgressView()
+                            .tint(.white)
                     }
+                    Text("No writable calendars available. Add one in Calendar settings.")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.7))
                 } else {
                     Picker("Calendar", selection: calendarSelection) {
                         ForEach(calendarOptions) { option in
@@ -151,35 +138,30 @@ private extension SettingsView {
                     .accentColor(.white)
                 }
 
-                // Status text omitted per request.
-
-                Button {
-                    Task { await requestLocationPermission() }
-                } label: {
-                    Label("Allow location context (optional)", systemImage: "location")
+                Toggle(isOn: discardShortBinding) {
+                    Text("Discard sessions under 2 minutes")
                         .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain)
+                .tint(.cyan)
             }
         }
     }
 
     var sessionsCard: some View {
-        SettingsCard(title: "Sessions",
-                     subtitle: "Keep your history clean by tossing ultra-short focus spurts.",
-                     icon: "hourglass") {
-            Toggle(isOn: discardShortBinding) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Discard sessions under 2 minutes")
-                        .font(.headline.weight(.medium))
-                        .foregroundStyle(.white)
-                }
+        SettingsCard(title: "Data",
+                     subtitle: nil,
+                     icon: "shield.lefthalf.fill") {
+            Toggle(isOn: $telemetryEnabled) {
+                Text("Share anonymous telemetry")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
             }
             .tint(Color.cyan)
+            .onChange(of: telemetryEnabled) { _, newValue in
+                Analytics.setEnabled(newValue)
+                Analytics.track("settings_toggled", ["key": "telemetry_enabled", "value": newValue])
+            }
         }
     }
 
@@ -187,35 +169,33 @@ private extension SettingsView {
         SettingsCard(title: "Account",
                      subtitle: nil,
                      icon: "person.crop.circle") {
-            VStack(alignment: .leading, spacing: 10) {
+            HStack {
                 if auth.isAuthenticated {
-                    Text("Signed in")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
-                    if let email = auth.userEmail {
-                        Text(email)
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.7))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(auth.displayName ?? "Signed in")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                        if let email = auth.userEmail {
+                            Text(email)
+                                .font(.footnote)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
                     }
                 } else {
                     Text("Not signed in")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
                 }
-
+                Spacer()
                 Button(role: auth.isAuthenticated ? .destructive : .none) {
                     Haptics.heavy()
                     auth.signOut()
                 } label: {
                     Text(auth.isAuthenticated ? "Sign out" : "Sign in")
                         .font(.footnote.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                        )
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.14), in: Capsule())
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
@@ -268,56 +248,25 @@ private extension SettingsView {
 
     var feedbackCard: some View {
         SettingsCard(title: "Feedback",
-                     subtitle: "Share what’s working and what’s not.",
-                     icon: "bubble.left.and.bubble.right.fill") {
-            VStack(alignment: .leading, spacing: 12) {
-                Button {
-                    Haptics.heavy()
-                    showingFeedbackWeb = true
-                    feedbackStatusMessage = nil
-                    print("[UserJot] feedback button tapped; showing web widget")
-                } label: {
-                    Label("General feedback", systemImage: "square.and.pencil")
-                        .font(.headline.weight(.semibold))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                        )
-                        .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-
-                if let feedbackStatusMessage {
-                    Text(feedbackStatusMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.75))
-                }
+                     subtitle: "Request features or report bugs.",
+                     icon: "sparkles") {
+            Button {
+                Haptics.heavy()
+                showingFeedbackWeb = true
+                feedbackStatusMessage = nil
+            } label: {
+                Text("I have some!")
+                    .font(.headline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+                    .foregroundStyle(.white)
             }
-        }
-    }
-
-    var privacyCard: some View {
-        SettingsCard(title: "Privacy",
-                     subtitle: "Control analytics and diagnostics.",
-                     icon: "shield.lefthalf.fill") {
-            Toggle(isOn: $telemetryEnabled) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Share anonymous telemetry")
-                        .font(.headline.weight(.medium))
-                        .foregroundStyle(.white)
-                    Text("Helps improve Monk. No emails or names are sent.")
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-            }
-            .tint(Color.cyan)
-            .onChange(of: telemetryEnabled) { _, newValue in
-                Analytics.setEnabled(newValue)
-                Analytics.track("settings_toggled", ["key": "telemetry_enabled", "value": newValue])
-            }
+            .buttonStyle(.plain)
         }
     }
 
