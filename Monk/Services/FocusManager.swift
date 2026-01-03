@@ -30,17 +30,20 @@ final class FocusManager: ObservableObject {
         if let activeProject = currentSession?.project {
             _ = HardBlockManager.shared.activateHardBlock(for: activeProject)
         }
+        SnapshotWriter.refresh(modelContext: modelContext, currentSession: currentSession)
     }
 
     deinit {
         timer?.cancel()
     }
 
-    func start(project: Project? = nil, mood: Int? = nil) {
+    func start(project: Project? = nil, task: FocusTask? = nil, mood: Int? = nil) {
         guard currentSession == nil else { return }
+        let resolvedProject = project ?? task?.project
         let session = FocusSession(startedAt: Date(),
                                    endedAt: nil,
-                                   project: project)
+                                   project: resolvedProject,
+                                   task: task)
         modelContext.insert(session)
         guard modelContext.saveOrRollback() else { return }
         currentSession = session
@@ -54,9 +57,10 @@ final class FocusManager: ObservableObject {
 #endif
         focusScoreTickCounter = 0
 
-        if let project {
-            _ = HardBlockManager.shared.activateHardBlock(for: project)
+        if let resolvedProject {
+            _ = HardBlockManager.shared.activateHardBlock(for: resolvedProject)
         }
+        SnapshotWriter.refresh(modelContext: modelContext, currentSession: session)
     }
 
     func stop() {
@@ -76,6 +80,8 @@ final class FocusManager: ObservableObject {
         currentSession = nil
         recalcTodayTotal()
         Haptics.success()
+
+        SnapshotWriter.refresh(modelContext: modelContext, currentSession: session, stateOverride: .stopped)
 
         if activeProject != nil {
             HardBlockManager.shared.deactivateHardBlock()

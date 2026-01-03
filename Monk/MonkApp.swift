@@ -48,7 +48,8 @@ struct MonkApp: App {
         let schema = Schema([
             FocusSession.self,
             Preferences.self,
-            Project.self
+            Project.self,
+            FocusTask.self
         ])
         do {
             let configuration = ModelConfiguration(

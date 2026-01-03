@@ -7,9 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		24ED5865A2BC49CEA6853EBA /* Monk/Services/InsightsAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74FAA5013001060000784214 /* Monk/Services/InsightsAnalyzer.swift */; };
 		36B9113F98084EA99379D668 /* WeeklyGoalWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */; };
-		6ABE5BDF611B4C24A81857B7 /* Monk/Models/FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DFBEB3FDC443799326FBEF /* Monk/Models/FocusSession.swift */; };
 		740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 740996632EE058A9009DF533 /* GoogleSignIn */; };
 		740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 740996652EE058A9009DF533 /* GoogleSignInSwift */; };
 		740996692EE05BFF009DF533 /* UserJot in Frameworks */ = {isa = PBXBuildFile; productRef = 740996682EE05BFF009DF533 /* UserJot */; };
@@ -27,9 +25,8 @@
 		74F7A0903000D00000784214 /* MonkLiveActivitiesExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		74F7A0A03000D00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F6B0003000C00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift */; };
 		74F7A0B23000D00000784214 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 74F7A0B03000D00000784214 /* Assets.xcassets */; };
-		76F20E2A94E547EA83E2DC12 /* Monk/Models/Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CAA36B6431243A0B9E653FD /* Monk/Models/Project.swift */; };
-		AA760DFACBF64332B0E7A8DD /* Monk/Utilities/DateUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 041AEA59AD634B4BBC888C46 /* Monk/Utilities/DateUtils.swift */; };
-		C0075459DA9E44D2A932B09D /* Monk/Models/Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5363E89AAFA742E6B0B0CB6E /* Monk/Models/Preferences.swift */; };
+		BC0D20487F5D4E71B1B2CF91 /* Monk/Shared/Snapshot/LiveSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D6F0AFF72F54E099A746397 /* Monk/Shared/Snapshot/LiveSnapshot.swift */; };
+		E48ACE0DDF3C4893A088CDD5 /* Monk/Shared/Snapshot/SnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D461856453C4D339642C15F /* Monk/Shared/Snapshot/SnapshotReader.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -68,6 +65,7 @@
 		041AEA59AD634B4BBC888C46 /* Monk/Utilities/DateUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Utilities/DateUtils.swift; sourceTree = SOURCE_ROOT; };
 		23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyGoalWidget.swift; sourceTree = "<group>"; };
 		39DFBEB3FDC443799326FBEF /* Monk/Models/FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/FocusSession.swift; sourceTree = SOURCE_ROOT; };
+		4D461856453C4D339642C15F /* Monk/Shared/Snapshot/SnapshotReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/Snapshot/SnapshotReader.swift; sourceTree = SOURCE_ROOT; };
 		5363E89AAFA742E6B0B0CB6E /* Monk/Models/Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/Preferences.swift; sourceTree = SOURCE_ROOT; };
 		7420C2462E5CE57200784214 /* Monk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		74F1E0002FFF5FE100784214 /* HardBlockShieldDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardBlockShieldDataSource.swift; sourceTree = "<group>"; };
@@ -85,7 +83,9 @@
 		74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonkLiveActivitiesExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		74F7A0B03000D00000784214 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		74FAA5013001060000784214 /* Monk/Services/InsightsAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Services/InsightsAnalyzer.swift; sourceTree = SOURCE_ROOT; };
+		7D6F0AFF72F54E099A746397 /* Monk/Shared/Snapshot/LiveSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/Snapshot/LiveSnapshot.swift; sourceTree = SOURCE_ROOT; };
 		8CAA36B6431243A0B9E653FD /* Monk/Models/Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/Project.swift; sourceTree = SOURCE_ROOT; };
+		8CFF0616EDB5442C90064883 /* MonkLiveActivities/MonkLiveActivities.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonkLiveActivities/MonkLiveActivities.entitlements; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -177,6 +177,8 @@
 				39DFBEB3FDC443799326FBEF /* Monk/Models/FocusSession.swift */,
 				5363E89AAFA742E6B0B0CB6E /* Monk/Models/Preferences.swift */,
 				8CAA36B6431243A0B9E653FD /* Monk/Models/Project.swift */,
+				7D6F0AFF72F54E099A746397 /* Monk/Shared/Snapshot/LiveSnapshot.swift */,
+				4D461856453C4D339642C15F /* Monk/Shared/Snapshot/SnapshotReader.swift */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -209,6 +211,7 @@
 				74F7A0003000D00000784214 /* MonkLiveActivities.swift */,
 				23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */,
 				74F7A0013000D00000784214 /* Info.plist */,
+				8CFF0616EDB5442C90064883 /* MonkLiveActivities/MonkLiveActivities.entitlements */,
 			);
 			path = MonkLiveActivities;
 			sourceTree = "<group>";
@@ -395,13 +398,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				36B9113F98084EA99379D668 /* WeeklyGoalWidget.swift in Sources */,
-				24ED5865A2BC49CEA6853EBA /* Monk/Services/InsightsAnalyzer.swift in Sources */,
-				AA760DFACBF64332B0E7A8DD /* Monk/Utilities/DateUtils.swift in Sources */,
-				6ABE5BDF611B4C24A81857B7 /* Monk/Models/FocusSession.swift in Sources */,
-				C0075459DA9E44D2A932B09D /* Monk/Models/Preferences.swift in Sources */,
-				76F20E2A94E547EA83E2DC12 /* Monk/Models/Project.swift in Sources */,
 				74F7A0A03000D00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift in Sources */,
 				74F7A0803000D00000784214 /* MonkLiveActivities.swift in Sources */,
+				BC0D20487F5D4E71B1B2CF91 /* Monk/Shared/Snapshot/LiveSnapshot.swift in Sources */,
+				E48ACE0DDF3C4893A088CDD5 /* Monk/Shared/Snapshot/SnapshotReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -681,6 +681,7 @@
 		74F7A0413000D00000784214 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MonkLiveActivities/MonkLiveActivities.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -707,6 +708,7 @@
 		74F7A0423000D00000784214 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MonkLiveActivities/MonkLiveActivities.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

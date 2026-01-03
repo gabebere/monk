@@ -61,7 +61,8 @@ final class LiveActivityManager {
         let goalSeconds = project?.weeklyGoalHours.map { max(0, $0) * 3600 }
 
         let weeklyCompletedSeconds: TimeInterval? = {
-            guard let sessions = project?.sessions else { return nil }
+            guard let project else { return nil }
+            let sessions = project.sessions ?? []
             let (weekStart, weekEnd) = weekBounds(containing: now)
             var total: TimeInterval = 0
             for s in sessions {
@@ -78,7 +79,7 @@ final class LiveActivityManager {
         }()
 
         return FocusSessionActivityAttributes.ContentState(
-            projectName: session.project?.title,
+            projectName: session.calendarDisplayTitle,
             weeklyGoalSeconds: goalSeconds,
             weeklyCompletedSeconds: weeklyCompletedSeconds,
             weeklyRemainingSeconds: {

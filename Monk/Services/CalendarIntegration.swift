@@ -48,10 +48,10 @@ actor CalendarIntegration {
             if try await hasEvent(for: session, in: calendar) { return }
             let event = EKEvent(eventStore: eventStore)
             event.calendar = calendar
-            event.title = "[Monk] \(session.project?.title ?? "Focus Session")"
+            event.title = session.calendarDisplayTitle
             event.startDate = session.startedAt
             event.endDate = end
-            // Avoid leaving internal markers in user-visible notes
+            event.notes = session.calendarSessionMarker
             if let location = session.locationName {
                 event.location = location
             }
@@ -75,7 +75,7 @@ actor CalendarIntegration {
         let predicate = eventStore.predicateForEvents(withStart: session.startedAt.addingTimeInterval(-60),
                                                       end: end.addingTimeInterval(60),
                                                       calendars: [calendar])
-        let events = eventStore.events(matching: predicate).filter(isMonkEvent)
+        let events = eventStore.events(matching: predicate).filter { eventMatchesSession($0, session: session) }
         guard let event = events.first else { return }
 
         if let locationName = session.locationName {
@@ -191,22 +191,21 @@ actor CalendarIntegration {
                                                       calendars: [calendar])
         let events = eventStore.events(matching: predicate)
         let tolerance: TimeInterval = 120
-        let expectedTitle = "[monk] \(session.project?.title ?? "focus session")".lowercased()
+        let expectedTitle = session.calendarDisplayTitle.lowercased()
+        let marker = session.calendarSessionMarker.lowercased()
         return events.contains { event in
-            guard isMonkEvent(event) else { return false }
             let startDiff = abs(event.startDate.timeIntervalSince(session.startedAt))
             let endDiff = abs(event.endDate.timeIntervalSince(end))
             if startDiff > tolerance || endDiff > tolerance { return false }
-            if let title = event.title?.lowercased(), title == expectedTitle {
-                return true
-            }
-            return true
+            if let notes = event.notes?.lowercased(), notes.contains(marker) { return true }
+            if let title = event.title?.lowercased(), title == expectedTitle { return true }
+            return false
         }
     }
 
     private func isMonkEvent(_ event: EKEvent) -> Bool {
-        if let notes = event.notes,
-           notes.range(of: "MonkSession:", options: [.caseInsensitive]) != nil {
+        if let notes = event.notes?.lowercased(),
+           notes.contains("monksession:") {
             return true
         }
         if let title = event.title?.lowercased() {
@@ -216,6 +215,16 @@ actor CalendarIntegration {
             if trimmed.contains("monk") { return true }
         }
         return false
+    }
+
+    private func eventMatchesSession(_ event: EKEvent, session: FocusSession) -> Bool {
+        let marker = session.calendarSessionMarker.lowercased()
+        if let notes = event.notes?.lowercased(), notes.contains(marker) { return true }
+        if let title = event.title?.lowercased(),
+           title == session.calendarDisplayTitle.lowercased() {
+            return true
+        }
+        return isMonkEvent(event)
     }
 
     private func logMonkDiagnostics(context: String, targetCalendar: EKCalendar? = nil, calendars: [EKCalendar]? = nil) async {

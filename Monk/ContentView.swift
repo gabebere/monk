@@ -62,13 +62,13 @@ struct ContentView: View {
                         .tag(AppTab.home)
 
                         NavigationStack {
-                            InsightsView()
+                            ProjectsTabView()
                         }
                         .tabItem {
-                            Label("", systemImage: "chart.bar.doc.horizontal")
-                                .accessibilityLabel("Insights")
+                            Label("", systemImage: "square.grid.2x2")
+                                .accessibilityLabel("Projects")
                         }
-                        .tag(AppTab.insights)
+                        .tag(AppTab.projects)
 
                         NavigationStack {
                             HistoryView()
@@ -153,7 +153,8 @@ struct ContentView: View {
             .modelContainer(for: [
                 FocusSession.self,
                 Preferences.self,
-                Project.self
+                Project.self,
+                FocusTask.self
             ], inMemory: true)
 }
 

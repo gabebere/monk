@@ -8,6 +8,15 @@ struct CalendarPreviewCard: View {
     let locationStatus: String?
 
     private var title: String {
+        let taskName = session.task?.displayTitle ?? session.task?.title
+        if let taskName,
+           let projectTitle,
+           !projectTitle.isEmpty {
+            return "\(taskName) from \(projectTitle)"
+        }
+        if let taskName {
+            return taskName
+        }
         if let projectTitle, !projectTitle.isEmpty {
             return projectTitle
         }

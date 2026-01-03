@@ -1,11 +1,10 @@
 import WidgetKit
 import SwiftUI
-import SwiftData
 import UIKit
 
 struct WeeklyGoalWidgetEntry: TimelineEntry {
     let date: Date
-    let summary: WeeklyProjectGoalSummary?
+    let summary: WeeklyGoalsSnapshot?
     let rotation: Int
 }
 
@@ -17,7 +16,7 @@ struct WeeklyGoalWidgetProvider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (WeeklyGoalWidgetEntry) -> Void) {
         let now = Date()
         let capacity = WeeklyGoalWidgetLayout.maxRows(for: context.family)
-        let summary = context.isPreview ? .preview : WeeklyGoalWidgetDataSource.loadSummary(now: now)
+        let summary = context.isPreview ? .placeholder : WeeklyGoalWidgetDataSource.loadSummary(now: now)
         let rotationEnabled = (summary?.segments.count ?? 0) > capacity
         let entry = WeeklyGoalWidgetEntry(date: now, summary: summary, rotation: rotationEnabled ? 0 : 0)
         completion(entry)
@@ -143,7 +142,7 @@ private struct WeeklyGoalWidgetLayout {
 }
 
 private struct ProjectGoalsWidgetContent: View {
-    let summary: WeeklyProjectGoalSummary
+    let summary: WeeklyGoalsSnapshot
     let family: WidgetFamily
     let layout: WeeklyGoalWidgetLayout
     let rotation: Int
@@ -512,33 +511,10 @@ private enum WeeklyGoalWidgetPalette {
 }
 
 private enum WeeklyGoalWidgetDataSource {
-    static func loadSummary(now: Date) -> WeeklyProjectGoalSummary? {
-        do {
-            let schema = Schema([FocusSession.self, Preferences.self, Project.self])
-            let configuration = ModelConfiguration(cloudKitDatabase: .private("iCloud.com.gbr.Monk"))
-            let container = try ModelContainer(for: schema, configurations: [configuration])
-            let context = ModelContext(container)
-
-            let projects = try context.fetch(FetchDescriptor<Project>())
-            guard !projects.isEmpty else { return nil }
-
-            let calendar = Calendar(identifier: .gregorian)
-            let startDate = calendar.date(byAdding: .day, value: -21, to: now) ?? now.addingTimeInterval(-21 * 24 * 3600)
-
-            let descriptor = FetchDescriptor<FocusSession>(
-                predicate: #Predicate { session in
-                    session.startedAt >= startDate
-                },
-                sortBy: [SortDescriptor(\FocusSession.startedAt, order: .forward)]
-            )
-
-            let sessions = try context.fetch(descriptor)
-            let analyzer = InsightsAnalyzer()
-            let summary = analyzer.weeklyProjectGoals(projects: projects, sessions: sessions, now: now)
-            return summary.hasGoals ? summary : nil
-        } catch {
-            return nil
-        }
+    static func loadSummary(now: Date) -> WeeklyGoalsSnapshot? {
+        let snapshot = SnapshotReader.load()
+        guard let goals = snapshot.projectGoals, goals.hasGoals else { return nil }
+        return goals
     }
 }
 
@@ -578,14 +554,13 @@ private enum WidgetProjectPalette {
     }
 }
 
-private extension WeeklyProjectGoalSummary {
-    static let placeholder: WeeklyProjectGoalSummary = .mock()
-    static let preview: WeeklyProjectGoalSummary = .mock()
+private extension WeeklyGoalsSnapshot {
+    static let placeholder: WeeklyGoalsSnapshot = .mock()
 
-    static func mock() -> WeeklyProjectGoalSummary {
+    static func mock() -> WeeklyGoalsSnapshot {
         let now = Date()
         let cap: Double = 112
-        let segments: [WeeklyProjectGoalSummary.Segment] = [
+        let segments: [WeeklyGoalsSnapshot.Segment] = [
             .init(id: UUID(), title: "Research", gradientIndex: 0, goalHours: 42, actualHours: 24),
             .init(id: UUID(), title: "Writing", gradientIndex: 1, goalHours: 32, actualHours: 18),
             .init(id: UUID(), title: "Planning", gradientIndex: 2, goalHours: 18, actualHours: 10),
@@ -593,7 +568,7 @@ private extension WeeklyProjectGoalSummary {
         ]
         let raw = segments.reduce(0) { $0 + $1.goalHours }
         let scale = raw > cap ? cap / raw : 1
-        return WeeklyProjectGoalSummary(
+        return WeeklyGoalsSnapshot(
             weekStart: now,
             weekEnd: now.addingTimeInterval(7 * 24 * 3600),
             rawGoalHours: raw,

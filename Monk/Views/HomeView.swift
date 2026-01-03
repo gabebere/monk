@@ -7,8 +7,9 @@ struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
-    @State private var showingNewProject: Bool = false
-    @State private var projectDetail: Project?
+    @Query(sort: [SortDescriptor(\FocusTask.updatedAt, order: .reverse)]) private var focusTasks: [FocusTask]
+    @State private var taskEditorRoute: TaskEditorRoute?
+    @State private var selectedTaskID: UUID?
 
     private var prefs: Preferences {
         if let existing = prefsList.first { return existing }
@@ -17,13 +18,24 @@ struct HomeView: View {
         return created
     }
 
+    private var selectedTask: FocusTask? {
+        focusTasks.first(where: { $0.id == selectedTaskID })
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             AnimatingBackground()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 12) {
-                    TimerCard()
-                    ProjectsSection(onAdd: { showingNewProject = true }, onInfo: { project in projectDetail = project })
+                    TimerCard(selectedTask: selectedTask)
+                        if FeatureFlags.tasksV1Enabled {
+                        ScheduledTasksView(
+                            selectedTaskID: $selectedTaskID,
+                            onAdd: { taskEditorRoute = .create(defaultProject: nil) },
+                            onEdit: { task in taskEditorRoute = .edit(task) }
+                        )
+                        .padding(.top, 32)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
                 .padding(.horizontal)
@@ -33,11 +45,13 @@ struct HomeView: View {
         }
         .navigationTitle("Welcome to Monk.")
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $showingNewProject) {
-            NewProjectView()
-        }
-        .sheet(item: $projectDetail) { project in
-            ProjectDetailView(project: project)
+        .sheet(item: $taskEditorRoute) { route in
+            switch route.mode {
+            case .create(let defaultProject):
+                TaskEditorView(mode: .create(defaultProject: defaultProject))
+            case .edit(let task):
+                TaskEditorView(mode: .edit(task: task))
+            }
         }
     }
 }
@@ -47,6 +61,7 @@ private struct TimerCard: View {
     @EnvironmentObject private var entitlementSync: EntitlementSyncService
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
+    let selectedTask: FocusTask?
 
     @State private var outerAngle: Double = -30
     @State private var innerAngle: Double = 30
@@ -190,7 +205,7 @@ private struct TimerCard: View {
         }
         .sheet(isPresented: $showingProjectPicker) {
             ProjectSelectionSheet { selection in
-                startSession(with: selection)
+                startSession(with: selection, task: selectedTask)
             }
         }
         .fullScreenCover(isPresented: $showingPaywall) {
@@ -212,19 +227,22 @@ private struct TimerCard: View {
         }
     }
 
-    private func startSession(with project: Project?) {
+    private func startSession(with project: Project?, task: FocusTask?) {
         let sessionID = UUID().uuidString
-        focus.start(project: project)
+        let resolvedProject = project ?? task?.project
+        focus.start(project: resolvedProject, task: task)
         if let current = focus.currentSession {
             Analytics.track("focus_started", [
                 "session_id": current.id.uuidString,
-                "project_id": project?.id.uuidString ?? "none",
+                "project_id": current.project?.id.uuidString ?? "none",
+                "task_id": current.task?.id.uuidString ?? task?.id.uuidString ?? "none",
                 "ts": Date().timeIntervalSince1970
             ])
         } else {
             Analytics.track("focus_started", [
                 "session_id": sessionID,
-                "project_id": project?.id.uuidString ?? "none",
+                "project_id": resolvedProject?.id.uuidString ?? "none",
+                "task_id": task?.id.uuidString ?? "none",
                 "ts": Date().timeIntervalSince1970
             ])
         }
@@ -261,6 +279,7 @@ private struct TimerCard: View {
             Analytics.track("focus_stopped", [
                 "session_id": s.id.uuidString,
                 "project_id": s.project?.id.uuidString ?? "none",
+                "task_id": s.task?.id.uuidString ?? "none",
                 "duration_sec": duration,
                 "ts": Date().timeIntervalSince1970
             ])
@@ -277,7 +296,11 @@ private struct TimerCard: View {
             rippleScale = 2.2
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
-            showingProjectPicker = true
+            if let task = selectedTask, let project = task.project {
+                startSession(with: project, task: task)
+            } else {
+                showingProjectPicker = true
+            }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             pressDown = false
@@ -436,7 +459,7 @@ private struct ProjectSelectionSheet: View {
     }
 }
 
-private struct ProjectsSection: View {
+struct ProjectsSection: View {
     @EnvironmentObject private var focus: FocusManager
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
 
@@ -588,7 +611,7 @@ private struct ProjectCard: View {
 
 }
 
-private struct NewProjectView: View {
+struct NewProjectView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
@@ -878,7 +901,7 @@ private struct NewProjectView: View {
         return parts.joined(separator: " · ")
     }
 }
-private struct ProjectDetailView: View {
+struct ProjectDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var focus: FocusManager
     @Environment(\.modelContext) private var modelContext
@@ -894,7 +917,7 @@ private struct ProjectDetailView: View {
     @Query private var allProjects: [Project]
 
     private var totalHours: Double { focus.totalDuration(for: project) / 3600 }
-    private var sessionCount: Int { project.sessions?.count ?? 0 }
+    private var sessionCount: Int { project.sessionsUnwrapped.count }
     private var sessionActive: Bool { focus.currentSession != nil }
     private var weeklyProgress: ProjectGoalProgress { focus.weeklyGoalProgress(for: project) }
 
@@ -1367,7 +1390,7 @@ private struct ProjectFormCard<Content: View>: View {
     }
 }
 
-private struct ProjectSelectionTile: View {
+struct ProjectSelectionTile: View {
     let title: String
     let ratioText: String
     let detailText: String
@@ -1433,7 +1456,7 @@ private struct ProjectSelectionTile: View {
     }
 }
 
-private struct ProjectSelectionNoProjectTile: View {
+struct ProjectSelectionNoProjectTile: View {
     let action: () -> Void
 
     var body: some View {
@@ -1468,7 +1491,7 @@ private struct ProjectSelectionNoProjectTile: View {
     }
 }
 
-private struct ProjectSelectionButtonStyle: ButtonStyle {
+struct ProjectSelectionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
@@ -1479,7 +1502,7 @@ private struct ProjectSelectionButtonStyle: ButtonStyle {
 private extension ButtonStyle where Self == ProjectSelectionButtonStyle {
     static var projectSelection: ProjectSelectionButtonStyle { ProjectSelectionButtonStyle() }
 }
-private struct EmptyProjectsView: View {
+struct EmptyProjectsView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "rectangle.stack.badge.plus")
@@ -1673,6 +1696,7 @@ private struct CompletedSessionView: View {
             session.project = nil
         }
         if modelContext.saveOrRollback() {
+            SnapshotWriter.refresh(modelContext: modelContext, currentSession: session, stateOverride: .stopped)
             onStop()
             dismiss()
         }

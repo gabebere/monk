@@ -6,7 +6,8 @@ final class FocusSession {
     var id: UUID = Foundation.UUID()
     var startedAt: Date = Foundation.Date()
     var endedAt: Date?
-    var project: Project?
+    @Relationship(deleteRule: .nullify) var project: Project?
+    @Relationship(deleteRule: .nullify) var task: FocusTask?
     var locationName: String?
     var locationLatitude: Double?
     var locationLongitude: Double?
@@ -15,6 +16,7 @@ final class FocusSession {
          startedAt: Date = .now,
          endedAt: Date? = nil,
          project: Project? = nil,
+         task: FocusTask? = nil,
          locationName: String? = nil,
          locationLatitude: Double? = nil,
          locationLongitude: Double? = nil) {
@@ -22,6 +24,7 @@ final class FocusSession {
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.project = project
+        self.task = task
         self.locationName = locationName
         self.locationLatitude = locationLatitude
         self.locationLongitude = locationLongitude

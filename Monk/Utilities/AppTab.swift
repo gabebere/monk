@@ -1,6 +1,6 @@
 enum AppTab: Int, CaseIterable, Hashable {
     case home
-    case insights
+    case projects
     case history
     case settings
 

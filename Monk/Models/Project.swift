@@ -11,6 +11,7 @@ final class Project {
     var hardBlockEnabled: Bool = false
     var hardBlockSelectionData: Data?
     @Relationship(deleteRule: .nullify, inverse: \FocusSession.project) var sessions: [FocusSession]?
+    @Relationship(deleteRule: .cascade, inverse: \FocusTask.project) var tasks: [FocusTask]?
 
     init(id: UUID = UUID(),
          title: String,
@@ -26,20 +27,22 @@ final class Project {
         self.weeklyGoalHours = weeklyGoalHours
         self.hardBlockEnabled = hardBlockEnabled
         self.hardBlockSelectionData = hardBlockSelectionData
-        self.sessions = []
     }
 }
 
 extension Project {
     func totalDuration(now: Date = .now) -> TimeInterval {
-        sessions?.reduce(0) { partialResult, session in
+        sessionsUnwrapped.reduce(0) { partialResult, session in
             let end = session.endedAt ?? now
             guard end > session.startedAt else { return partialResult }
             return partialResult + end.timeIntervalSince(session.startedAt)
-        } ?? 0
+        }
     }
 
     var mostRecentSessionDate: Date? {
-        sessions?.compactMap { $0.endedAt ?? $0.startedAt }.max()
+        sessionsUnwrapped.compactMap { $0.endedAt ?? $0.startedAt }.max()
     }
+
+    var tasksUnwrapped: [FocusTask] { tasks ?? [] }
+    var sessionsUnwrapped: [FocusSession] { sessions ?? [] }
 }
