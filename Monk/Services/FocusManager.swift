@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Combine
+import UIKit
 #if canImport(ActivityKit)
 import ActivityKit
 #endif
@@ -16,6 +17,8 @@ final class FocusManager: ObservableObject {
     private let insightsAnalyzer = InsightsAnalyzer()
     private let calendarIntegration = CalendarIntegration.shared
     private var focusScoreTickCounter = 0
+    private var mirrorObserver: Any?
+    private var foregroundObserver: Any?
 
     init(modelContext: ModelContext,
          calendar: Calendar = Calendar(identifier: .gregorian)) {
@@ -31,10 +34,40 @@ final class FocusManager: ObservableObject {
             _ = HardBlockManager.shared.activateHardBlock(for: activeProject)
         }
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: currentSession)
+
+        mirrorObserver = NotificationCenter.default.addObserver(
+            forName: .mirrorSessionDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.currentSession = self.fetchInProgressSession()
+                self.recalcTodayTotal()
+                self.enforceShieldsIfNeeded()
+            }
+        }
+
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.enforceShieldsIfNeeded()
+            }
+        }
     }
 
     deinit {
         timer?.cancel()
+        if let mirrorObserver {
+            NotificationCenter.default.removeObserver(mirrorObserver)
+        }
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
     }
 
     func start(project: Project? = nil, task: FocusTask? = nil, mood: Int? = nil) {
@@ -48,6 +81,9 @@ final class FocusManager: ObservableObject {
         guard modelContext.saveOrRollback() else { return }
         currentSession = session
         Haptics.heavy()
+        Task {
+            await MirrorSyncService.shared.emitStart(for: session)
+        }
 
 #if canImport(ActivityKit)
         if #available(iOS 16.2, *) {
@@ -68,6 +104,9 @@ final class FocusManager: ObservableObject {
         let activeProject = session.project
         session.endedAt = Date()
         let discardSession = shouldDiscard(session: session)
+        Task {
+            await MirrorSyncService.shared.emitStop(for: session)
+        }
         if discardSession {
             modelContext.delete(session)
         }
@@ -127,6 +166,12 @@ final class FocusManager: ObservableObject {
             predicate: #Predicate { s in s.endedAt == nil }
         )
         return (try? modelContext.fetch(descriptor))?.first
+    }
+
+    private func enforceShieldsIfNeeded() {
+        if let project = currentSession?.project {
+            _ = HardBlockManager.shared.activateHardBlock(for: project)
+        }
     }
 
     private func weekBounds(containing date: Date) -> (start: Date, end: Date) {

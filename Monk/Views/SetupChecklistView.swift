@@ -2,6 +2,8 @@ import SwiftUI
 import FamilyControls
 import CoreLocation
 import SwiftData
+import UserNotifications
+import UIKit
 
 struct SetupChecklistView: View {
     @Environment(\.modelContext) private var modelContext
@@ -16,6 +18,8 @@ struct SetupChecklistView: View {
     @State private var selectedCalendarId: String?
     @State private var selectedCalendarName: String?
     @State private var didPrefetchCalendars = false
+    @State private var notificationsStatus: ChecklistStatus = .pending
+    @State private var notificationsBusy = false
 
     @Query private var prefsList: [Preferences]
 
@@ -106,6 +110,7 @@ struct SetupChecklistView: View {
         .ignoresSafeArea()
         .task {
             await prefetchCalendarsIfNeeded()
+            await refreshNotificationStatus()
         }
     }
 
@@ -122,6 +127,10 @@ struct SetupChecklistView: View {
 
             checklistRow(title: "Calendar access", detail: "Write focus sessions to your calendar.", status: calendarStatusView, isLoading: calendarBusy, grantedActionTitle: calendarButtonTitle) {
                 Task { await prepareCalendarSelection(showPicker: true) }
+            }
+
+            checklistRow(title: "Notifications", detail: "Get reminders and updates across devices.", status: notificationsStatus, isLoading: notificationsBusy) {
+                Task { await requestNotifications() }
             }
 
             if let calendarStatus {
@@ -294,6 +303,48 @@ struct SetupChecklistView: View {
         await MainActor.run { locationBusy = true }
         _ = await LocationProvider.shared.requestLocation()
         await MainActor.run { locationBusy = false }
+    }
+
+    private func refreshNotificationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        await MainActor.run {
+            notificationsStatus = mapNotificationStatus(settings)
+        }
+    }
+
+    private func requestNotifications() async {
+        await MainActor.run { notificationsBusy = true }
+        let center = UNUserNotificationCenter.current()
+        let granted: Bool
+        do {
+            granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+        } catch {
+            await MainActor.run {
+                notificationsStatus = .denied
+                notificationsBusy = false
+            }
+            return
+        }
+        await refreshNotificationStatus()
+        await MainActor.run { notificationsBusy = false }
+        if granted {
+            await MainActor.run {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+        }
+    }
+
+    private func mapNotificationStatus(_ settings: UNNotificationSettings) -> ChecklistStatus {
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return .granted
+        case .denied:
+            return .denied
+        case .notDetermined:
+            return .pending
+        @unknown default:
+            return .pending
+        }
     }
 
     private func prefetchCalendarsIfNeeded() async {

@@ -22,6 +22,7 @@ struct SettingsView: View {
     @State private var selectedBoard: String?
     @State private var showingFeedbackWeb = false
     @State private var showingOnboardingPreview = false
+    @AppStorage("mirroring.enabled") private var mirroringEnabled: Bool = true
 
     private var prefs: Preferences {
         if let existing = prefsList.first {
@@ -55,6 +56,7 @@ struct SettingsView: View {
                     VStack(spacing: 24) {
                         feedbackCard
                         accountCard
+                        mirroringCard
                         calendarCard
                         goalCard
                         sessionsCard
@@ -161,6 +163,22 @@ private extension SettingsView {
             .onChange(of: telemetryEnabled) { _, newValue in
                 Analytics.setEnabled(newValue)
                 Analytics.track("settings_toggled", ["key": "telemetry_enabled", "value": newValue])
+            }
+        }
+    }
+
+    var mirroringCard: some View {
+        SettingsCard(title: "Session mirroring",
+                     subtitle: "Sync live sessions across your devices.",
+                     icon: "wifi") {
+            Toggle(isOn: $mirroringEnabled) {
+                Text("This device participates in mirroring")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white)
+            }
+            .tint(Color.cyan)
+            .onChange(of: mirroringEnabled) { _, newValue in
+                MirrorSyncService.shared.setParticipation(enabled: newValue)
             }
         }
     }

@@ -31,6 +31,7 @@ struct MonkApp: App {
 #if canImport(UserJot)
         UserJot.setup(projectId: "cmiptfvv400yb15lbz1dzqbey")
 #endif
+        MirrorSyncService.shared.setModelContainer(sharedModelContainer)
         // Global UINavigationBar appearance: white titles and buttons, transparent background
         let appearance = UINavigationBarAppearance()
         appearance.configureWithTransparentBackground()
@@ -114,6 +115,15 @@ final class MonkAppDelegate: NSObject, UIApplicationDelegate {
         }
 #endif
         return false
+    }
+
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        Task {
+            await MirrorSyncService.shared.handleRemoteNotification(userInfo: userInfo)
+            completionHandler(.newData)
+        }
     }
 
     #if canImport(PostHog)
