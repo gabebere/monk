@@ -9,6 +9,7 @@ import RevenueCat
 import RevenueCatUI
 import SwiftData
 import SwiftUI
+import Combine
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
@@ -169,5 +170,12 @@ private extension ContentView {
             pendingOnboardingPaywall = false
         }
         requirePaywall = authManager.isAuthenticated && !(revenueCat.isPro || entitlementSync.isEntitled)
+    }
+
+    var calendarLoggingEnabledOnThisDevice: Bool {
+        if let value = UserDefaults.standard.object(forKey: "calendar.logging.enabled") as? Bool {
+            return value
+        }
+        return true
     }
 }

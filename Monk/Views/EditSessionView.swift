@@ -8,6 +8,10 @@ struct EditSessionView: View {
     @Bindable var session: FocusSession
 
     @State private var selectedProjectID: UUID?
+    @State private var startedAt: Date = Date()
+    @State private var endedAt: Date?
+    @State private var errorMessage: String?
+    @State private var showDeleteConfirm = false
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
 
     var body: some View {
@@ -28,6 +32,7 @@ struct EditSessionView: View {
                         header
                         timingCard
                         projectCard
+                        deleteCard
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 32) 
@@ -54,6 +59,8 @@ struct EditSessionView: View {
         .tint(.white)
         .onAppear {
             selectedProjectID = session.project?.id
+            startedAt = session.startedAt
+            endedAt = session.endedAt
         }
         // no sheet needed
     }
@@ -75,33 +82,36 @@ struct EditSessionView: View {
                    title: "Timing",
                    subtitle: "When this session started and ended.") {
             VStack(alignment: .leading, spacing: 12) {
-                timingRow(label: "Started", date: session.startedAt, systemImage: "play.fill")
-                if let end = session.endedAt {
-                    timingRow(label: "Ended", date: end, systemImage: "stop.fill")
-                } else {
-                    Label("In progress", systemImage: "record.circle.fill")
-                        .foregroundStyle(.orange)
-                }
-            }
-        }
-    }
+                DatePicker("Started",
+                           selection: $startedAt,
+                           displayedComponents: [.date, .hourAndMinute])
+                .labelsHidden()
+                .tint(.white)
+                .foregroundStyle(.white)
 
-    private func timingRow(label: String, date: Date, systemImage: String) -> some View {
-        HStack {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(label)
+                if let _ = session.endedAt ?? endedAt {
+                    DatePicker("Ended",
+                               selection: Binding(
+                                get: { endedAt ?? startedAt },
+                                set: { endedAt = $0 }
+                               ),
+                               in: startedAt...,
+                               displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+                    .tint(.white)
+                    .foregroundStyle(.white)
+                } else {
+                    Label("In progress session can’t be edited", systemImage: "record.circle.fill")
+                        .foregroundStyle(.orange)
                         .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.65))
-                    Text(date, format: Date.FormatStyle().weekday(.wide).hour().minute())
-                        .font(.headline.weight(.medium))
-                        .foregroundStyle(.white)
                 }
-            } icon: {
-                Image(systemName: systemImage)
-                    .foregroundStyle(.white.opacity(0.8))
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.red.opacity(0.9))
+                }
             }
-            Spacer()
         }
     }
 
@@ -144,6 +154,34 @@ struct EditSessionView: View {
         }
     }
 
+    private var deleteCard: some View {
+        DetailCard(icon: "trash",
+                   title: "Delete",
+                   subtitle: "Remove this session permanently.") {
+            Button(role: .destructive) {
+                showDeleteConfirm = true
+            } label: {
+                Text("Delete session")
+                    .font(.headline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.red.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .confirmationDialog("Delete session?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                Button("Delete session", role: .destructive) {
+                    deleteSession()
+                }
+                Button("Cancel", role: .cancel) { }
+            }
+        }
+    }
+
     private var currentProject: Project? {
         guard let id = selectedProjectID else { return nil }
         return projects.first { $0.id == id }
@@ -161,12 +199,31 @@ struct EditSessionView: View {
     }
 
     private func saveAndClose() {
+        guard let finalEnd = endedAt ?? session.endedAt else {
+            errorMessage = "End time is required for past sessions."
+            return
+        }
+        guard finalEnd > startedAt else {
+            errorMessage = "End time must be after start time."
+            return
+        }
+        errorMessage = nil
+
+        session.startedAt = startedAt
+        session.endedAt = finalEnd
         if let id = selectedProjectID,
            let project = projects.first(where: { $0.id == id }) {
             session.project = project
         } else {
             session.project = nil
         }
+        if modelContext.saveOrRollback() {
+            dismiss()
+        }
+    }
+
+    private func deleteSession() {
+        modelContext.delete(session)
         if modelContext.saveOrRollback() {
             dismiss()
         }

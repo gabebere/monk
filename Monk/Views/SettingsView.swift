@@ -23,6 +23,7 @@ struct SettingsView: View {
     @State private var showingFeedbackWeb = false
     @State private var showingOnboardingPreview = false
     @AppStorage("mirroring.enabled") private var mirroringEnabled: Bool = true
+    @AppStorage("calendar.logging.enabled") private var calendarLoggingEnabled: Bool = true
 
     private var prefs: Preferences {
         if let existing = prefsList.first {
@@ -120,24 +121,38 @@ private extension SettingsView {
                      subtitle: nil,
                      icon: "calendar") {
             VStack(alignment: .leading, spacing: 16) {
-                if calendarOptions.isEmpty {
-                    if calendarBusy {
-                        ProgressView()
-                            .tint(.white)
+                Toggle(isOn: $calendarLoggingEnabled) {
+                    Text("Create calendar events from this device")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.cyan)
+                .onChange(of: calendarLoggingEnabled) { old, newValue in
+                    if newValue, old == false {
+                        resumeCalendarBackfillIfNeeded()
                     }
-                    Text("No writable calendars available. Add one in Calendar settings.")
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.7))
-                } else {
+                }
+
+                if calendarLoggingEnabled {
                     Picker("Calendar", selection: calendarSelection) {
+                        Text("None").tag(String?.none)
                         ForEach(calendarOptions) { option in
-                            Text("\(option.title) — \(option.sourceName)")
-                                .tag(option.id)
+                            Text(option.title)
+                                .tag(Optional<String>.some(option.id))
+                        }
+                        if let orphanTag = orphanedSelectionTag {
+                            Text("Unavailable (\(orphanTag))").tag(Optional<String>.some(orphanTag))
                         }
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
-                    .accentColor(.white)
+                    .tint(.white)
+                    .disabled(calendarBusy)
+                    if calendarOptions.isEmpty && !calendarBusy {
+                        Text("No writable calendars available. Add one in Calendar settings.")
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
                 }
 
                 Toggle(isOn: discardShortBinding) {
@@ -234,11 +249,20 @@ private extension SettingsView {
         )
     }
 
-    var calendarSelection: Binding<String> {
+    var calendarSelection: Binding<String?> {
         Binding(
-            get: { prefs.calendarCalendarIdentifier ?? "" },
+            get: {
+                let current = prefs.calendarCalendarIdentifier
+                if let current, calendarOptions.contains(where: { $0.id == current }) {
+                    return current
+                }
+                if let current {
+                    return current // allow orphaned selection to render
+                }
+                return nil
+            },
             set: { newValue in
-                let normalized = newValue.isEmpty ? nil : newValue
+                let normalized = newValue?.isEmpty == true ? nil : newValue
                 guard prefs.calendarCalendarIdentifier != normalized else { return }
                 let previous = prefs.calendarCalendarIdentifier
                 prefs.calendarCalendarIdentifier = normalized
@@ -249,6 +273,11 @@ private extension SettingsView {
                 }
             }
         )
+    }
+
+    var orphanedSelectionTag: String? {
+        guard let current = prefs.calendarCalendarIdentifier else { return nil }
+        return calendarOptions.contains(where: { $0.id == current }) ? nil : current
     }
 
     var rawProjectGoalTotal: Double {
@@ -375,7 +404,9 @@ private extension SettingsView {
         let calendars = await CalendarIntegration.shared.availableCalendars()
         await MainActor.run {
             calendarOptions = calendars
-            if prefs.calendarCalendarIdentifier == nil,
+            if calendarLoggingEnabled,
+               prefs.calendarCalendarIdentifier == nil,
+               prefs.calendarIntegrationEnabled != false,
                let first = calendars.first {
                 prefs.calendarCalendarIdentifier = first.id
                 modelContext.saveOrRollback()
@@ -397,15 +428,25 @@ private extension SettingsView {
             calendarBusy = true
             calendarStatusMessage = nil
         }
-        if let previous, !previous.isEmpty {
-            _ = await CalendarIntegration.shared.purgeMonkEvents(in: previous)
-        }
-        if let newValue, !newValue.isEmpty {
-            await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: newValue)
+        if calendarLoggingEnabled {
+            if let previous, !previous.isEmpty {
+                _ = await CalendarIntegration.shared.purgeMonkEvents(in: previous)
+            }
+            if let newValue, !newValue.isEmpty {
+                await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: newValue)
+            }
         }
         await MainActor.run {
             calendarBusy = false
             updateSelectionStatus()
+        }
+    }
+
+    func resumeCalendarBackfillIfNeeded() {
+        guard calendarLoggingEnabled,
+              let current = prefs.calendarCalendarIdentifier else { return }
+        Task {
+            await handleCalendarSelectionChange(from: nil, to: current)
         }
     }
 

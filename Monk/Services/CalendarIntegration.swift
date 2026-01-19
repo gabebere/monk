@@ -45,47 +45,51 @@ actor CalendarIntegration {
         }
 
         do {
-            if try await hasEvent(for: session, in: calendar) { return }
+            let matches = matchingEvents(for: session, calendar: calendar)
+            if let keeper = matches.min(by: { duration(of: $0) < duration(of: $1) }) {
+                let desiredDuration = min(duration(of: keeper), end.timeIntervalSince(session.startedAt))
+                let newEnd = session.startedAt.addingTimeInterval(desiredDuration)
+                keeper.title = session.calendarDisplayTitle
+                keeper.startDate = session.startedAt
+                keeper.endDate = newEnd
+                keeper.notes = session.calendarSessionMarker
+                applyLocation(session: session, to: keeper)
+                try eventStore.save(keeper, span: .thisEvent)
+
+                // Remove other duplicates
+                let duplicates = matches.filter { $0.eventIdentifier != keeper.eventIdentifier }
+                for duplicate in duplicates {
+                    try? eventStore.remove(duplicate, span: .thisEvent, commit: false)
+                }
+                if !duplicates.isEmpty {
+                    try? eventStore.commit()
+                }
+                return
+            }
+
             let event = EKEvent(eventStore: eventStore)
             event.calendar = calendar
             event.title = session.calendarDisplayTitle
             event.startDate = session.startedAt
             event.endDate = end
             event.notes = session.calendarSessionMarker
-            if let location = session.locationName {
-                event.location = location
-            }
-            if let lat = session.locationLatitude, let lon = session.locationLongitude {
-                let structured = EKStructuredLocation(title: session.locationName ?? "Focus Session")
-                structured.geoLocation = CLLocation(latitude: lat, longitude: lon)
-                event.structuredLocation = structured
-            }
+            applyLocation(session: session, to: event)
             try eventStore.save(event, span: .thisEvent)
         } catch {
         }
     }
 
     func updateEventLocation(for session: FocusSession, calendarIdentifier: String) async {
-        guard let end = session.endedAt else { return }
+        guard session.endedAt != nil else { return }
         guard await requestAccessIfNeeded(),
               let calendar = eventStore.calendar(withIdentifier: calendarIdentifier) else {
             return
         }
 
-        let predicate = eventStore.predicateForEvents(withStart: session.startedAt.addingTimeInterval(-60),
-                                                      end: end.addingTimeInterval(60),
-                                                      calendars: [calendar])
-        let events = eventStore.events(matching: predicate).filter { eventMatchesSession($0, session: session) }
+        let events = matchingEvents(for: session, calendar: calendar)
         guard let event = events.first else { return }
 
-        if let locationName = session.locationName {
-            event.location = locationName
-        }
-        if let lat = session.locationLatitude, let lon = session.locationLongitude {
-            let structured = EKStructuredLocation(title: session.locationName ?? "Focus Session")
-            structured.geoLocation = CLLocation(latitude: lat, longitude: lon)
-            event.structuredLocation = structured
-        }
+        applyLocation(session: session, to: event)
 
         do {
             try eventStore.save(event, span: .thisEvent)
@@ -184,22 +188,30 @@ actor CalendarIntegration {
         }
     }
 
-    private func hasEvent(for session: FocusSession, in calendar: EKCalendar) async throws -> Bool {
-        guard let end = session.endedAt else { return false }
-        let predicate = eventStore.predicateForEvents(withStart: session.startedAt.addingTimeInterval(-60),
-                                                      end: end.addingTimeInterval(60),
+    private func matchingEvents(for session: FocusSession, calendar: EKCalendar) -> [EKEvent] {
+        guard let end = session.endedAt else { return [] }
+        let predicate = eventStore.predicateForEvents(withStart: session.startedAt.addingTimeInterval(-120),
+                                                      end: end.addingTimeInterval(120),
                                                       calendars: [calendar])
-        let events = eventStore.events(matching: predicate)
-        let tolerance: TimeInterval = 120
-        let expectedTitle = session.calendarDisplayTitle.lowercased()
         let marker = session.calendarSessionMarker.lowercased()
-        return events.contains { event in
-            let startDiff = abs(event.startDate.timeIntervalSince(session.startedAt))
-            let endDiff = abs(event.endDate.timeIntervalSince(end))
-            if startDiff > tolerance || endDiff > tolerance { return false }
+        return eventStore.events(matching: predicate).filter { event in
             if let notes = event.notes?.lowercased(), notes.contains(marker) { return true }
-            if let title = event.title?.lowercased(), title == expectedTitle { return true }
-            return false
+            return eventMatchesSession(event, session: session)
+        }
+    }
+
+    private func duration(of event: EKEvent) -> TimeInterval {
+        max(0, event.endDate.timeIntervalSince(event.startDate))
+    }
+
+    private func applyLocation(session: FocusSession, to event: EKEvent) {
+        if let locationName = session.locationName {
+            event.location = locationName
+        }
+        if let lat = session.locationLatitude, let lon = session.locationLongitude {
+            let structured = EKStructuredLocation(title: session.locationName ?? "Focus Session")
+            structured.geoLocation = CLLocation(latitude: lat, longitude: lon)
+            event.structuredLocation = structured
         }
     }
 

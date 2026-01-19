@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct HistoryView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor<FocusSession>(\.startedAt, order: .reverse)])
     private var sessions: [FocusSession]
     @State private var editing: FocusSession? = nil
@@ -19,6 +20,7 @@ struct HistoryView: View {
                     .buttonStyle(.plain)
                     .listRowBackground(Color.white.opacity(0.08))
                 }
+                .onDelete(perform: deleteSessions)
             }
             .scrollContentBackground(.hidden)
             .background(Color.clear)
@@ -31,24 +33,60 @@ struct HistoryView: View {
     }
 }
 
+private extension HistoryView {
+    func deleteSessions(at offsets: IndexSet) {
+        offsets.map { sessions[$0] }.forEach { session in
+            modelContext.delete(session)
+        }
+        modelContext.saveOrRollback()
+    }
+}
+
 private struct HistoryRow: View {
     let session: FocusSession
 
+    private var titleLine: String {
+        if let project = session.project {
+            return project.title
+        }
+        return "No project"
+    }
+
+    private var timeLine: String {
+        let end = session.endedAt ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let startStr = formatter.string(from: session.startedAt)
+        let endStr = formatter.string(from: end)
+
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "E, d MMM"
+        let dayStr = dayFormatter.string(from: session.startedAt)
+
+        return "\(startStr)-\(endStr), \(dayStr)"
+    }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.startedAt, format: .dateTime.weekday(.abbreviated).day().month())
-                HStack(spacing: 4) {
-                    Text(session.startedAt, style: .time)
-                    Text("–")
-                    Text((session.endedAt ?? Date()), style: .time)
-                }
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(titleLine)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text(durationString(session))
+                    .fontDesign(.monospaced)
+                    .foregroundStyle(.secondary)
             }
-            Spacer()
-            Text(durationString(session))
-                .fontDesign(.monospaced)
+
+            Text(timeLine)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
+
+            if let task = session.task {
+                Text(task.displayTitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

@@ -113,7 +113,7 @@ final class FocusManager: ObservableObject {
 
         let preferences = (try? modelContext.fetch(FetchDescriptor<Preferences>()))?.first
         let calendarIdentifier = preferences?.calendarCalendarIdentifier
-        let shouldLogCalendar = calendarIdentifier?.isEmpty == false
+        let shouldLogCalendar = calendarIdentifier?.isEmpty == false && calendarLoggingEnabledOnThisDevice
 
         guard modelContext.saveOrRollback() else { return }
         currentSession = nil
@@ -242,23 +242,31 @@ extension FocusManager {
     private func captureLocationAndSync(for session: FocusSession,
                                         calendarIdentifier: String?,
                                         shouldLogCalendar: Bool) async {
-        if let result = await LocationProvider.shared.requestLocation() {
-            session.locationName = result.displayName
-            session.locationLatitude = result.location.coordinate.latitude
-            session.locationLongitude = result.location.coordinate.longitude
-            _ = modelContext.saveOrRollback()
-        }
+        if shouldLogCalendar {
+            if let result = await LocationProvider.shared.requestLocation() {
+                session.locationName = result.displayName
+                session.locationLatitude = result.location.coordinate.latitude
+                session.locationLongitude = result.location.coordinate.longitude
+                _ = modelContext.saveOrRollback()
+            }
 
-        if shouldLogCalendar,
-           let calendarIdentifier,
-           !calendarIdentifier.isEmpty {
-            await CalendarIntegration.shared.logSession(session, calendarIdentifier: calendarIdentifier)
-            let allSessions = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? [session]
-            await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: calendarIdentifier)
-            if session.locationName != nil || (session.locationLatitude != nil && session.locationLongitude != nil) {
-                await CalendarIntegration.shared.updateEventLocation(for: session, calendarIdentifier: calendarIdentifier)
+            if let calendarIdentifier,
+               !calendarIdentifier.isEmpty {
+                await CalendarIntegration.shared.logSession(session, calendarIdentifier: calendarIdentifier)
+                let allSessions = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? [session]
+                await CalendarIntegration.shared.backfillSessions(allSessions, calendarIdentifier: calendarIdentifier)
+                if session.locationName != nil || (session.locationLatitude != nil && session.locationLongitude != nil) {
+                    await CalendarIntegration.shared.updateEventLocation(for: session, calendarIdentifier: calendarIdentifier)
+                }
             }
         }
+    }
+
+    private var calendarLoggingEnabledOnThisDevice: Bool {
+        if let value = UserDefaults.standard.object(forKey: "calendar.logging.enabled") as? Bool {
+            return value
+        }
+        return true
     }
 }
 

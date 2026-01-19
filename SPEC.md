@@ -60,6 +60,9 @@ AC: Define start/stop intents that operate without opening the UI.
 Data & Sync
     •    SwiftData + CloudKit: Focus sessions, projects, and preferences sync via private CloudKit container `iCloud.com.gbr.Monk`.
 AC: Schema provisions in CloudKit; last-writer-wins merges; new devices see existing data after login.
+    •    Live session mirroring: CloudKit subscription-backed start/stop broadcasts with “latest session wins” behavior and automatic shields. Same `sessionId` is reused across devices so stop events line up. App remains silent when successful; if shields cannot activate (e.g., Screen Time permission missing), a notification is shown (“Shields applied on this device. Enjoy your focus :)”).
+AC: When a session starts on device A, device B auto-starts with the same session ID and enables shields; if device B starts a newer session, A’s session is ended and replaced. Stops propagate similarly (newer local session prevents older stop from applying).
+    •    Calendar: Device-local calendar choice with optional logging. Each device can enable/disable “Create calendar events from this device” and pick a local calendar (or None). One event per session ID; dedupe keeps the shorter event when duplicates exist. Backfill fills any missing events; changing the selected calendar purges old Monk events and migrates sessions to the new calendar on that device only.
 
 Settings
     •    Weekly goal: Set hours/week (e.g., 40h).

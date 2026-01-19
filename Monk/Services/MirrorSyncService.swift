@@ -26,6 +26,7 @@ final class MirrorSyncService {
     private init() {
         Task {
             await ensureSubscription()
+            await purgeLegacyAlertNotifications()
         }
     }
 
@@ -95,15 +96,16 @@ final class MirrorSyncService {
     // MARK: - Private helpers
 
     private func ensureSubscription() async {
-        if let existing = try? await database.subscription(for: subscriptionID) {
-            let info = existing.notificationInfo
-            let hasAlert = (info?.alertBody != nil)
-            let silent = info?.shouldSendContentAvailable == true
-            if silent && !hasAlert {
-                return
+        // Clean up any existing mirror subscriptions (alerting or otherwise) and recreate a single silent one.
+        if let all = try? await database.allSubscriptions() {
+            for sub in all {
+                let isMirrorType = (sub is CKQuerySubscription) &&
+                    (sub as? CKQuerySubscription)?.recordType == MirrorEventPayload.recordType
+                if isMirrorType {
+                    logger.debug("Deleting existing mirror subscription \(sub.subscriptionID, privacy: .public)")
+                    _ = try? await database.deleteSubscription(withID: sub.subscriptionID)
+                }
             }
-            // Replace non-silent/alerting subscription
-            _ = try? await database.deleteSubscription(withID: subscriptionID)
         }
 
         let subscription = CKQuerySubscription(recordType: MirrorEventPayload.recordType,
@@ -119,6 +121,27 @@ final class MirrorSyncService {
             logger.debug("Mirror subscription created")
         } catch {
             logger.error("Failed to create mirror subscription: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Remove any pending/delivered legacy notifications that used alert text.
+    private func purgeLegacyAlertNotifications() async {
+        let targets = await withCheckedContinuation { continuation in
+            notificationCenter.getDeliveredNotifications { delivered in
+                continuation.resume(returning: delivered)
+            }
+        }
+        let legacyIds = targets
+            .filter { notif in
+                let body = notif.request.content.body.lowercased()
+                let title = notif.request.content.title.lowercased()
+                return body.contains("mirror your focus session") || title.contains("mirror your focus session")
+            }
+            .map { $0.request.identifier }
+        if !legacyIds.isEmpty {
+            notificationCenter.removeDeliveredNotifications(withIdentifiers: legacyIds)
+            notificationCenter.removePendingNotificationRequests(withIdentifiers: legacyIds)
+            logger.debug("Purged \(legacyIds.count, privacy: .public) legacy mirror notifications")
         }
     }
 
@@ -308,7 +331,12 @@ final class MirrorSyncService {
         guard status.authorizationStatus == .authorized || status.authorizationStatus == .provisional else { return }
 
         // Clear any previous shield failure notifications to avoid duplicates.
-        let identifiers = await notificationCenter.pendingNotificationRequests().map { $0.identifier }.filter { $0.hasPrefix("mirror.shieldFailure") }
+        let pending = await withCheckedContinuation { continuation in
+            notificationCenter.getPendingNotificationRequests { requests in
+                continuation.resume(returning: requests)
+            }
+        }
+        let identifiers = pending.map { $0.identifier }.filter { $0.hasPrefix("mirror.shieldFailure") }
         if !identifiers.isEmpty {
             notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
             notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
