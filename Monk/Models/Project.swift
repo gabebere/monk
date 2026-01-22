@@ -10,6 +10,7 @@ final class Project {
     var weeklyGoalHours: Double?
     var hardBlockEnabled: Bool = false
     var hardBlockSelectionData: Data?
+    var isArchived: Bool = false
     @Relationship(deleteRule: .nullify, inverse: \FocusSession.project) var sessions: [FocusSession]?
     @Relationship(deleteRule: .cascade, inverse: \FocusTask.project) var tasks: [FocusTask]?
 
@@ -19,7 +20,8 @@ final class Project {
          gradientIndex: Int = 0,
          weeklyGoalHours: Double? = nil,
          hardBlockEnabled: Bool = false,
-         hardBlockSelectionData: Data? = nil) {
+         hardBlockSelectionData: Data? = nil,
+         isArchived: Bool = false) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
@@ -27,6 +29,7 @@ final class Project {
         self.weeklyGoalHours = weeklyGoalHours
         self.hardBlockEnabled = hardBlockEnabled
         self.hardBlockSelectionData = hardBlockSelectionData
+        self.isArchived = isArchived
     }
 }
 

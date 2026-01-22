@@ -75,6 +75,7 @@ final class MirrorSyncService {
 
     func handleRemoteNotification(userInfo: [AnyHashable: Any]) async {
         guard isParticipating else { return }
+        await purgeLegacyAlertNotifications()
         guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo),
               notification.subscriptionID == subscriptionID else {
             return
@@ -101,7 +102,11 @@ final class MirrorSyncService {
             for sub in all {
                 let isMirrorType = (sub is CKQuerySubscription) &&
                     (sub as? CKQuerySubscription)?.recordType == MirrorEventPayload.recordType
-                if isMirrorType {
+                let alertText = (sub.notificationInfo?.alertBody ?? "").lowercased()
+                let hasMirrorAlert = alertText.contains("mirror your focus session")
+                    || (sub.notificationInfo?.title ?? "").lowercased().contains("mirror your focus session")
+                    || (sub.notificationInfo?.subtitle ?? "").lowercased().contains("mirror your focus session")
+                if isMirrorType || hasMirrorAlert {
                     logger.debug("Deleting existing mirror subscription \(sub.subscriptionID, privacy: .public)")
                     _ = try? await database.deleteSubscription(withID: sub.subscriptionID)
                 }

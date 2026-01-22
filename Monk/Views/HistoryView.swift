@@ -11,7 +11,7 @@ struct HistoryView: View {
         ZStack {
             AnimatingBackground(base: Theme.historyBackground(), halo: Theme.historyHaloGradient)
             List {
-                ForEach(sessions) { session in
+                ForEach(sessions, id: \.persistentModelID) { session in
                     Button {
                         editing = session
                     } label: {

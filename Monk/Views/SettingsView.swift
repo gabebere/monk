@@ -61,9 +61,6 @@ struct SettingsView: View {
                         calendarCard
                         goalCard
                         sessionsCard
-#if DEBUG
-                        debugCard
-#endif
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 36)
@@ -317,7 +314,6 @@ private extension SettingsView {
         }
     }
 
-#if DEBUG
     var debugCard: some View {
         SettingsCard(title: "Debug",
                      subtitle: "Onboarding tools for testing.",
@@ -396,7 +392,6 @@ private extension SettingsView {
             }
         }
     }
-#endif
 }
 
 private extension SettingsView {

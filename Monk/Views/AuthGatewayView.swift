@@ -6,6 +6,11 @@ struct AuthGatewayView: View {
     @EnvironmentObject private var auth: AuthManager
     @State private var showingGoogleAlert = false
     @State private var googleError: String?
+    @State private var email = ""
+    @State private var password = ""
+    @State private var passwordError: String?
+    @State private var passwordBusy = false
+    @State private var showingEmailSheet = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -69,6 +74,29 @@ struct AuthGatewayView: View {
                             )
                         }
                         .buttonStyle(.plain)
+
+                        Button {
+                            showingEmailSheet = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "envelope.fill")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 20, height: 16)
+                                Text("Continue with Monk email")
+                                    .font(.headline.weight(.semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(Color.white.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                     .frame(maxWidth: 520)
 
@@ -83,6 +111,66 @@ struct AuthGatewayView: View {
             Button("OK", role: .cancel) { showingGoogleAlert = false }
         } message: {
             Text(googleError ?? "Sign in with Google is not available in this build.")
+        }
+        .sheet(isPresented: $showingEmailSheet) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Sign in with your Monk email")
+                        .font(.title2.weight(.bold))
+                        .padding(.bottom, 6)
+
+                    TextField("Email", text: $email)
+                        .textContentType(.username)
+                        .keyboardType(.emailAddress)
+                        .autocorrectionDisabled(true)
+                        .textInputAutocapitalization(.never)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    if let passwordError {
+                        Text(passwordError)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red.opacity(0.9))
+                    }
+
+                    Button {
+                        Task { await handlePasswordSignIn() }
+                    } label: {
+                        HStack {
+                            if passwordBusy {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            Text("Sign in")
+                                .font(.headline.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.white.opacity(0.14))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(email.isEmpty || password.isEmpty || passwordBusy)
+
+                    Spacer()
+                }
+                .padding()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { showingEmailSheet = false }
+                    }
+                }
+            }
+            .preferredColorScheme(.dark)
         }
     }
 
@@ -119,5 +207,20 @@ struct AuthGatewayView: View {
             return topViewController(base: presented)
         }
         return base
+    }
+
+    private func handlePasswordSignIn() async {
+        await MainActor.run { passwordBusy = true }
+        let result = auth.signInWithPassword(email: email, password: password)
+        await MainActor.run {
+            passwordBusy = false
+            switch result {
+            case .success:
+                passwordError = nil
+                showingEmailSheet = false
+            case .failure(let error):
+                passwordError = error.localizedDescription
+            }
+        }
     }
 }

@@ -7,6 +7,9 @@ import GoogleSignIn
 @MainActor
 final class AuthManager: ObservableObject {
     private let googleClientID = "767517007770-v4i7a49e9qi2b3tmgpgu7s1nrtmf9enb.apps.googleusercontent.com"
+    private let passwordUsers: [PasswordCredential] = [
+        .init(email: "reviewer@monk.app", password: "Demo123!", displayName: "Review Account")
+    ]
 
 @Published private(set) var isAuthenticated: Bool
 @Published private(set) var displayName: String?
@@ -118,6 +121,20 @@ private let newsletterOptInKey = "auth.newsletterOptIn"
         }
         defaults.synchronize()
     }
+
+    func signInWithPassword(email: String, password: String) -> Result<Void, Error> {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let match = passwordUsers.first(where: { $0.email.caseInsensitiveCompare(trimmedEmail) == .orderedSame }) else {
+            return .failure(PasswordAuthError.invalid)
+        }
+        guard match.password == password else {
+            return .failure(PasswordAuthError.invalid)
+        }
+        completeSignIn(userID: "password:\(match.email.lowercased())",
+                       name: match.displayName,
+                       email: match.email)
+        return .success(())
+    }
 }
 
 private extension AuthManager {
@@ -135,5 +152,19 @@ private extension AuthManager {
         isAuthenticated = true
         displayName = name
         userEmail = email
+    }
+}
+
+private struct PasswordCredential {
+    let email: String
+    let password: String
+    let displayName: String?
+}
+
+enum PasswordAuthError: LocalizedError {
+    case invalid
+
+    var errorDescription: String? {
+        "Invalid email or password."
     }
 }

@@ -10,12 +10,16 @@ import RevenueCatUI
 import SwiftData
 import SwiftUI
 import Combine
+import UIKit
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var authManager = AuthManager()
     @StateObject private var revenueCat = RevenueCatService()
     @StateObject private var entitlementSync = EntitlementSyncService()
@@ -62,14 +66,16 @@ struct ContentView: View {
                         }
                         .tag(AppTab.home)
 
-                        NavigationStack {
-                            ProjectsTabView()
+                        if shouldShowProjectsTab {
+                            NavigationStack {
+                                ProjectsTabView()
+                            }
+                            .tabItem {
+                                Label("", systemImage: "square.grid.2x2")
+                                    .accessibilityLabel("Projects")
+                            }
+                            .tag(AppTab.projects)
                         }
-                        .tabItem {
-                            Label("", systemImage: "square.grid.2x2")
-                                .accessibilityLabel("Projects")
-                        }
-                        .tag(AppTab.projects)
 
                         NavigationStack {
                             HistoryView()
@@ -94,6 +100,11 @@ struct ContentView: View {
                     .onChange(of: selectedTab) { _, _ in
                         Haptics.heavy()
                     }
+                    .onChange(of: shouldShowProjectsTab) { _, visible in
+                        if !visible && selectedTab == .projects {
+                            selectedTab = .home
+                        }
+                    }
                     .environmentObject(manager)
                     .environmentObject(revenueCat)
                     .environmentObject(authManager)
@@ -117,10 +128,11 @@ struct ContentView: View {
                     }
                     .fullScreenCover(isPresented: $requirePaywall) {
                         RevenueCatPaywallView(onClose: {
-                            requirePaywall = false
+                            updatePaywallRequirement()
                         })
                             .environmentObject(revenueCat)
-                            .interactiveDismissDisabled(!revenueCat.isPro)
+                            .environmentObject(entitlementSync)
+                            .interactiveDismissDisabled(!hasEntitlement)
                     }
                     .onOpenURL { url in
 #if canImport(GoogleSignIn)
@@ -144,6 +156,12 @@ struct ContentView: View {
             } else {
                 AuthGatewayView()
                     .environmentObject(authManager)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                revenueCat.refresh()
+                updatePaywallRequirement()
             }
         }
     }
@@ -172,10 +190,20 @@ private extension ContentView {
         requirePaywall = authManager.isAuthenticated && !(revenueCat.isPro || entitlementSync.isEntitled)
     }
 
+    var hasEntitlement: Bool {
+        revenueCat.isPro || entitlementSync.isEntitled
+    }
+
     var calendarLoggingEnabledOnThisDevice: Bool {
         if let value = UserDefaults.standard.object(forKey: "calendar.logging.enabled") as? Bool {
             return value
         }
         return true
+    }
+
+    var shouldShowProjectsTab: Bool {
+        !(UIDevice.current.userInterfaceIdiom == .pad &&
+          horizontalSizeClass == .regular &&
+          UIScreen.main.bounds.width > UIScreen.main.bounds.height)
     }
 }

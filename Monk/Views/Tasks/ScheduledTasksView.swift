@@ -41,11 +41,11 @@ struct ScheduledTasksView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             header
 
             if !sections.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(sections) { section in
                         VStack(alignment: .leading, spacing: 8) {
                             if !isFirstSection(section) {
@@ -75,7 +75,7 @@ struct ScheduledTasksView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
+        .padding(.vertical, 0)
         .background(Color.clear)
     }
 }

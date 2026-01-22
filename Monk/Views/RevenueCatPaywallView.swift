@@ -4,6 +4,7 @@ import RevenueCat
 
 struct RevenueCatPaywallView: View {
     @EnvironmentObject private var revenueCat: RevenueCatService
+    @EnvironmentObject private var entitlementSync: EntitlementSyncService
     @Environment(\.dismiss) private var dismiss
 
     let onClose: () -> Void
@@ -42,9 +43,11 @@ struct RevenueCatPaywallView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        onClose()
-                        dismiss()
+                    if canDismiss {
+                        Button("Close") {
+                            onClose()
+                            dismiss()
+                        }
                     }
                 }
             }
@@ -54,5 +57,9 @@ struct RevenueCatPaywallView: View {
                 }
             }
         }
+    }
+
+    private var canDismiss: Bool {
+        revenueCat.isPro || entitlementSync.isEntitled
     }
 }

@@ -6,10 +6,15 @@ import UIKit
 struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Query private var prefsList: [Preferences]
     @Query(sort: [SortDescriptor(\FocusTask.updatedAt, order: .reverse)]) private var focusTasks: [FocusTask]
+    @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
     @State private var taskEditorRoute: TaskEditorRoute?
     @State private var selectedTaskID: UUID?
+    @State private var showingNewProject: Bool = false
+    @State private var projectDetail: Project?
 
     private var prefs: Preferences {
         if let existing = prefsList.first { return existing }
@@ -22,29 +27,131 @@ struct HomeView: View {
         focusTasks.first(where: { $0.id == selectedTaskID })
     }
 
+    private enum LandscapeLayout {
+        // Hero position as a fraction of the height from the top (0 = top, 1 = bottom).
+        // 0.15 ≈ 85% up from the bottom.
+        static let heroVerticalFraction: CGFloat = 0.15
+        static let heroHeight: CGFloat = 40
+        static let heroBottomSpacing: CGFloat = 40         // gap between hero and projects/tasks row
+        static let heroMaxWidth: CGFloat = 340            // max width for the hero button container
+        static let bottomPadding: CGFloat = 0             // keep content off the home indicator
+        static let listTopContentInset: CGFloat = 24      // clearance so fade does not cover first row
+    }
+
+    private var projectsPane: some View {
+        ProjectGridListView(
+            embedInScroll: true,
+            projects: projects,
+            onSelect: { project in
+                projectDetail = project
+            },
+            onCreate: {
+                showingNewProject = true
+            }
+        )
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var tasksPane: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                if FeatureFlags.tasksV1Enabled {
+                    ScheduledTasksView(
+                        selectedTaskID: $selectedTaskID,
+                        onAdd: { taskEditorRoute = .create(defaultProject: nil) },
+                        onEdit: { task in taskEditorRoute = .edit(task) }
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.top, LandscapeLayout.listTopContentInset)
+        }
+        .mask(verticalFadeMask)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var verticalFadeMask: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .black, location: 0.06),
+                .init(color: .black, location: 0.94),
+                .init(color: .clear, location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    private func shouldUseSplitLayout(for size: CGSize) -> Bool {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { return false }
+        guard horizontalSizeClass == .regular else { return false }
+        let aspect = size.width / max(size.height, 1)
+        return aspect > 1.05
+    }
+
+    private var layoutTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.combined(with: .move(edge: .trailing)),
+            removal: .opacity.combined(with: .move(edge: .leading))
+        )
+    }
+
     var body: some View {
-        ZStack(alignment: .top) {
-            AnimatingBackground()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 12) {
-                    TimerCard(selectedTask: selectedTask)
-                        if FeatureFlags.tasksV1Enabled {
-                        ScheduledTasksView(
-                            selectedTaskID: $selectedTaskID,
-                            onAdd: { taskEditorRoute = .create(defaultProject: nil) },
-                            onEdit: { task in taskEditorRoute = .edit(task) }
-                        )
-                        .padding(.top, 32)
+        GeometryReader { outer in
+            let isLandscapeSplitLayout = shouldUseSplitLayout(for: outer.size)
+            ZStack(alignment: .top) {
+                AnimatingBackground()
+                Group {
+                    if isLandscapeSplitLayout {
+                        let safeTop = outer.safeAreaInsets.top
+                        let totalHeight = outer.size.height
+                        let heroTop = max(safeTop + 4, totalHeight * LandscapeLayout.heroVerticalFraction)
+                        let listsTop = heroTop + LandscapeLayout.heroHeight + LandscapeLayout.heroBottomSpacing
+
+                        ZStack(alignment: .top) {
+                            TimerCard(selectedTask: selectedTask)
+                                .frame(maxWidth: LandscapeLayout.heroMaxWidth, minHeight: LandscapeLayout.heroHeight)
+                                .position(x: outer.size.width / 2, y: heroTop + LandscapeLayout.heroHeight / 2)
+
+                            HStack(alignment: .top, spacing: 12) {
+                                projectsPane
+                                tasksPane
+                            }
+                            .padding(.top, listsTop)
+                            .padding(.horizontal, 12)
+                            // Let the fades run all the way to the bottom; avoid extra inset in landscape.
+                            .padding(.bottom, LandscapeLayout.bottomPadding)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        }
+                        .frame(width: outer.size.width, height: outer.size.height, alignment: .top)
+                        .transition(layoutTransition)
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 12) {
+                                TimerCard(selectedTask: selectedTask)
+                                if FeatureFlags.tasksV1Enabled {
+                                    ScheduledTasksView(
+                                        selectedTaskID: $selectedTaskID,
+                                        onAdd: { taskEditorRoute = .create(defaultProject: nil) },
+                                        onEdit: { task in taskEditorRoute = .edit(task) }
+                                    )
+                                    .padding(.top, 32)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .top)
+                            .padding(.horizontal)
+                            .padding(.top, 64)
+                            .padding(.bottom, 48)
+                        }
+                        .transition(layoutTransition)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
-                .padding(.horizontal)
-                .padding(.top, 64)
-                .padding(.bottom, 48)
+                .animation(.easeInOut(duration: 0.28), value: isLandscapeSplitLayout)
             }
         }
         .navigationTitle("Welcome to Monk.")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $taskEditorRoute) { route in
             switch route.mode {
             case .create(let defaultProject):
@@ -52,6 +159,21 @@ struct HomeView: View {
             case .edit(let task):
                 TaskEditorView(mode: .edit(task: task))
             }
+        }
+        .sheet(isPresented: $showingNewProject) {
+            NewProjectView()
+        }
+        .sheet(item: $projectDetail) { project in
+            ProjectDetailView(project: project)
+        }
+    }
+
+    private var headerTitle: some View {
+        HStack {
+            Text("Welcome to Monk.")
+                .font(.largeTitle.bold())
+                .foregroundStyle(.white)
+            Spacer()
         }
     }
 }
@@ -78,8 +200,12 @@ private struct TimerCard: View {
     @State private var showingProjectPicker: Bool = false
     @State private var showingPaywall = false
 
+    private var hasEntitlement: Bool {
+        revenueCat.isPro || entitlementSync.isEntitled
+    }
+
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 14) {
             if focus.currentSession == nil {
                 Button(action: {
                     Haptics.heavy()
@@ -90,18 +216,18 @@ private struct TimerCard: View {
                             .fill(Theme.buttonGradient)
                             .opacity(rippleOpacity)
                             .scaleEffect(rippleScale)
-                            .blur(radius: 20)
+                            .blur(radius: 14)
                             .animation(.easeOut(duration: 0.6), value: rippleOpacity)
                             .animation(.easeOut(duration: 0.6), value: rippleScale)
 
-                        let cyanShadowRadius: CGFloat = 36
-                        let blueShadowRadius: CGFloat = 54
+                        let cyanShadowRadius: CGFloat = 22
+                        let blueShadowRadius: CGFloat = 32
 
                         Text("Time to focus?")
                             .font(.system(size: 22, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 28)
-                            .padding(.vertical, 16)
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 14)
                             .background(
                                 Capsule().fill(Theme.buttonGradient)
                             )
@@ -116,6 +242,10 @@ private struct TimerCard: View {
                             .animation(.spring(response: 0.25, dampingFraction: 0.8), value: pressDown)
                     }
                 }
+                .buttonStyle(.plain)
+                .contentShape(Capsule())
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
                 .accessibilityLabel("Start focusing")
                 .background(
                     ZStack {
@@ -126,8 +256,8 @@ private struct TimerCard: View {
                                 Color.purple.opacity(0.75),
                                 Color.cyan.opacity(0.8)
                             ], center: .center))
-                            .frame(width: 180, height: 120)
-                            .blur(radius: 16)
+                            .frame(width: 140, height: 90)
+                            .blur(radius: 12)
                             .rotationEffect(.degrees(outerAngle))
                             .opacity(0.7)
                             .offset(x: driftX, y: driftY)
@@ -142,8 +272,8 @@ private struct TimerCard: View {
                                 Color.cyan.opacity(0.85),
                                 Color.purple.opacity(0.9)
                             ], center: .center))
-                            .frame(width: 150, height: 100)
-                            .blur(radius: 10)
+                            .frame(width: 115, height: 75)
+                            .blur(radius: 8)
                             .rotationEffect(.degrees(innerAngle))
                             .opacity(0.8)
                             .offset(x: -driftX * 0.83, y: -driftY * 0.75)
@@ -195,7 +325,7 @@ private struct TimerCard: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .animation(.spring(response: 0.45, dampingFraction: 0.88), value: focus.currentSession != nil)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 2)
         .sheet(isPresented: $showStopDetails) {
             if let session = stoppedSession {
                 CompletedSessionView(session: session) {
@@ -210,9 +340,13 @@ private struct TimerCard: View {
         }
         .fullScreenCover(isPresented: $showingPaywall) {
             RevenueCatPaywallView(onClose: {
-                showingPaywall = false
+                if hasEntitlement {
+                    showingPaywall = false
+                }
             })
                 .environmentObject(revenueCat)
+                .environmentObject(entitlementSync)
+                .interactiveDismissDisabled(!hasEntitlement)
         }
         .task {
             if focus.currentSession == nil { restartIdleAnimation() }
@@ -359,15 +493,38 @@ private struct ProjectSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var focus: FocusManager
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
+    @AppStorage("projects.showArchived") private var showArchived: Bool = false
+    @AppStorage("projects.viewMode") private var viewModeRaw: String = ProjectViewMode.grid.rawValue
+    @AppStorage("projects.sortMode") private var sortModeRaw: String = ProjectSortMode.recent.rawValue
     let onSelect: (Project?) -> Void
+
+    @State private var searchText: String = ""
 
     private var columns: [GridItem] { [GridItem(.flexible(), spacing: 18), GridItem(.flexible(), spacing: 18)] }
 
+    private var viewMode: ProjectViewMode { ProjectViewMode(rawValue: viewModeRaw) ?? .grid }
+    private var sortMode: ProjectSortMode { ProjectSortMode(rawValue: sortModeRaw) ?? .recent }
+
+    private var filteredProjects: [Project] {
+        projects
+            .filter { showArchived || !$0.isArchived }
+            .filter { project in
+                guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return true }
+                return project.title.localizedCaseInsensitiveContains(searchText)
+            }
+    }
+
     private var sortedProjects: [Project] {
-        projects.sorted { lhs, rhs in
+        filteredProjects.sorted { lhs, rhs in
             let leftDate = focus.lastActivityDate(for: lhs) ?? lhs.createdAt
             let rightDate = focus.lastActivityDate(for: rhs) ?? rhs.createdAt
-            return leftDate > rightDate
+            switch sortMode {
+            case .recent:
+                if leftDate == rightDate { return lhs.createdAt > rhs.createdAt }
+                return leftDate > rightDate
+            case .name:
+                return lhs.title.lowercased() < rhs.title.lowercased()
+            }
         }
     }
 
@@ -395,22 +552,51 @@ private struct ProjectSelectionSheet: View {
                                 .foregroundStyle(.white.opacity(0.72))
                         }
 
+                        SearchBar(text: $searchText)
+
+                        ProjectDisplayToolbar(viewMode: viewMode,
+                                              sortMode: sortMode,
+                                              showArchived: showArchived,
+                                              onSetViewMode: { mode in viewModeRaw = mode.rawValue },
+                                              onToggleSort: toggleSortMode,
+                                              onToggleArchived: { showArchived.toggle() })
+
                         if projects.isEmpty {
                             EmptyProjectsView()
                         } else {
-                            LazyVGrid(columns: columns, spacing: 18) {
-                                ForEach(sortedProjects) { project in
-                                    let gradient = ProjectGradientPalette.gradient(at: project.gradientIndex)
-                                    let info = projectProgress(for: project)
-                                    ProjectSelectionTile(
-                                        title: project.title,
-                                        ratioText: info.ratio,
-                                        detailText: projectDetail(for: project),
-                                        gradient: gradient,
-                                        progressFraction: info.fraction
-                                    ) {
-                                        onSelect(project)
-                                        dismiss()
+                            Group {
+                                switch viewMode {
+                                case .grid:
+                                    LazyVGrid(columns: columns, spacing: 18) {
+                                        ForEach(sortedProjects) { project in
+                                            let gradient = ProjectGradientPalette.gradient(at: project.gradientIndex)
+                                            let info = projectProgress(for: project)
+                                            ProjectSelectionTile(
+                                                title: project.title,
+                                                ratioText: info.ratio,
+                                                detailText: projectDetail(for: project),
+                                                gradient: gradient,
+                                                progressFraction: info.fraction,
+                                                isArchived: project.isArchived
+                                            ) {
+                                                onSelect(project)
+                                                dismiss()
+                                            }
+                                        }
+                                    }
+                                case .list:
+                                    VStack(spacing: 10) {
+                                        ForEach(sortedProjects) { project in
+                                            let info = projectProgress(for: project)
+                                            ProjectListRow(project: project,
+                                                           ratioText: info.ratio,
+                                                           detailText: projectDetail(for: project),
+                                                           progressFraction: info.fraction,
+                                                           isArchived: project.isArchived) {
+                                                onSelect(project)
+                                                dismiss()
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -456,6 +642,10 @@ private struct ProjectSelectionSheet: View {
         }
         let hours = focus.totalDuration(for: project) / 3600
         return String(format: "%.1fh logged total", hours)
+    }
+
+    private func toggleSortMode() {
+        sortModeRaw = (sortMode == .recent ? ProjectSortMode.name : .recent).rawValue
     }
 }
 
@@ -1132,6 +1322,24 @@ struct ProjectDetailView: View {
                             }
                         }
 
+                        ProjectFormCard(title: project.isArchived ? "Archived" : "Archive",
+                                        subtitle: project.isArchived ? "This project is hidden unless you choose to show archived items." : "Hide this project without deleting its history.",
+                                        icon: "archivebox") {
+                            Button {
+                                Haptics.heavy()
+                                project.isArchived.toggle()
+                                modelContext.saveOrRollback()
+                            } label: {
+                                Text(project.isArchived ? "Unarchive project" : "Archive project")
+                                    .font(.footnote.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.white)
+                        }
+
                         ProjectFormCard(title: "Danger zone",
                                         subtitle: "Remove this project and stop tracking future hours.",
                                         icon: "trash.fill") {
@@ -1342,6 +1550,28 @@ struct ProjectDetailView: View {
     }
 }
 
+private struct SearchBar: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.white.opacity(0.7))
+            TextField("Search projects", text: $text)
+                .textInputAutocapitalization(.words)
+                .disableAutocorrection(true)
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+    }
+}
+
 private struct ProjectFormCard<Content: View>: View {
     let title: String
     let subtitle: String
@@ -1396,6 +1626,7 @@ struct ProjectSelectionTile: View {
     let detailText: String
     let gradient: (start: Color, end: Color)
     let progressFraction: Double?
+    let isArchived: Bool
     let action: () -> Void
 
     var body: some View {
@@ -1453,6 +1684,13 @@ struct ProjectSelectionTile: View {
             .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 10)
         }
         .buttonStyle(.projectSelection)
+        .opacity(isArchived ? 0.72 : 1)
+        .overlay(alignment: .topTrailing) {
+            if isArchived {
+                ArchivedBadge()
+                    .padding(10)
+            }
+        }
     }
 }
 
