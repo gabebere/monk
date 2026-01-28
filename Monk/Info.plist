@@ -23,5 +23,7 @@
 	</array>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Monk reads workouts and sleep from Health to mirror them into your calendar.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Monk only reads your Health workouts and sleep to mirror them into your calendar; it never writes or changes your Health data.</string>
 </dict>
 </plist>
