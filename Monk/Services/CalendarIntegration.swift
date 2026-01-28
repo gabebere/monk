@@ -150,6 +150,46 @@ actor CalendarIntegration {
         return totalRemoved
     }
 
+    func upsertHealthEvent(existingIdentifier: String?,
+                           calendarIdentifier: String,
+                           title: String,
+                           start: Date,
+                           end: Date,
+                           notes: String?) async -> String? {
+        guard await requestAccessIfNeeded() else { return nil }
+        guard let calendar = eventStore.calendar(withIdentifier: calendarIdentifier) else { return nil }
+
+        let event: EKEvent
+        if let existingIdentifier,
+           let existing = eventStore.event(withIdentifier: existingIdentifier) {
+            event = existing
+        } else {
+            event = EKEvent(eventStore: eventStore)
+            event.calendar = calendar
+        }
+
+        event.title = title
+        event.startDate = start
+        if end > start {
+            event.endDate = end
+        } else {
+            event.endDate = start.addingTimeInterval(60)
+        }
+        event.notes = notes
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return event.eventIdentifier
+        } catch {
+            return nil
+        }
+    }
+
+    func deleteEvent(identifier: String) async {
+        guard await requestAccessIfNeeded() else { return }
+        guard let event = eventStore.event(withIdentifier: identifier) else { return }
+        try? eventStore.remove(event, span: .thisEvent, commit: true)
+    }
+
     private func requestAccessIfNeeded() async -> Bool {
         if #available(iOS 17.0, *) {
             switch EKEventStore.authorizationStatus(for: .event) {

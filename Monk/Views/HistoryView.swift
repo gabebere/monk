@@ -102,5 +102,5 @@ private struct HistoryRow: View {
 
 #Preview {
     HistoryView()
-        .modelContainer(for: [FocusSession.self, Project.self, Preferences.self, FocusTask.self], inMemory: true)
+        .modelContainer(for: [FocusSession.self, Project.self, Preferences.self, FocusTask.self, HealthSampleLink.self], inMemory: true)
 }

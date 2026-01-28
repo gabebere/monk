@@ -162,18 +162,22 @@ struct ContentView: View {
             if phase == .active {
                 revenueCat.refresh()
                 updatePaywallRequirement()
+                Task {
+                    await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext)
+                }
             }
         }
     }
 }
 
 #Preview {
-    ContentView()
+            ContentView()
             .modelContainer(for: [
                 FocusSession.self,
                 Preferences.self,
                 Project.self,
-                FocusTask.self
+                FocusTask.self,
+                HealthSampleLink.self
             ], inMemory: true)
 }
 

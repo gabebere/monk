@@ -4,6 +4,7 @@ import CoreLocation
 import SwiftData
 import UserNotifications
 import UIKit
+import HealthKit
 
 struct SetupChecklistView: View {
     @Environment(\.modelContext) private var modelContext
@@ -20,6 +21,8 @@ struct SetupChecklistView: View {
     @State private var didPrefetchCalendars = false
     @State private var notificationsStatus: ChecklistStatus = .pending
     @State private var notificationsBusy = false
+    @State private var healthStatus: ChecklistStatus = .pending
+    @State private var healthBusy = false
 
     @Query private var prefsList: [Preferences]
 
@@ -111,6 +114,7 @@ struct SetupChecklistView: View {
         .task {
             await prefetchCalendarsIfNeeded()
             await refreshNotificationStatus()
+            await refreshHealthStatus()
         }
     }
 
@@ -131,6 +135,10 @@ struct SetupChecklistView: View {
 
             checklistRow(title: "Notifications", detail: "Get reminders and updates across devices.", status: notificationsStatus, isLoading: notificationsBusy) {
                 Task { await requestNotifications() }
+            }
+
+            checklistRow(title: "Health access", detail: "Import workouts and sleep into your calendar.", status: healthStatus, isLoading: healthBusy) {
+                Task { await requestHealthAccess() }
             }
 
             if let calendarStatus {
@@ -299,6 +307,48 @@ struct SetupChecklistView: View {
         }
     }
 
+    private func requestHealthAccess() async {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+            await MainActor.run {
+                healthStatus = .denied
+            }
+            return
+        }
+        await MainActor.run { healthBusy = true }
+        do {
+            try await HKHealthStore().requestAuthorization(toShare: [], read: [HKObjectType.workoutType(), sleepType])
+            await MainActor.run {
+                prefs.healthIncludeWorkouts = true
+                prefs.healthIncludeSleepAsleep = true
+                prefs.healthIncludeSleepInBed = true
+                modelContext.saveOrRollback()
+            }
+            await refreshHealthStatus()
+        } catch {
+            await MainActor.run {
+                healthStatus = .denied
+                healthBusy = false
+            }
+        }
+    }
+
+    private func refreshHealthStatus() async {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+            await MainActor.run { healthStatus = .denied }
+            return
+        }
+        let store = HKHealthStore()
+        let sleepStatus = store.authorizationStatus(for: sleepType)
+        let workoutStatus = store.authorizationStatus(for: HKObjectType.workoutType())
+        let status = combineHealthStatus(sleepStatus, workoutStatus)
+        await MainActor.run {
+            healthStatus = mapHealthStatus(status)
+            healthBusy = false
+        }
+    }
+
     private func requestLocation() async {
         await MainActor.run { locationBusy = true }
         _ = await LocationProvider.shared.requestLocation()
@@ -345,6 +395,26 @@ struct SetupChecklistView: View {
         @unknown default:
             return .pending
         }
+    }
+
+    private func mapHealthStatus(_ status: HKAuthorizationStatus) -> ChecklistStatus {
+        switch status {
+        case .sharingAuthorized:
+            return .granted
+        case .sharingDenied:
+            return .denied
+        case .notDetermined:
+            return .pending
+        @unknown default:
+            return .pending
+        }
+    }
+
+    private func combineHealthStatus(_ lhs: HKAuthorizationStatus, _ rhs: HKAuthorizationStatus) -> HKAuthorizationStatus {
+        if lhs == .sharingDenied || rhs == .sharingDenied { return .sharingDenied }
+        if lhs == .sharingAuthorized && rhs == .sharingAuthorized { return .sharingAuthorized }
+        if lhs == .notDetermined || rhs == .notDetermined { return .notDetermined }
+        return .notDetermined
     }
 
     private func prefetchCalendarsIfNeeded() async {

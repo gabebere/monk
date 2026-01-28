@@ -9,16 +9,31 @@ final class Preferences {
     var hasConvertedDailyGoal: Bool = false
     var calendarIntegrationEnabled: Bool = false
     var calendarCalendarIdentifier: String?
+    var healthIncludeWorkouts: Bool = false
+    var healthIncludeSleepInBed: Bool = false
+    var healthIncludeSleepAsleep: Bool = false
+    var healthLastImportAt: Date?
+    var healthDefaultWorkoutProjectId: UUID?
 
     init(weeklyGoalHours: Double = 0.0,
          discardShortSessions: Bool? = nil,
          hasConvertedDailyGoal: Bool = false,
          calendarIntegrationEnabled: Bool = false,
-         calendarCalendarIdentifier: String? = nil) {
+         calendarCalendarIdentifier: String? = nil,
+         healthIncludeWorkouts: Bool = false,
+         healthIncludeSleepInBed: Bool = false,
+         healthIncludeSleepAsleep: Bool = false,
+         healthLastImportAt: Date? = nil,
+         healthDefaultWorkoutProjectId: UUID? = nil) {
         self.weeklyGoalHours = weeklyGoalHours
         self.discardShortSessions = discardShortSessions
         self.hasConvertedDailyGoal = hasConvertedDailyGoal
         self.calendarIntegrationEnabled = calendarIntegrationEnabled
         self.calendarCalendarIdentifier = calendarCalendarIdentifier
+        self.healthIncludeWorkouts = healthIncludeWorkouts
+        self.healthIncludeSleepInBed = healthIncludeSleepInBed
+        self.healthIncludeSleepAsleep = healthIncludeSleepAsleep
+        self.healthLastImportAt = healthLastImportAt
+        self.healthDefaultWorkoutProjectId = healthDefaultWorkoutProjectId
     }
 }

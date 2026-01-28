@@ -50,12 +50,13 @@ struct MonkApp: App {
             FocusSession.self,
             Preferences.self,
             Project.self,
-            FocusTask.self
+            FocusTask.self,
+            HealthSampleLink.self
         ])
         do {
             let configuration = ModelConfiguration(
                 cloudKitDatabase: .private("iCloud.com.gbr.Monk")
-            )
+             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             logger.error("Failed to create CloudKit-backed ModelContainer: \(error.localizedDescription, privacy: .public)")

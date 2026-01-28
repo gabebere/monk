@@ -59,6 +59,7 @@ struct SettingsView: View {
                         accountCard
                         mirroringCard
                         calendarCard
+                        healthCard
                         goalCard
                         sessionsCard
                     }
@@ -162,6 +163,123 @@ private extension SettingsView {
         }
     }
 
+    var healthCard: some View {
+        SettingsCard(title: "Health sync",
+                     subtitle: "Read-only; refreshed on app launch.",
+                     icon: "heart.fill") {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle(isOn: healthWorkoutsBinding) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Workouts → calendar")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white)
+                        Text("Imports last 30 days; new items auto-sync.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                }
+                .tint(.pink)
+
+                if prefs.healthIncludeWorkouts {
+                    Picker("Assign to project (optional)", selection: workoutProjectBinding) {
+                        Text("None").tag(UUID?.none)
+                        ForEach(projects) { project in
+                            Text(project.title).tag(Optional<UUID>.some(project.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
+
+                    Button {
+                        Task {
+                            await HealthSyncService.shared.removeImportedEvents(kinds: [.workout],
+                                                                                calendarId: prefs.calendarCalendarIdentifier,
+                                                                                modelContext: modelContext)
+                        }
+                    } label: {
+                        Label("Remove imported workouts", systemImage: "trash")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Toggle(isOn: healthAsleepBinding) {
+                    Text("Time asleep → calendar")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.pink)
+                if prefs.healthIncludeSleepAsleep {
+                    Button {
+                        Task {
+                            await HealthSyncService.shared.removeImportedEvents(kinds: [.sleepAsleep],
+                                                                                calendarId: prefs.calendarCalendarIdentifier,
+                                                                                modelContext: modelContext)
+                        }
+                    } label: {
+                        Label("Remove imported sleep (asleep)", systemImage: "trash")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Toggle(isOn: healthInBedBinding) {
+                    Text("Time in bed → calendar")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.pink)
+                if prefs.healthIncludeSleepInBed {
+                    Button {
+                        Task {
+                            await HealthSyncService.shared.removeImportedEvents(kinds: [.sleepInBed],
+                                                                                calendarId: prefs.calendarCalendarIdentifier,
+                                                                                modelContext: modelContext)
+                        }
+                    } label: {
+                        Label("Remove imported sleep (in bed)", systemImage: "trash")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack(spacing: 8) {
+                    Text("Last import")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                    Text(lastHealthImportLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+
+                Button {
+                    Haptics.heavy()
+                    prefs.healthLastImportAt = nil
+                    modelContext.saveOrRollback()
+                    Task {
+                        await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext, forceFullResync: true)
+                    }
+                } label: {
+                    Label("Sync now", systemImage: "arrow.clockwise")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.white.opacity(0.14), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     var sessionsCard: some View {
         SettingsCard(title: "Data",
                      subtitle: nil,
@@ -244,6 +362,65 @@ private extension SettingsView {
                 }
             }
         )
+    }
+
+    var healthWorkoutsBinding: Binding<Bool> {
+        Binding(
+            get: { prefs.healthIncludeWorkouts },
+            set: { newValue in
+                prefs.healthIncludeWorkouts = newValue
+                modelContext.saveOrRollback()
+                if newValue {
+                    Task { await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext) }
+                }
+            }
+        )
+    }
+
+    var healthAsleepBinding: Binding<Bool> {
+        Binding(
+            get: { prefs.healthIncludeSleepAsleep },
+            set: { newValue in
+                prefs.healthIncludeSleepAsleep = newValue
+                modelContext.saveOrRollback()
+                if newValue {
+                    Task { await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext) }
+                }
+            }
+        )
+    }
+
+    var healthInBedBinding: Binding<Bool> {
+        Binding(
+            get: { prefs.healthIncludeSleepInBed },
+            set: { newValue in
+                prefs.healthIncludeSleepInBed = newValue
+                modelContext.saveOrRollback()
+                if newValue {
+                    Task { await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext) }
+                }
+            }
+        )
+    }
+
+    var workoutProjectBinding: Binding<UUID?> {
+        Binding(
+            get: { prefs.healthDefaultWorkoutProjectId },
+            set: { newValue in
+                prefs.healthDefaultWorkoutProjectId = newValue
+                modelContext.saveOrRollback()
+            }
+        )
+    }
+
+    var lastHealthImportLabel: String {
+        if let date = prefs.healthLastImportAt {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
+        }
+        return "Not yet synced"
     }
 
     var calendarSelection: Binding<String?> {

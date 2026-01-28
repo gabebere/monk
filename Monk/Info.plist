@@ -21,5 +21,7 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Monk reads workouts and sleep from Health to mirror them into your calendar.</string>
 </dict>
 </plist>
