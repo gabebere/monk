@@ -51,7 +51,8 @@ struct MonkApp: App {
             Preferences.self,
             Project.self,
             FocusTask.self,
-            HealthSampleLink.self
+            HealthSampleLink.self,
+            UnlockEvent.self
         ])
         do {
             let configuration = ModelConfiguration(

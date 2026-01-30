@@ -14,6 +14,13 @@ final class Preferences {
     var healthIncludeSleepAsleep: Bool = false
     var healthLastImportAt: Date?
     var healthDefaultWorkoutProjectId: UUID?
+    // Intent Mode (formerly Baseline) configuration
+    var baselineEnabled: Bool = false
+    var baselineScheduleEnabled: Bool = false
+    var baselineScheduleData: Data?
+    var baselineAlwaysAllowedSelectionData: Data?
+    var baselineNeverBlockCategoriesSelectionData: Data?
+    var baselineUnlockableAppsSelectionData: Data?
 
     init(weeklyGoalHours: Double = 0.0,
          discardShortSessions: Bool? = nil,
@@ -24,7 +31,13 @@ final class Preferences {
          healthIncludeSleepInBed: Bool = false,
          healthIncludeSleepAsleep: Bool = false,
          healthLastImportAt: Date? = nil,
-         healthDefaultWorkoutProjectId: UUID? = nil) {
+         healthDefaultWorkoutProjectId: UUID? = nil,
+         baselineEnabled: Bool = false,
+         baselineScheduleEnabled: Bool = false,
+         baselineScheduleData: Data? = nil,
+         baselineAlwaysAllowedSelectionData: Data? = nil,
+         baselineNeverBlockCategoriesSelectionData: Data? = nil,
+         baselineUnlockableAppsSelectionData: Data? = nil) {
         self.weeklyGoalHours = weeklyGoalHours
         self.discardShortSessions = discardShortSessions
         self.hasConvertedDailyGoal = hasConvertedDailyGoal
@@ -35,5 +48,11 @@ final class Preferences {
         self.healthIncludeSleepAsleep = healthIncludeSleepAsleep
         self.healthLastImportAt = healthLastImportAt
         self.healthDefaultWorkoutProjectId = healthDefaultWorkoutProjectId
+        self.baselineEnabled = baselineEnabled
+        self.baselineScheduleEnabled = baselineScheduleEnabled
+        self.baselineScheduleData = baselineScheduleData
+        self.baselineAlwaysAllowedSelectionData = baselineAlwaysAllowedSelectionData
+        self.baselineNeverBlockCategoriesSelectionData = baselineNeverBlockCategoriesSelectionData
+        self.baselineUnlockableAppsSelectionData = baselineUnlockableAppsSelectionData
     }
 }

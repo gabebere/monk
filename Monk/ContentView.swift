@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var requirePaywall = false
     @State private var didSeedDemoData = false
     @State private var pendingOnboardingPaywall = false
+    @State private var unlockMessage: String?
 
     var body: some View {
         Group {
@@ -136,8 +137,9 @@ struct ContentView: View {
                     }
                     .onOpenURL { url in
 #if canImport(GoogleSignIn)
-                        _ = GIDSignIn.sharedInstance.handle(url)
+                        if GIDSignIn.sharedInstance.handle(url) { return }
 #endif
+                        handleDeepLink(url)
                     }
                     .task {
                         if !didSeedDemoData {
@@ -166,6 +168,14 @@ struct ContentView: View {
                     await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext)
                 }
             }
+        }
+        .alert("Intent Unlock", isPresented: Binding(
+            get: { unlockMessage != nil },
+            set: { if !$0 { unlockMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { unlockMessage = nil }
+        } message: {
+            if let unlockMessage { Text(unlockMessage) }
         }
     }
 }
@@ -209,5 +219,47 @@ private extension ContentView {
         !(UIDevice.current.userInterfaceIdiom == .pad &&
           horizontalSizeClass == .regular &&
           UIScreen.main.bounds.width > UIScreen.main.bounds.height)
+    }
+
+    func handleDeepLink(_ url: URL) {
+        guard url.scheme == "monk" else { return }
+        switch url.host {
+        case "quickunlock":
+            if let shortcutURL = URL(string: "shortcuts://run-shortcut?name=Monk%20Unlock"),
+               UIApplication.shared.canOpenURL(shortcutURL) {
+                UIApplication.shared.open(shortcutURL, options: [:], completionHandler: nil)
+            } else {
+                selectedTab = .settings
+                unlockMessage = "Shortcut not installed. Open Settings → Intent Mode to unlock manually."
+            }
+        case "unlock":
+            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let query = components.queryItems?.first(where: { $0.name == "query" })?.value,
+                  let minutesString = components.queryItems?.first(where: { $0.name == "minutes" })?.value,
+                  let minutes = Int(minutesString) else {
+                unlockMessage = "Invalid unlock link."
+                return
+            }
+            Task { @MainActor in
+                let result = await IntentBlockManager.shared.registerTemporaryUnlock(query: query,
+                                                                                      minutes: minutes,
+                                                                                      source: .shortcut,
+                                                                                      modelContext: modelContext)
+                switch result {
+                case .unlocked(_, let entry):
+                    unlockMessage = "Unlocked \(entry.displayName) for \(minutes) minute\(minutes == 1 ? "" : "s")."
+                case .ambiguous:
+                    unlockMessage = "More typing needed—unlock was ambiguous."
+                case .noMatch:
+                    unlockMessage = "No matching app for \"\(query)\"."
+                case .authorizationDenied:
+                    unlockMessage = "Screen Time authorization required."
+                case .invalidMinutes:
+                    unlockMessage = "Duration must be between 2 and 60 minutes."
+                }
+            }
+        default:
+            break
+        }
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UserJot
+import FamilyControls
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -22,6 +23,7 @@ struct SettingsView: View {
     @State private var selectedBoard: String?
     @State private var showingFeedbackWeb = false
     @State private var showingOnboardingPreview = false
+    @State private var showingIntentSetup = false
     @AppStorage("mirroring.enabled") private var mirroringEnabled: Bool = true
     @AppStorage("calendar.logging.enabled") private var calendarLoggingEnabled: Bool = true
 
@@ -57,6 +59,7 @@ struct SettingsView: View {
                     VStack(spacing: 24) {
                         feedbackCard
                         accountCard
+                        intentCard
                         mirroringCard
                         calendarCard
                         healthCard
@@ -91,10 +94,51 @@ struct SettingsView: View {
             .environmentObject(auth)
             .environmentObject(focus)
         }
+        .sheet(isPresented: $showingIntentSetup) {
+            IntentSetupView(dismiss: { showingIntentSetup = false }, onSaved: applyIntentShields)
+                .environmentObject(focus)
+        }
     }
 }
 
 private extension SettingsView {
+    var intentCard: some View {
+        SettingsCard(title: "Intent Mode",
+                     subtitle: "Blocks by default; allow only what you pick.",
+                     icon: "lock.fill") {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: intentEnabledBinding) {
+                    Text("Enable Intent Mode")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.orange)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(intentSummary)
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.8))
+                        Text("Project sessions override with their own allowlist.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    Spacer()
+                    Button {
+                        showingIntentSetup = true
+                    } label: {
+                        Label("Configure", systemImage: "slider.horizontal.3")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     var goalCard: some View {
         SettingsCard(title: "Project goals",
                      subtitle: nil,
@@ -421,6 +465,40 @@ private extension SettingsView {
             return formatter.string(from: date)
         }
         return "Not yet synced"
+    }
+
+    var intentEnabledBinding: Binding<Bool> {
+        Binding {
+            prefs.baselineEnabled
+        } set: { newValue in
+            prefs.baselineEnabled = newValue
+            modelContext.saveOrRollback()
+            applyIntentShields()
+        }
+    }
+
+    var intentSummary: String {
+        var parts: [String] = []
+        parts.append(prefs.baselineEnabled ? "On" : "Off")
+        let allowCount = decodeSelectionCount(prefs.baselineAlwaysAllowedSelectionData)
+        if allowCount > 0 {
+            parts.append("\(allowCount) always allowed")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    func decodeSelectionCount(_ data: Data?) -> Int {
+        guard let data,
+              let selection = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else { return 0 }
+        return selection.applicationTokens.count
+    }
+
+    func applyIntentShields() {
+        let projectSelection = focus.currentSession?.project?.hardBlockSelectionData.flatMap(HardBlockManager.shared.decodeSelection(from:))
+        IntentBlockManager.shared.applyShields(
+            preferences: prefs,
+            activeProjectSelection: projectSelection
+        )
     }
 
     var calendarSelection: Binding<String?> {

@@ -16,6 +16,7 @@ final class FocusManager: ObservableObject {
     private let calendar: Calendar
     private let insightsAnalyzer = InsightsAnalyzer()
     private let calendarIntegration = CalendarIntegration.shared
+    private let intentBlock = IntentBlockManager.shared
     private var focusScoreTickCounter = 0
     private var mirrorObserver: Any?
     private var foregroundObserver: Any?
@@ -29,6 +30,7 @@ final class FocusManager: ObservableObject {
         startTicking()
         // Optionally purge short sessions on launch if the preference is enabled
         purgeShortSessionsIfNeeded()
+        applyIntentModeForCurrentState()
 
         if let activeProject = currentSession?.project {
             _ = HardBlockManager.shared.activateHardBlock(for: activeProject)
@@ -93,15 +95,15 @@ final class FocusManager: ObservableObject {
 #endif
         focusScoreTickCounter = 0
 
-        if let resolvedProject {
-            _ = HardBlockManager.shared.activateHardBlock(for: resolvedProject)
-        }
+        intentBlock.applyShields(
+            preferences: currentPreferences(),
+            activeProjectSelection: resolvedProject?.hardBlockSelectionData.flatMap(HardBlockManager.shared.decodeSelection(from:))
+        )
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: session)
     }
 
     func stop() {
         guard let session = currentSession else { return }
-        let activeProject = session.project
         session.endedAt = Date()
         let discardSession = shouldDiscard(session: session)
         Task {
@@ -122,9 +124,10 @@ final class FocusManager: ObservableObject {
 
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: session, stateOverride: .stopped)
 
-        if activeProject != nil {
-            HardBlockManager.shared.deactivateHardBlock()
-        }
+        intentBlock.applyShields(
+            preferences: currentPreferences(),
+            activeProjectSelection: nil
+        )
 #if canImport(ActivityKit)
         if #available(iOS 16.2, *) {
             LiveActivityManager.shared.endActivity(for: session)
@@ -170,7 +173,15 @@ final class FocusManager: ObservableObject {
 
     private func enforceShieldsIfNeeded() {
         if let project = currentSession?.project {
-            _ = HardBlockManager.shared.activateHardBlock(for: project)
+            intentBlock.applyShields(
+                preferences: currentPreferences(),
+                activeProjectSelection: project.hardBlockSelectionData.flatMap(HardBlockManager.shared.decodeSelection(from:))
+            )
+        } else {
+            intentBlock.applyShields(
+                preferences: currentPreferences(),
+                activeProjectSelection: nil
+            )
         }
     }
 
@@ -206,6 +217,25 @@ final class FocusManager: ObservableObject {
     }
 
     private func currentFocusScoreSnapshot(now: Date = .now) -> FocusScoreSnapshot? { nil }
+
+    private func currentPreferences() -> Preferences {
+        let descriptor = FetchDescriptor<Preferences>()
+        return (try? modelContext.fetch(descriptor))?.first ?? Preferences(hasConvertedDailyGoal: true)
+    }
+
+    private func applyIntentModeForCurrentState() {
+        if let project = currentSession?.project {
+            intentBlock.applyShields(
+                preferences: currentPreferences(),
+                activeProjectSelection: project.hardBlockSelectionData.flatMap(HardBlockManager.shared.decodeSelection(from:))
+            )
+        } else {
+            intentBlock.applyShields(
+                preferences: currentPreferences(),
+                activeProjectSelection: nil
+            )
+        }
+    }
 
 }
 // MARK: - Short session handling
