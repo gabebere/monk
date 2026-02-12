@@ -1,22 +1,18 @@
 import SwiftUI
 import UIKit
 
-/// Story-style onboarding (tap left/right) with four narrative screens and a pricing handoff.
+/// Story-style onboarding (tap left/right) with four narrative screens.
 struct OnboardingStoryView: View {
     enum Step: Int, CaseIterable {
         case timeIdentity
         case attentionConstraint
         case focusSkill
-        case paywall
+        case finish
 
-        var isLast: Bool { self == .paywall }
+        var isLast: Bool { self == .finish }
     }
 
-    struct Completion {
-        let requestPricing: Bool
-    }
-
-    let onFinish: (Completion) -> Void
+    let onFinish: () -> Void
 
     @State private var step: Step = .timeIdentity
 
@@ -117,7 +113,7 @@ It isn’t something you either have or don’t. It’s a skill that develops wi
 """,
                 titleTopPadding: 120
             )
-        case .paywall:
+        case .finish:
             return nil
         }
     }
@@ -137,7 +133,7 @@ It isn’t something you either have or don’t. It’s a skill that develops wi
     func goForward() {
         if let next = Step(rawValue: step.rawValue + 1) {
             Haptics.medium()
-            if next == .paywall {
+            if next == .finish {
                 finish()
             } else {
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -159,7 +155,7 @@ It isn’t something you either have or don’t. It’s a skill that develops wi
     }
 
     func finish() {
-        onFinish(Completion(requestPricing: true))
+        onFinish()
     }
 }
 

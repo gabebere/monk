@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import FamilyControls
+import ManagedSettings
 import UIKit
 
 struct HomeView: View {
@@ -41,6 +42,7 @@ struct HomeView: View {
     private var projectsPane: some View {
         ProjectGridListView(
             embedInScroll: true,
+            showsCreateButton: true,
             projects: projects,
             onSelect: { project in
                 projectDetail = project
@@ -179,8 +181,6 @@ struct HomeView: View {
 }
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
-    @EnvironmentObject private var revenueCat: RevenueCatService
-    @EnvironmentObject private var entitlementSync: EntitlementSyncService
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
     let selectedTask: FocusTask?
@@ -198,11 +198,6 @@ private struct TimerCard: View {
     @State private var showStopDetails: Bool = false
     @State private var stoppedSession: FocusSession? = nil
     @State private var showingProjectPicker: Bool = false
-    @State private var showingPaywall = false
-
-    private var hasEntitlement: Bool {
-        revenueCat.isPro || entitlementSync.isEntitled
-    }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -338,16 +333,6 @@ private struct TimerCard: View {
                 startSession(with: selection, task: selectedTask)
             }
         }
-        .fullScreenCover(isPresented: $showingPaywall) {
-            RevenueCatPaywallView(onClose: {
-                if hasEntitlement {
-                    showingPaywall = false
-                }
-            })
-                .environmentObject(revenueCat)
-                .environmentObject(entitlementSync)
-                .interactiveDismissDisabled(!hasEntitlement)
-        }
         .task {
             if focus.currentSession == nil { restartIdleAnimation() }
         }
@@ -383,17 +368,7 @@ private struct TimerCard: View {
     }
 
     private func handlePrimaryTap() {
-        // If user is entitled via RevenueCat or synced flag, proceed; otherwise show paywall.
-        if revenueCat.isPro || entitlementSync.isEntitled {
-            animateStartAndBeginSession()
-        } else {
-            Analytics.track("paywall_viewed", [
-                "offering_id": revenueCat.activeOffering?.identifier ?? "unknown",
-                "has_paywall": revenueCat.activeOffering?.paywall != nil,
-                "entitlement_active": revenueCat.isPro
-            ])
-            showingPaywall = true
-        }
+        animateStartAndBeginSession()
     }
 
     private func stopSession() {
@@ -808,9 +783,10 @@ struct NewProjectView: View {
     @Query private var allProjects: [Project]
     @State private var title: String = ""
     @State private var hardBlockEnabled: Bool = false
-    @State private var hardBlockSelection = FamilyActivitySelection()
+    @State private var hardBlockSelectedApps = Set<ManagedSettings.ApplicationToken>()
     @State private var showingHardBlockPicker = false
     @State private var authorizationDenied = false
+    @State private var managedAppsMissing = false
     @State private var hasWeeklyGoal: Bool = false
     @State private var weeklyGoalHoursInput: Double = 10
 
@@ -820,6 +796,11 @@ struct NewProjectView: View {
 
     private var sessionActive: Bool {
         focus.currentSession != nil
+    }
+
+    private var managedAppTokens: Set<ManagedSettings.ApplicationToken> {
+        let prefs = (try? modelContext.fetch(FetchDescriptor<Preferences>()))?.first
+        return ManagedAppTokenCodec.decodeSelectionTokens(from: prefs?.baselineManagedAppsSelectionData)
     }
 
     var body: some View {
@@ -934,10 +915,15 @@ struct NewProjectView: View {
                                             return
                                         }
                                         if newValue {
+                                            guard !managedAppTokens.isEmpty else {
+                                                managedAppsMissing = true
+                                                hardBlockEnabled = false
+                                                return
+                                            }
                                             let approved = await HardBlockManager.shared.ensureAuthorization()
                                             if approved {
                                                 authorizationDenied = false
-                                                if hardBlockSelection.isEmpty {
+                                                if hardBlockSelectedApps.isEmpty {
                                                     showingHardBlockPicker = true
                                                 }
                                             } else {
@@ -946,6 +932,7 @@ struct NewProjectView: View {
                                             }
                                         } else {
                                             authorizationDenied = false
+                                            managedAppsMissing = false
                                         }
                                     }
                                 }
@@ -954,7 +941,7 @@ struct NewProjectView: View {
                                     Haptics.heavy()
                                     showingHardBlockPicker = true
                                 } label: {
-                                    Label("Choose apps and websites", systemImage: "square.and.pencil")
+                                    Label("Choose managed apps", systemImage: "square.and.pencil")
                                         .font(.footnote.weight(.semibold))
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 11)
@@ -962,12 +949,12 @@ struct NewProjectView: View {
                                         .foregroundStyle(Color.white.opacity(hardBlockEnabled ? 1 : 0.65))
                                 }
                                 .buttonStyle(.plain)
-                                .disabled(!hardBlockEnabled || sessionActive)
+                                .disabled(!hardBlockEnabled || sessionActive || managedAppTokens.isEmpty)
                                 .opacity((hardBlockEnabled && !sessionActive) ? 1 : 0.6)
 
                                 Text(hardBlockSummary)
                                     .font(.footnote)
-                                    .foregroundStyle(authorizationDenied ? .red : Color.white.opacity(0.7))
+                                    .foregroundStyle((authorizationDenied || managedAppsMissing) ? .red : Color.white.opacity(0.7))
                             }
                         }
 
@@ -1004,8 +991,21 @@ struct NewProjectView: View {
             }
         }
         .tint(.white)
-        .familyActivityPicker(isPresented: $showingHardBlockPicker, selection: $hardBlockSelection)
-        .onChange(of: hardBlockSelection) { _, _ in
+        .sheet(isPresented: $showingHardBlockPicker) {
+            ManagedAppsSelectionView(
+                title: "Project Hard Blocking",
+                subtitle: "Select which managed apps should be blocked during this project.",
+                availableTokens: managedAppTokens,
+                selectedTokens: $hardBlockSelectedApps,
+                onDone: {
+                    showingHardBlockPicker = false
+                    authorizationDenied = false
+                    managedAppsMissing = false
+                },
+                onCancel: { showingHardBlockPicker = false }
+            )
+        }
+        .onChange(of: hardBlockSelectedApps) { _, _ in
             authorizationDenied = false
         }
     }
@@ -1017,7 +1017,7 @@ struct NewProjectView: View {
             guard hasWeeklyGoal, canAddGoal else { return nil }
             return clampedGoalInput(weeklyGoalHoursInput)
         }()
-        let selectionData = HardBlockManager.shared.encodeSelection(hardBlockSelection)
+        let selectionData = ManagedAppTokenCodec.encodeSelection(from: hardBlockSelectedApps)
         let project = Project(title: trimmed,
                               gradientIndex: nextGradientIndex(),
                               weeklyGoalHours: goalHours,
@@ -1067,28 +1067,19 @@ struct NewProjectView: View {
         if authorizationDenied {
             return "Screen Time permission required. Open Settings → Screen Time to grant access."
         }
+        if managedAppsMissing {
+            return "Select managed apps first in Intent Mode settings."
+        }
         if sessionActive {
             return "Pause your current focus session to adjust blocking."
         }
         if !hardBlockEnabled {
             return "Hard blocking is disabled."
         }
-        if hardBlockSelection.isEmpty {
-            return "No apps or websites selected yet."
+        if hardBlockSelectedApps.isEmpty {
+            return "No apps selected yet."
         }
-        var parts: [String] = []
-        if hardBlockSelection.includeEntireCategory {
-            parts.append("All categories")
-        } else if !hardBlockSelection.categoryTokens.isEmpty {
-            parts.append("\(hardBlockSelection.categoryTokens.count) categor\(hardBlockSelection.categoryTokens.count == 1 ? "y" : "ies")")
-        }
-        if !hardBlockSelection.applicationTokens.isEmpty {
-            parts.append("\(hardBlockSelection.applicationTokens.count) app\(hardBlockSelection.applicationTokens.count == 1 ? "" : "s")")
-        }
-        if !hardBlockSelection.webDomainTokens.isEmpty {
-            parts.append("\(hardBlockSelection.webDomainTokens.count) domain\(hardBlockSelection.webDomainTokens.count == 1 ? "" : "s")")
-        }
-        return parts.joined(separator: " · ")
+        return "\(hardBlockSelectedApps.count) app\(hardBlockSelectedApps.count == 1 ? "" : "s") selected"
     }
 }
 struct ProjectDetailView: View {
@@ -1096,9 +1087,10 @@ struct ProjectDetailView: View {
     @EnvironmentObject private var focus: FocusManager
     @Environment(\.modelContext) private var modelContext
     @Bindable var project: Project
-    @State private var hardBlockSelection = FamilyActivitySelection()
+    @State private var hardBlockSelectedApps = Set<ManagedSettings.ApplicationToken>()
     @State private var showingHardBlockPicker = false
     @State private var authorizationDenied = false
+    @State private var managedAppsMissing = false
     @State private var showDeleteConfirmation = false
     @State private var editedTitle: String = ""
     @State private var hasWeeklyGoal: Bool = false
@@ -1110,6 +1102,10 @@ struct ProjectDetailView: View {
     private var sessionCount: Int { project.sessionsUnwrapped.count }
     private var sessionActive: Bool { focus.currentSession != nil }
     private var weeklyProgress: ProjectGoalProgress { focus.weeklyGoalProgress(for: project) }
+    private var managedAppTokens: Set<ManagedSettings.ApplicationToken> {
+        let prefs = (try? modelContext.fetch(FetchDescriptor<Preferences>()))?.first
+        return ManagedAppTokenCodec.decodeSelectionTokens(from: prefs?.baselineManagedAppsSelectionData)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1280,10 +1276,15 @@ struct ProjectDetailView: View {
                                             return
                                         }
                                         if newValue {
+                                            guard !managedAppTokens.isEmpty else {
+                                                managedAppsMissing = true
+                                                project.hardBlockEnabled = false
+                                                return
+                                            }
                                             let approved = await HardBlockManager.shared.ensureAuthorization()
                                             if approved {
                                                 authorizationDenied = false
-                                                if hardBlockSelection.isEmpty {
+                                                if hardBlockSelectedApps.isEmpty {
                                                     showingHardBlockPicker = true
                                                 } else if focus.currentSession?.project?.id == project.id {
                                                     _ = HardBlockManager.shared.activateHardBlock(for: project)
@@ -1294,6 +1295,7 @@ struct ProjectDetailView: View {
                                             }
                                         } else {
                                             authorizationDenied = false
+                                            managedAppsMissing = false
                                             if focus.currentSession?.project?.id == project.id {
                                                 HardBlockManager.shared.deactivateHardBlock()
                                             }
@@ -1305,7 +1307,7 @@ struct ProjectDetailView: View {
                                 Button {
                                     showingHardBlockPicker = true
                                 } label: {
-                                    Label("Choose apps and websites", systemImage: "square.and.pencil")
+                                    Label("Choose managed apps", systemImage: "square.and.pencil")
                                         .font(.footnote.weight(.semibold))
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 11)
@@ -1313,12 +1315,12 @@ struct ProjectDetailView: View {
                                         .foregroundStyle(Color.white.opacity(project.hardBlockEnabled ? 1 : 0.65))
                                 }
                                 .buttonStyle(.plain)
-                                .disabled(!project.hardBlockEnabled || sessionActive)
+                                .disabled(!project.hardBlockEnabled || sessionActive || managedAppTokens.isEmpty)
                                 .opacity((project.hardBlockEnabled && !sessionActive) ? 1 : 0.6)
 
                                 Text(hardBlockSummary)
                                     .font(.footnote)
-                                    .foregroundStyle(authorizationDenied ? .red : Color.white.opacity(0.7))
+                                    .foregroundStyle((authorizationDenied || managedAppsMissing) ? .red : Color.white.opacity(0.7))
                             }
                         }
 
@@ -1374,14 +1376,14 @@ struct ProjectDetailView: View {
         .tint(.white)
         .onAppear {
             if let stored = HardBlockManager.shared.decodeSelection(from: project.hardBlockSelectionData) {
-                hardBlockSelection = stored
+                hardBlockSelectedApps = stored.applicationTokens
             }
             editedTitle = project.title
             bootstrapWeeklyGoalStateIfNeeded()
         }
-        .onChange(of: hardBlockSelection) { _, newValue in
+        .onChange(of: hardBlockSelectedApps) { _, newValue in
             guard !sessionActive else { return }
-            project.hardBlockSelectionData = HardBlockManager.shared.encodeSelection(newValue)
+            project.hardBlockSelectionData = ManagedAppTokenCodec.encodeSelection(from: newValue)
             guard modelContext.saveOrRollback() else { return }
             guard project.hardBlockEnabled else { return }
             if newValue.isEmpty {
@@ -1392,7 +1394,20 @@ struct ProjectDetailView: View {
                 _ = HardBlockManager.shared.activateHardBlock(for: project)
             }
         }
-        .familyActivityPicker(isPresented: $showingHardBlockPicker, selection: $hardBlockSelection)
+        .sheet(isPresented: $showingHardBlockPicker) {
+            ManagedAppsSelectionView(
+                title: "Project Hard Blocking",
+                subtitle: "Select which managed apps should be blocked during this project.",
+                availableTokens: managedAppTokens,
+                selectedTokens: $hardBlockSelectedApps,
+                onDone: {
+                    showingHardBlockPicker = false
+                    authorizationDenied = false
+                    managedAppsMissing = false
+                },
+                onCancel: { showingHardBlockPicker = false }
+            )
+        }
         .alert("Delete Project?", isPresented: $showDeleteConfirmation, actions: {
             Button("Delete", role: .destructive) {
                 Haptics.warning()
@@ -1441,22 +1456,13 @@ struct ProjectDetailView: View {
         if !project.hardBlockEnabled {
             return "Hard blocking is disabled."
         }
-        if hardBlockSelection.isEmpty {
-            return "No apps or websites selected yet."
+        if managedAppsMissing {
+            return "Select managed apps first in Intent Mode settings."
         }
-        var parts: [String] = []
-        if hardBlockSelection.includeEntireCategory {
-            parts.append("All categories")
-        } else if !hardBlockSelection.categoryTokens.isEmpty {
-            parts.append("\(hardBlockSelection.categoryTokens.count) categor\(hardBlockSelection.categoryTokens.count == 1 ? "y" : "ies")")
+        if hardBlockSelectedApps.isEmpty {
+            return "No apps selected yet."
         }
-        if !hardBlockSelection.applicationTokens.isEmpty {
-            parts.append("\(hardBlockSelection.applicationTokens.count) app\(hardBlockSelection.applicationTokens.count == 1 ? "" : "s")")
-        }
-        if !hardBlockSelection.webDomainTokens.isEmpty {
-            parts.append("\(hardBlockSelection.webDomainTokens.count) domain\(hardBlockSelection.webDomainTokens.count == 1 ? "" : "s")")
-        }
-        return parts.joined(separator: " · ")
+        return "\(hardBlockSelectedApps.count) app\(hardBlockSelectedApps.count == 1 ? "" : "s") selected"
     }
 
     private func bootstrapWeeklyGoalStateIfNeeded() {

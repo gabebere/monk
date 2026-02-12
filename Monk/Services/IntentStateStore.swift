@@ -79,9 +79,8 @@ struct IntentState: Codable {
     var baselineEnabled: Bool
     var baselineScheduleEnabled: Bool
     var baselineScheduleData: Data?
-    var baselineAlwaysAllowedSelectionData: Data?
-    var baselineNeverBlockCategoriesSelectionData: Data?
-    var baselineUnlockableAppsSelectionData: Data?
+    var baselineAlwaysAllowedManagedSelectionData: Data?
+    var baselineManagedAppsSelectionData: Data?
     var activeUnlocks: [IntentUnlock]
     var updatedAt: Date
 }
@@ -138,9 +137,8 @@ enum IntentStateStore {
         state.baselineEnabled = preferences.baselineEnabled
         state.baselineScheduleEnabled = preferences.baselineScheduleEnabled
         state.baselineScheduleData = preferences.baselineScheduleData
-        state.baselineAlwaysAllowedSelectionData = preferences.baselineAlwaysAllowedSelectionData
-        state.baselineNeverBlockCategoriesSelectionData = preferences.baselineNeverBlockCategoriesSelectionData
-        state.baselineUnlockableAppsSelectionData = preferences.baselineUnlockableAppsSelectionData
+        state.baselineAlwaysAllowedManagedSelectionData = preferences.baselineAlwaysAllowedManagedSelectionData
+        state.baselineManagedAppsSelectionData = preferences.baselineManagedAppsSelectionData
         if let activeUnlocks { state.activeUnlocks = activeUnlocks }
         state.updatedAt = Date()
         save(state)
@@ -151,9 +149,8 @@ enum IntentStateStore {
             baselineEnabled: false,
             baselineScheduleEnabled: false,
             baselineScheduleData: nil,
-            baselineAlwaysAllowedSelectionData: nil,
-            baselineNeverBlockCategoriesSelectionData: nil,
-            baselineUnlockableAppsSelectionData: nil,
+            baselineAlwaysAllowedManagedSelectionData: nil,
+            baselineManagedAppsSelectionData: nil,
             activeUnlocks: [],
             updatedAt: Date()
         )

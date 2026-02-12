@@ -58,12 +58,9 @@ final class IntentBlockManager {
         let state = IntentStateStore.load()
         let activeUnlocks = (state?.activeUnlocks ?? []).filter { $0.expiresAt > now }
         var allowApps = forcedTokens
-        allowApps.formUnion(decodeApplications(from: preferences.baselineAlwaysAllowedSelectionData))
+        allowApps.formUnion(decodeApplications(from: preferences.baselineAlwaysAllowedManagedSelectionData))
         allowApps.formUnion(activeUnlocks.compactMap { $0.token })
-
-        let neverBlockCategories = decodeCategories(from: preferences.baselineNeverBlockCategoriesSelectionData)
-        applyAllowlist(allowedApps: allowApps,
-                       neverBlockCategories: neverBlockCategories)
+        applyAllowlist(allowedApps: allowApps)
         pruneExpiredUnlocks(activeUnlocks)
         IntentStateStore.syncFromPreferences(preferences, activeUnlocks: activeUnlocks)
     }
@@ -92,7 +89,7 @@ final class IntentBlockManager {
 
         // Ensure we have an index to match against.
         let preferences: Preferences = (try? modelContext.fetch(FetchDescriptor<Preferences>()))?.first ?? Preferences(hasConvertedDailyGoal: true)
-        IntentAppIndexStore.rebuild(from: preferences.baselineUnlockableAppsSelectionData)
+        IntentAppIndexStore.rebuild(from: preferences.baselineManagedAppsSelectionData)
 
         guard let entry = IntentAppIndexStore.resolve(prefix: query) else {
             // If there are multiple matches resolve() returns nil; we treat it as ambiguous when query not empty.
@@ -128,22 +125,11 @@ final class IntentBlockManager {
 
     private func applyProjectAllowlist(_ selection: FamilyActivitySelection, forced: Set<ManagedSettings.ApplicationToken>) {
         let allowedApps = selection.applicationTokens.union(forced)
-        applyAllowlist(allowedApps: allowedApps, neverBlockCategories: [])
+        applyAllowlist(allowedApps: allowedApps)
     }
 
-    private func applyAllowlist(allowedApps: Set<ManagedSettings.ApplicationToken>,
-                                neverBlockCategories: Set<ManagedSettings.ActivityCategoryToken>) {
-        // Primary policy: block all categories, allow specific apps. If categories are marked
-        // as “never block”, prefer a specific list that omits them (best effort).
-        if neverBlockCategories.isEmpty {
-            store.shield.applicationCategories = .all(except: allowedApps)
-        } else if let allCategoryTokens = allActivityCategoryTokens() {
-            let blocked = allCategoryTokens.subtracting(neverBlockCategories)
-            store.shield.applicationCategories = .specific(blocked, except: allowedApps)
-        } else {
-            // Fallback if we cannot enumerate categories on this device.
-            store.shield.applicationCategories = .all(except: allowedApps)
-        }
+    private func applyAllowlist(allowedApps: Set<ManagedSettings.ApplicationToken>) {
+        store.shield.applicationCategories = .all(except: allowedApps)
         store.shield.applications = nil
         store.shield.webDomains = nil
     }
@@ -165,12 +151,6 @@ final class IntentBlockManager {
         return selection.applicationTokens
     }
 
-    private func decodeCategories(from data: Data?) -> Set<ManagedSettings.ActivityCategoryToken> {
-        guard let data else { return [] }
-        guard let selection = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else { return [] }
-        return selection.categoryTokens
-    }
-
     private func pruneExpiredUnlocks(_ unlocks: [IntentUnlock]) {
         let valid = unlocks.filter { $0.expiresAt > Date() }
         IntentStateStore.replaceActiveUnlocks(valid)
@@ -186,15 +166,6 @@ final class IntentBlockManager {
         return schedule.isActive(at: now)
     }
 
-    /// Best-effort enumeration of all activity categories available on the device.
-    /// Returns nil when the framework does not expose them (e.g., simulator/mac).
-    private func allActivityCategoryTokens() -> Set<ManagedSettings.ActivityCategoryToken>? {
-        // The frameworks do not currently expose a public static list. We rely on a heuristic:
-        // create a FamilyActivitySelection with includeEntireCategory=true and read categoryTokens.
-        let selection = FamilyActivitySelection(includeEntireCategory: true)
-        let tokens = selection.categoryTokens
-        return tokens.isEmpty ? nil : tokens
-    }
 }
 
 private extension ManagedSettingsStore.Name {

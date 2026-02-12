@@ -3,7 +3,6 @@ import SwiftData
 import FamilyControls
 import ManagedSettings
 import UIKit
-import OSLog
 
 struct IntentSetupView: View {
     @Environment(\.modelContext) private var modelContext
@@ -12,12 +11,11 @@ struct IntentSetupView: View {
     let dismiss: () -> Void
     let onSaved: (() -> Void)?
 
-    @State private var alwaysAllowed = FamilyActivitySelection()
-    @State private var unlockableApps = FamilyActivitySelection()
-    @State private var neverBlockCategories = FamilyActivitySelection()
+    @State private var managedApps = FamilyActivitySelection()
+    @State private var alwaysAllowedTokens = Set<ManagedSettings.ApplicationToken>()
     @State private var isSaving = false
     @State private var showPicker = false
-    @State private var pickerMode: PickerMode = .alwaysAllowed
+    @State private var showingAlwaysAllowedPicker = false
     @State private var authDenied = false
 
     private var prefs: Preferences {
@@ -35,23 +33,29 @@ struct IntentSetupView: View {
 #if targetEnvironment(simulator)
                 simulatorWarning
 #else
-                selectionSection(title: "Always allowed apps",
-                                 subtitle: "These stay accessible even when Intent Mode blocks everything else.",
+                selectionSection(title: "Managed apps",
+                                 subtitle: "Pick the apps Monk is allowed to manage and unlock. Select all apps you want Monk to control.",
                                  buttonLabel: "Select Apps",
-                                 countLabel: selectedCountLabel(alwaysAllowed),
-                                 mode: .alwaysAllowed)
+                                 countLabel: selectedCountLabel(managedApps))
 
-                selectionSection(title: "Unlockable apps",
-                                 subtitle: "Apps you can unlock via typing and Shortcut/Siri.",
-                                 buttonLabel: "Select Unlockable Apps",
-                                 countLabel: selectedCountLabel(unlockableApps),
-                                 mode: .unlockable)
-
-                selectionSection(title: "Never block categories",
-                                 subtitle: "These categories stay accessible while Intent Mode is on.",
-                                 buttonLabel: "Select Categories",
-                                 countLabel: categoryCountLabel(neverBlockCategories),
-                                 mode: .neverBlock)
+                Button {
+                    showingAlwaysAllowedPicker = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Text("Always allowed apps")
+                            .font(.headline.weight(.semibold))
+                        Text(alwaysAllowedSummary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+                .disabled(managedApps.applicationTokens.isEmpty)
+                .opacity(managedApps.applicationTokens.isEmpty ? 0.6 : 1)
 
                 if authDenied {
                     VStack(spacing: 8) {
@@ -82,7 +86,20 @@ struct IntentSetupView: View {
                 }
             }
             .onAppear { loadSelections() }
-            .familyActivityPicker(isPresented: $showPicker, selection: pickerBinding)
+            .familyActivityPicker(isPresented: $showPicker, selection: $managedApps)
+            .onChange(of: managedApps) { _, _ in
+                syncAlwaysAllowedTokens()
+            }
+            .sheet(isPresented: $showingAlwaysAllowedPicker) {
+                ManagedAppsSelectionView(
+                    title: "Always Allowed",
+                    subtitle: "These apps stay accessible even when Intent Mode blocks everything else.",
+                    availableTokens: managedApps.applicationTokens,
+                    selectedTokens: $alwaysAllowedTokens,
+                    onDone: { showingAlwaysAllowedPicker = false },
+                    onCancel: { showingAlwaysAllowedPicker = false }
+                )
+            }
         }
     }
 }
@@ -102,21 +119,18 @@ private extension IntentSetupView {
     }
 
     func loadSelections() {
-        alwaysAllowed = decodeSelection(from: prefs.baselineAlwaysAllowedSelectionData) ?? FamilyActivitySelection()
-        unlockableApps = decodeSelection(from: prefs.baselineUnlockableAppsSelectionData) ?? FamilyActivitySelection()
-        neverBlockCategories = decodeSelection(from: prefs.baselineNeverBlockCategoriesSelectionData) ?? FamilyActivitySelection()
+        managedApps = decodeSelection(from: prefs.baselineManagedAppsSelectionData) ?? FamilyActivitySelection()
+        alwaysAllowedTokens = ManagedAppTokenCodec.decodeSelectionTokens(from: prefs.baselineAlwaysAllowedManagedSelectionData)
+        syncAlwaysAllowedTokens()
     }
 
     func saveSelections() async {
         await MainActor.run { isSaving = true }
-        prefs.baselineAlwaysAllowedSelectionData = encodeSelection(alwaysAllowed)
-        prefs.baselineUnlockableAppsSelectionData = encodeSelection(unlockableApps)
-        // Persist only category tokens for never block; zero apps to avoid unintended allowlist.
-        var categoriesOnly = FamilyActivitySelection()
-        categoriesOnly.categoryTokens = neverBlockCategories.categoryTokens
-        prefs.baselineNeverBlockCategoriesSelectionData = encodeSelection(categoriesOnly)
+        syncAlwaysAllowedTokens()
+        prefs.baselineManagedAppsSelectionData = encodeSelection(managedApps)
+        prefs.baselineAlwaysAllowedManagedSelectionData = ManagedAppTokenCodec.encodeSelection(from: alwaysAllowedTokens)
         modelContext.saveOrRollback()
-        IntentAppIndexStore.rebuild(from: prefs.baselineUnlockableAppsSelectionData)
+        IntentAppIndexStore.rebuild(from: prefs.baselineManagedAppsSelectionData)
 
         await MainActor.run {
             applyShields()
@@ -131,9 +145,9 @@ private extension IntentSetupView {
         return count == 0 ? "No apps selected" : "\(count) app\(count == 1 ? "" : "s") selected"
     }
 
-    func categoryCountLabel(_ selection: FamilyActivitySelection) -> String {
-        let count = selection.categoryTokens.count
-        return count == 0 ? "No categories selected" : "\(count) categor\(count == 1 ? "y" : "ies") selected"
+    var alwaysAllowedSummary: String {
+        let count = alwaysAllowedTokens.count
+        return count == 0 ? "No always-allowed apps" : "\(count) app\(count == 1 ? "" : "s") always allowed"
     }
 
     func openScreenTimeSettings() {
@@ -158,23 +172,17 @@ private extension IntentSetupView {
         )
     }
 
-    var pickerBinding: Binding<FamilyActivitySelection> {
-        switch pickerMode {
-        case .alwaysAllowed:
-            return $alwaysAllowed
-        case .unlockable:
-            return $unlockableApps
-        case .neverBlock:
-            return $neverBlockCategories
-        }
+    func syncAlwaysAllowedTokens() {
+        let managedSet = managedApps.applicationTokens
+        if alwaysAllowedTokens.isEmpty { return }
+        alwaysAllowedTokens = alwaysAllowedTokens.intersection(managedSet)
     }
 
     @ViewBuilder
     func selectionSection(title: String,
                           subtitle: String,
                           buttonLabel: String,
-                          countLabel: String,
-                          mode: PickerMode) -> some View {
+                          countLabel: String) -> some View {
         VStack(spacing: 8) {
             Text(title)
                 .font(.title3.weight(.semibold))
@@ -188,7 +196,6 @@ private extension IntentSetupView {
                     await MainActor.run {
                         authDenied = !approved
                         if approved {
-                            pickerMode = mode
                             showPicker = true
                         }
                     }
@@ -209,10 +216,4 @@ private extension IntentSetupView {
                 .frame(maxWidth: .infinity)
         }
     }
-}
-
-private enum PickerMode {
-    case alwaysAllowed
-    case unlockable
-    case neverBlock
 }

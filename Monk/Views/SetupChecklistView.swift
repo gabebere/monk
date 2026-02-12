@@ -9,7 +9,6 @@ import HealthKit
 struct SetupChecklistView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var auth: AuthManager
-    @EnvironmentObject private var revenueCat: RevenueCatService
     @State private var calendars: [CalendarDisplayInfo] = []
     @State private var calendarStatus: String?
     @State private var calendarBusy = false
@@ -120,7 +119,7 @@ struct SetupChecklistView: View {
 
     private var checklist: some View {
         VStack(spacing: 14) {
-            checklistRow(title: "Login", detail: "Sign in to sync your data and purchases.", status: auth.isAuthenticated ? .granted : .pending) {
+            checklistRow(title: "Login", detail: "Sign in to sync your data across devices.", status: auth.isAuthenticated ? .granted : .pending) {
                 // Auth handled elsewhere
             }
             .padding(.top, 4)

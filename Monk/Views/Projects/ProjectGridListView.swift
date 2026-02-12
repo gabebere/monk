@@ -7,6 +7,7 @@ struct ProjectGridListView: View {
     @AppStorage("projects.sortMode") private var sortModeRaw: String = ProjectSortMode.recent.rawValue
     @AppStorage("projects.showArchived") private var showArchived: Bool = false
     let embedInScroll: Bool
+    let showsCreateButton: Bool = false
 
     let projects: [Project]
     let onSelect: (Project) -> Void
@@ -55,12 +56,18 @@ private extension ProjectGridListView {
 
     var contentBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProjectDisplayToolbar(viewMode: viewMode,
-                                  sortMode: sortMode,
-                                  showArchived: showArchived,
-                                  onSetViewMode: { mode in viewModeRaw = mode.rawValue },
-                                  onToggleSort: toggleSortMode,
-                                  onToggleArchived: { showArchived.toggle() })
+            HStack(spacing: 10) {
+                ProjectDisplayToolbar(viewMode: viewMode,
+                                      sortMode: sortMode,
+                                      showArchived: showArchived,
+                                      onSetViewMode: { mode in viewModeRaw = mode.rawValue },
+                                      onToggleSort: toggleSortMode,
+                                      onToggleArchived: { showArchived.toggle() })
+                if showsCreateButton {
+                    Spacer(minLength: 0)
+                    createButton
+                }
+            }
 
             if filteredProjects.isEmpty {
                 emptyState
@@ -161,6 +168,22 @@ private extension ProjectGridListView {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    var createButton: some View {
+        Button(action: {
+            Haptics.heavy()
+            onCreate()
+        }) {
+            Image(systemName: "plus")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background(Color.white.opacity(0.14))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Create project")
     }
 
     func toggleSortMode() {

@@ -18,9 +18,8 @@ final class Preferences {
     var baselineEnabled: Bool = false
     var baselineScheduleEnabled: Bool = false
     var baselineScheduleData: Data?
-    var baselineAlwaysAllowedSelectionData: Data?
-    var baselineNeverBlockCategoriesSelectionData: Data?
-    var baselineUnlockableAppsSelectionData: Data?
+    @Attribute(originalName: "baselineAlwaysAllowedSelectionData") var baselineAlwaysAllowedManagedSelectionData: Data?
+    @Attribute(originalName: "baselineUnlockableAppsSelectionData") var baselineManagedAppsSelectionData: Data?
 
     init(weeklyGoalHours: Double = 0.0,
          discardShortSessions: Bool? = nil,
@@ -35,9 +34,8 @@ final class Preferences {
          baselineEnabled: Bool = false,
          baselineScheduleEnabled: Bool = false,
          baselineScheduleData: Data? = nil,
-         baselineAlwaysAllowedSelectionData: Data? = nil,
-         baselineNeverBlockCategoriesSelectionData: Data? = nil,
-         baselineUnlockableAppsSelectionData: Data? = nil) {
+         baselineAlwaysAllowedManagedSelectionData: Data? = nil,
+         baselineManagedAppsSelectionData: Data? = nil) {
         self.weeklyGoalHours = weeklyGoalHours
         self.discardShortSessions = discardShortSessions
         self.hasConvertedDailyGoal = hasConvertedDailyGoal
@@ -51,8 +49,7 @@ final class Preferences {
         self.baselineEnabled = baselineEnabled
         self.baselineScheduleEnabled = baselineScheduleEnabled
         self.baselineScheduleData = baselineScheduleData
-        self.baselineAlwaysAllowedSelectionData = baselineAlwaysAllowedSelectionData
-        self.baselineNeverBlockCategoriesSelectionData = baselineNeverBlockCategoriesSelectionData
-        self.baselineUnlockableAppsSelectionData = baselineUnlockableAppsSelectionData
+        self.baselineAlwaysAllowedManagedSelectionData = baselineAlwaysAllowedManagedSelectionData
+        self.baselineManagedAppsSelectionData = baselineManagedAppsSelectionData
     }
 }
