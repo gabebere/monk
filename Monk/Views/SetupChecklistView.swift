@@ -72,42 +72,65 @@ struct SetupChecklistView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showCalendarPicker) {
                 NavigationStack {
-                    VStack(spacing: 16) {
-                        Text("Choose a calendar")
-                            .font(.headline)
-                            .padding(.top, 12)
-
-                        Picker("Calendar", selection: Binding(
-                            get: { selectedCalendarId ?? calendars.first?.id ?? "" },
-                            set: { newValue in selectedCalendarId = newValue }
-                        )) {
-                            ForEach(calendars, id: \.id) { calendar in
-                                Text(calendar.title).tag(calendar.id)
+                    Group {
+                        if calendarBusy {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(.black)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if calendars.isEmpty {
+                            Text("No writable calendars available.")
+                                .font(.footnote)
+                                .foregroundStyle(.black.opacity(0.7))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            List(calendars, id: \.id) { calendar in
+                                Button {
+                                    selectedCalendarId = calendar.id
+                                } label: {
+                                    HStack {
+                                        Text(calendar.title)
+                                            .foregroundStyle(.black)
+                                        Spacer()
+                                        if selectedCalendarId == calendar.id {
+                                            Image(systemName: "checkmark")
+                                                .font(.body.weight(.semibold))
+                                                .foregroundStyle(.black)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .listRowBackground(Color.clear)
                             }
+                            .scrollContentBackground(.hidden)
+                            .listStyle(.insetGrouped)
                         }
-                        .pickerStyle(.wheel)
-                        .frame(maxHeight: 280)
-
-                        Button("Save") {
-                            if let sel = selectedCalendarId,
-                               let calendar = calendars.first(where: { $0.id == sel }) {
-                                Task { await selectCalendar(calendar) }
-                            }
-                            showCalendarPicker = false
-                        }
-                        .font(.headline.weight(.semibold))
-                        .padding(.vertical, 14)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .contentShape(Rectangle())
-                        .background(Color.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 0)
-                        .padding(.bottom, 12)
                     }
-                    .padding(.horizontal, 12)
-                    .background(AnimatingBackground().ignoresSafeArea())
+                    .navigationTitle("Choose a calendar")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                showCalendarPicker = false
+                            }
+                            .foregroundStyle(.black)
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                if let sel = selectedCalendarId,
+                                   let calendar = calendars.first(where: { $0.id == sel }) {
+                                    Task { await selectCalendar(calendar) }
+                                }
+                                showCalendarPicker = false
+                            }
+                            .disabled(calendars.isEmpty || selectedCalendarId == nil || calendarBusy)
+                            .foregroundStyle(.black)
+                        }
+                    }
                 }
                 .presentationDetents([.fraction(0.5), .large])
+                .presentationBackground(.ultraThinMaterial)
+                .preferredColorScheme(.light)
             }
         }
         .ignoresSafeArea()
@@ -311,7 +334,8 @@ struct SetupChecklistView: View {
         guard HKHealthStore.isHealthDataAvailable(),
               let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
             await MainActor.run {
-                healthStatus = .denied
+                healthStatus = .granted
+                healthBusy = false
             }
             return
         }
@@ -327,24 +351,37 @@ struct SetupChecklistView: View {
             await refreshHealthStatus()
         } catch {
             await MainActor.run {
-                healthStatus = .denied
+                healthStatus = .pending
                 healthBusy = false
             }
         }
     }
 
     private func refreshHealthStatus() async {
+        let hasEnabledHealthImport = prefs.healthIncludeWorkouts || prefs.healthIncludeSleepAsleep || prefs.healthIncludeSleepInBed
+        if hasEnabledHealthImport {
+            await MainActor.run {
+                healthStatus = .granted
+                healthBusy = false
+            }
+            return
+        }
+
         guard HKHealthStore.isHealthDataAvailable(),
               let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
-            await MainActor.run { healthStatus = .denied }
+            await MainActor.run {
+                healthStatus = .granted
+                healthBusy = false
+            }
             return
         }
         let store = HKHealthStore()
         let sleepStatus = store.authorizationStatus(for: sleepType)
         let workoutStatus = store.authorizationStatus(for: HKObjectType.workoutType())
-        let status = combineHealthStatus(sleepStatus, workoutStatus)
+        let hasDeterminedStatus = sleepStatus != .notDetermined || workoutStatus != .notDetermined
         await MainActor.run {
-            healthStatus = mapHealthStatus(status)
+            // HealthKit read-access verification can be ambiguous; show success once a choice was made.
+            healthStatus = hasDeterminedStatus ? .granted : .pending
             healthBusy = false
         }
     }
@@ -395,26 +432,6 @@ struct SetupChecklistView: View {
         @unknown default:
             return .pending
         }
-    }
-
-    private func mapHealthStatus(_ status: HKAuthorizationStatus) -> ChecklistStatus {
-        switch status {
-        case .sharingAuthorized:
-            return .granted
-        case .sharingDenied:
-            return .denied
-        case .notDetermined:
-            return .pending
-        @unknown default:
-            return .pending
-        }
-    }
-
-    private func combineHealthStatus(_ lhs: HKAuthorizationStatus, _ rhs: HKAuthorizationStatus) -> HKAuthorizationStatus {
-        if lhs == .sharingDenied || rhs == .sharingDenied { return .sharingDenied }
-        if lhs == .sharingAuthorized && rhs == .sharingAuthorized { return .sharingAuthorized }
-        if lhs == .notDetermined || rhs == .notDetermined { return .notDetermined }
-        return .notDetermined
     }
 
     private func prefetchCalendarsIfNeeded() async {

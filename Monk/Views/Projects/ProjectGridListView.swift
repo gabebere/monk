@@ -20,13 +20,21 @@ struct ProjectGridListView: View {
     var body: some View {
         Group {
             if embedInScroll {
-                ScrollView(showsIndicators: false) {
+                if filteredProjects.isEmpty {
                     contentBody
                         .padding(.top, scrollTopInset)
                         .padding(.bottom, scrollBottomInset)
                         .padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        contentBody
+                            .padding(.top, scrollTopInset)
+                            .padding(.bottom, scrollBottomInset)
+                            .padding(.horizontal, 12)
+                    }
+                    .mask(verticalFadeMask)
                 }
-                .mask(verticalFadeMask)
             } else {
                 contentBody
             }
@@ -63,7 +71,9 @@ private extension ProjectGridListView {
                                   onToggleArchived: { showArchived.toggle() })
 
             if filteredProjects.isEmpty {
+                Spacer(minLength: 0)
                 emptyState
+                Spacer(minLength: 0)
             } else {
                 Group {
                     switch viewMode {
@@ -75,6 +85,7 @@ private extension ProjectGridListView {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     var gridView: some View {
@@ -160,7 +171,8 @@ private extension ProjectGridListView {
             .buttonStyle(.plain)
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     func toggleSortMode() {

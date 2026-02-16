@@ -28,7 +28,6 @@ struct ContentView: View {
     @State private var manager: FocusManager?
     @State private var selectedTab: AppTab = .home
     @State private var requirePaywall = false
-    @State private var didSeedDemoData = false
     @State private var pendingOnboardingPaywall = false
 
     var body: some View {
@@ -138,12 +137,6 @@ struct ContentView: View {
 #if canImport(GoogleSignIn)
                         _ = GIDSignIn.sharedInstance.handle(url)
 #endif
-                    }
-                    .task {
-                        if !didSeedDemoData {
-                            didSeedDemoData = true
-                            DemoDataSeeder.seedIfNeeded(modelContext: modelContext)
-                        }
                     }
                 } else {
                     ProgressView()
