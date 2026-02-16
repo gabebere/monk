@@ -6,7 +6,6 @@
 //
 
 import OSLog
-import RevenueCat
 import SwiftData
 import SwiftUI
 import UIKit
@@ -26,7 +25,6 @@ struct MonkApp: App {
 
     init() {
         HardBlockStateStore.bootstrap()
-        configureRevenueCat()
         Analytics.configure()
 #if canImport(UserJot)
         UserJot.setup(projectId: "cmiptfvv400yb15lbz1dzqbey")
@@ -76,16 +74,6 @@ struct MonkApp: App {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
-    }
-}
-
-private extension MonkApp {
-    func configureRevenueCat() {
-        Purchases.logLevel = .warn
-
-        Purchases.configure(
-            with: .init(withAPIKey: "appl_MdQJjbrjYFxzEaabiQbrRLrmDZc")
-        )
     }
 }
 

@@ -5,11 +5,8 @@
 //  Created by Gabriel Berezovsky on 25/8/25.
 //
 
-import RevenueCat
-import RevenueCatUI
 import SwiftData
 import SwiftUI
-import Combine
 import UIKit
 #if canImport(GoogleSignIn)
 import GoogleSignIn
@@ -18,17 +15,12 @@ import GoogleSignIn
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var authManager = AuthManager()
-    @StateObject private var revenueCat = RevenueCatService()
-    @StateObject private var entitlementSync = EntitlementSyncService()
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @AppStorage("hasCompletedSetupChecklist") private var hasCompletedSetupChecklist = false
     @State private var manager: FocusManager?
     @State private var selectedTab: AppTab = .home
-    @State private var requirePaywall = false
-    @State private var pendingOnboardingPaywall = false
 
     var body: some View {
         Group {
@@ -40,19 +32,11 @@ struct ContentView: View {
                     hasCompletedSetupChecklist = true
                 }
                 .environmentObject(authManager)
-                .environmentObject(revenueCat)
             } else if !hasSeenOnboarding {
-                OnboardingStoryView { completion in
+                OnboardingStoryView {
                     hasSeenOnboarding = true
-                    if completion.requestPricing {
-                        pendingOnboardingPaywall = true
-                        if authManager.isAuthenticated && !revenueCat.isPro {
-                            requirePaywall = true
-                        }
-                    }
                 }
                 .environmentObject(authManager)
-                .environmentObject(revenueCat)
             } else if authManager.isAuthenticated {
                 if let manager {
                     TabView(selection: $selectedTab) {
@@ -105,34 +89,7 @@ struct ContentView: View {
                         }
                     }
                     .environmentObject(manager)
-                    .environmentObject(revenueCat)
                     .environmentObject(authManager)
-                    .environmentObject(entitlementSync)
-                    .onAppear {
-                        updatePaywallRequirement()
-                    }
-                    .onChange(of: revenueCat.isPro) { _, _ in
-                        entitlementSync.updateFromRevenueCat(isPro: revenueCat.isPro, userId: authManager.currentUserId)
-                        updatePaywallRequirement()
-                    }
-                    .onChange(of: authManager.isAuthenticated) { _, _ in
-                        updatePaywallRequirement()
-                        Task {
-                            if authManager.isAuthenticated, let userID = authManager.currentUserId {
-                                await revenueCat.logIn(userId: userID)
-                            } else {
-                                await revenueCat.logOut()
-                            }
-                        }
-                    }
-                    .fullScreenCover(isPresented: $requirePaywall) {
-                        RevenueCatPaywallView(onClose: {
-                            updatePaywallRequirement()
-                        })
-                            .environmentObject(revenueCat)
-                            .environmentObject(entitlementSync)
-                            .interactiveDismissDisabled(!hasEntitlement)
-                    }
                     .onOpenURL { url in
 #if canImport(GoogleSignIn)
                         _ = GIDSignIn.sharedInstance.handle(url)
@@ -153,8 +110,6 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                revenueCat.refresh()
-                updatePaywallRequirement()
                 Task {
                     await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext)
                 }
@@ -175,29 +130,6 @@ struct ContentView: View {
 }
 
 private extension ContentView {
-    func updatePaywallRequirement() {
-        if pendingOnboardingPaywall && authManager.isAuthenticated && !(revenueCat.isPro || entitlementSync.isEntitled) {
-            pendingOnboardingPaywall = false
-            requirePaywall = true
-            return
-        }
-        if revenueCat.isPro {
-            pendingOnboardingPaywall = false
-        }
-        requirePaywall = authManager.isAuthenticated && !(revenueCat.isPro || entitlementSync.isEntitled)
-    }
-
-    var hasEntitlement: Bool {
-        revenueCat.isPro || entitlementSync.isEntitled
-    }
-
-    var calendarLoggingEnabledOnThisDevice: Bool {
-        if let value = UserDefaults.standard.object(forKey: "calendar.logging.enabled") as? Bool {
-            return value
-        }
-        return true
-    }
-
     var shouldShowProjectsTab: Bool {
         !(UIDevice.current.userInterfaceIdiom == .pad &&
           horizontalSizeClass == .regular &&

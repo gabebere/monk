@@ -179,8 +179,6 @@ struct HomeView: View {
 }
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
-    @EnvironmentObject private var revenueCat: RevenueCatService
-    @EnvironmentObject private var entitlementSync: EntitlementSyncService
     @Environment(\.modelContext) private var modelContext
     @Query private var prefsList: [Preferences]
     let selectedTask: FocusTask?
@@ -198,11 +196,6 @@ private struct TimerCard: View {
     @State private var showStopDetails: Bool = false
     @State private var stoppedSession: FocusSession? = nil
     @State private var showingProjectPicker: Bool = false
-    @State private var showingPaywall = false
-
-    private var hasEntitlement: Bool {
-        revenueCat.isPro || entitlementSync.isEntitled
-    }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -338,16 +331,6 @@ private struct TimerCard: View {
                 startSession(with: selection, task: selectedTask)
             }
         }
-        .fullScreenCover(isPresented: $showingPaywall) {
-            RevenueCatPaywallView(onClose: {
-                if hasEntitlement {
-                    showingPaywall = false
-                }
-            })
-                .environmentObject(revenueCat)
-                .environmentObject(entitlementSync)
-                .interactiveDismissDisabled(!hasEntitlement)
-        }
         .task {
             if focus.currentSession == nil { restartIdleAnimation() }
         }
@@ -383,17 +366,7 @@ private struct TimerCard: View {
     }
 
     private func handlePrimaryTap() {
-        // If user is entitled via RevenueCat or synced flag, proceed; otherwise show paywall.
-        if revenueCat.isPro || entitlementSync.isEntitled {
-            animateStartAndBeginSession()
-        } else {
-            Analytics.track("paywall_viewed", [
-                "offering_id": revenueCat.activeOffering?.identifier ?? "unknown",
-                "has_paywall": revenueCat.activeOffering?.paywall != nil,
-                "entitlement_active": revenueCat.isPro
-            ])
-            showingPaywall = true
-        }
+        animateStartAndBeginSession()
     }
 
     private func stopSession() {

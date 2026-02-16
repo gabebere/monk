@@ -6,8 +6,6 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var focus: FocusManager
     @EnvironmentObject private var auth: AuthManager
-    @EnvironmentObject private var revenueCat: RevenueCatService
-    @EnvironmentObject private var entitlementSync: EntitlementSyncService
     @Query private var prefsList: [Preferences]
     @Query(sort: [SortDescriptor(\FocusSession.startedAt, order: .forward)]) private var allSessions: [FocusSession]
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .forward)]) private var projects: [Project]
@@ -85,7 +83,7 @@ struct SettingsView: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showingOnboardingPreview) {
-            OnboardingStoryView { _ in
+            OnboardingStoryView {
                 showingOnboardingPreview = false
             }
             .environmentObject(auth)
@@ -498,7 +496,7 @@ private extension SettingsView {
             VStack(alignment: .leading, spacing: 10) {
                 Button {
                     Haptics.heavy()
-                    Analytics.track("debug_test_event", ["entitlement_active": revenueCat.isPro])
+                    Analytics.track("debug_test_event", ["monetization_model": "paid_app"])
                 } label: {
                     Text("Send test analytics event")
                         .font(.footnote.weight(.semibold))
@@ -544,26 +542,6 @@ private extension SettingsView {
                                 .stroke(Color.white.opacity(0.14), lineWidth: 1)
                         )
                         .foregroundStyle(.white.opacity(0.9))
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    Haptics.heavy()
-                    Task {
-                        entitlementSync.clear()
-                        await revenueCat.resetForDebug()
-                    }
-                } label: {
-                    Text("Reset purchases (debug)")
-                        .font(.footnote.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.red.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                        )
-                        .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
             }
