@@ -5,22 +5,31 @@ import UIKit
 
 struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Query private var prefsList: [Preferences]
+    @AppStorage("tasks.showCompleted") private var showCompleted = false
+    @AppStorage("projects.viewMode") private var projectViewModeRaw: String = ProjectViewMode.grid.rawValue
+    @AppStorage("projects.sortMode") private var projectSortModeRaw: String = ProjectSortMode.recent.rawValue
+    @AppStorage("projects.showArchived") private var showArchivedProjects: Bool = false
     @Query(sort: [SortDescriptor(\FocusTask.updatedAt, order: .reverse)]) private var focusTasks: [FocusTask]
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
     @State private var taskEditorRoute: TaskEditorRoute?
     @State private var selectedTaskID: UUID?
     @State private var showingNewProject: Bool = false
     @State private var projectDetail: Project?
+    @State private var selectedHomeSection: HomeSection = .tasks
 
-    private var prefs: Preferences {
-        if let existing = prefsList.first { return existing }
-        let created = Preferences(hasConvertedDailyGoal: true)
-        modelContext.insert(created)
-        return created
+    private enum HomeSection {
+        case projects
+        case tasks
+
+        var title: String {
+            switch self {
+            case .projects:
+                return "Projects"
+            case .tasks:
+                return "Tasks"
+            }
+        }
     }
 
     private var selectedTask: FocusTask? {
@@ -38,9 +47,10 @@ struct HomeView: View {
         static let listTopContentInset: CGFloat = 24      // clearance so fade does not cover first row
     }
 
-    private var projectsPane: some View {
+    private func projectsPane(embedInScroll: Bool) -> some View {
         ProjectGridListView(
-            embedInScroll: true,
+            embedInScroll: embedInScroll,
+            showsToolbar: false,
             projects: projects,
             onSelect: { project in
                 projectDetail = project
@@ -52,22 +62,26 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    private var tasksPane: some View {
+    private var splitTasksPane: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                if FeatureFlags.tasksV1Enabled {
-                    ScheduledTasksView(
-                        selectedTaskID: $selectedTaskID,
-                        onAdd: { taskEditorRoute = .create(defaultProject: nil) },
-                        onEdit: { task in taskEditorRoute = .edit(task) }
-                    )
-                }
-            }
+            tasksPane
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.top, LandscapeLayout.listTopContentInset)
         }
         .mask(verticalFadeMask)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var tasksPane: some View {
+        if FeatureFlags.tasksV1Enabled {
+            ScheduledTasksView(
+                selectedTaskID: $selectedTaskID,
+                onAdd: { taskEditorRoute = .create(defaultProject: nil) },
+                onEdit: { task in taskEditorRoute = .edit(task) },
+                showsHeader: false
+            )
+        }
     }
 
     private var verticalFadeMask: some View {
@@ -97,6 +111,118 @@ struct HomeView: View {
         )
     }
 
+    private var projectViewMode: ProjectViewMode {
+        ProjectViewMode(rawValue: projectViewModeRaw) ?? .grid
+    }
+
+    private var projectSortMode: ProjectSortMode {
+        ProjectSortMode(rawValue: projectSortModeRaw) ?? .recent
+    }
+
+    private var sectionHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            HStack(spacing: 8) {
+                sectionButton(.projects)
+                Text("|")
+                    .foregroundStyle(.white.opacity(0.45))
+                sectionButton(.tasks)
+            }
+            .font(.title3.weight(.semibold))
+
+            Spacer()
+
+            if selectedHomeSection == .tasks {
+                Button(action: {
+                    Haptics.heavy()
+                    withAnimation(.none) {
+                        showCompleted.toggle()
+                    }
+                }) {
+                    Text(showCompleted ? "Hide" : "Show all")
+                        .font(.footnote.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.mini)
+                .tint(Color.white.opacity(0.2))
+                .foregroundStyle(.white)
+
+                circularPlusButton(action: {
+                    Haptics.heavy()
+                    taskEditorRoute = .create(defaultProject: nil)
+                })
+                .guidedTutorialAnchor(.homeNewTaskButton)
+            } else {
+                projectHeaderIconButton(systemName: "square.grid.2x2", isActive: projectViewMode == .grid) {
+                    guard projectViewMode != .grid else { return }
+                    Haptics.soft()
+                    projectViewModeRaw = ProjectViewMode.grid.rawValue
+                }
+
+                projectHeaderIconButton(systemName: "list.bullet", isActive: projectViewMode == .list) {
+                    guard projectViewMode != .list else { return }
+                    Haptics.soft()
+                    projectViewModeRaw = ProjectViewMode.list.rawValue
+                }
+
+                projectHeaderIconButton(systemName: projectSortMode == .recent ? "clock.arrow.circlepath" : "textformat.abc", isActive: true) {
+                    Haptics.soft()
+                    projectSortModeRaw = (projectSortMode == .recent ? ProjectSortMode.name : ProjectSortMode.recent).rawValue
+                }
+
+                projectHeaderIconButton(systemName: showArchivedProjects ? "archivebox.fill" : "archivebox", isActive: showArchivedProjects) {
+                    Haptics.soft()
+                    showArchivedProjects.toggle()
+                }
+
+                circularPlusButton(action: {
+                    Haptics.heavy()
+                    showingNewProject = true
+                })
+                .guidedTutorialAnchor(.projectsAddButton)
+            }
+        }
+    }
+
+    private func circularPlusButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(Color.white.opacity(0.18))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func projectHeaderIconButton(systemName: String,
+                                         isActive: Bool,
+                                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isActive ? .white : .white.opacity(0.6))
+                .frame(width: 22, height: 22)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sectionButton(_ section: HomeSection) -> some View {
+        Button(section.title) {
+            guard section != selectedHomeSection else { return }
+            Haptics.soft()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedHomeSection = section
+                if section == .projects {
+                    selectedTaskID = nil
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selectedHomeSection == section ? .white : .white.opacity(0.52))
+    }
+
     var body: some View {
         GeometryReader { outer in
             let isLandscapeSplitLayout = shouldUseSplitLayout(for: outer.size)
@@ -114,9 +240,14 @@ struct HomeView: View {
                                 .frame(maxWidth: LandscapeLayout.heroMaxWidth, minHeight: LandscapeLayout.heroHeight)
                                 .position(x: outer.size.width / 2, y: heroTop + LandscapeLayout.heroHeight / 2)
 
-                            HStack(alignment: .top, spacing: 12) {
-                                projectsPane
-                                tasksPane
+                            VStack(alignment: .leading, spacing: 12) {
+                                sectionHeader
+
+                                if selectedHomeSection == .projects {
+                                    projectsPane(embedInScroll: true)
+                                } else {
+                                    splitTasksPane
+                                }
                             }
                             .padding(.top, listsTop)
                             .padding(.horizontal, 12)
@@ -130,13 +261,14 @@ struct HomeView: View {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 12) {
                                 TimerCard(selectedTask: selectedTask)
-                                if FeatureFlags.tasksV1Enabled {
-                                    ScheduledTasksView(
-                                        selectedTaskID: $selectedTaskID,
-                                        onAdd: { taskEditorRoute = .create(defaultProject: nil) },
-                                        onEdit: { task in taskEditorRoute = .edit(task) }
-                                    )
+
+                                sectionHeader
                                     .padding(.top, 32)
+
+                                if selectedHomeSection == .projects {
+                                    projectsPane(embedInScroll: false)
+                                } else {
+                                    tasksPane
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .top)
@@ -150,8 +282,7 @@ struct HomeView: View {
                 .animation(.easeInOut(duration: 0.28), value: isLandscapeSplitLayout)
             }
         }
-        .navigationTitle("Welcome to Monk.")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Home")
         .sheet(item: $taskEditorRoute) { route in
             switch route.mode {
             case .create(let defaultProject):
@@ -166,14 +297,10 @@ struct HomeView: View {
         .sheet(item: $projectDetail) { project in
             ProjectDetailView(project: project)
         }
-    }
-
-    private var headerTitle: some View {
-        HStack {
-            Text("Welcome to Monk.")
-                .font(.largeTitle.bold())
-                .foregroundStyle(.white)
-            Spacer()
+        .onAppear {
+            if !FeatureFlags.tasksV1Enabled {
+                selectedHomeSection = .projects
+            }
         }
     }
 }
@@ -240,6 +367,7 @@ private struct TimerCard: View {
                 .padding(.horizontal, 2)
                 .padding(.vertical, 2)
                 .accessibilityLabel("Start focusing")
+                .guidedTutorialAnchor(.homeTimeToFocusButton)
                 .background(
                     ZStack {
                         Ellipse()

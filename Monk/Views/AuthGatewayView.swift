@@ -124,17 +124,11 @@ struct AuthGatewayView: View {
                         .keyboardType(.emailAddress)
                         .autocorrectionDisabled(true)
                         .textInputAutocapitalization(.never)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .textFieldStyle(.roundedBorder)
 
                     SecureField("Password", text: $password)
                         .textContentType(.password)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .textFieldStyle(.roundedBorder)
 
                     if let passwordError {
                         Text(passwordError)
@@ -154,11 +148,12 @@ struct AuthGatewayView: View {
                                 .font(.headline.weight(.semibold))
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.white.opacity(0.14))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.roundedRectangle)
+                    .controlSize(.large)
+                    .tint(Color.white.opacity(0.2))
+                    .foregroundStyle(.white)
                     .disabled(email.isEmpty || password.isEmpty || passwordBusy)
 
                     Spacer()

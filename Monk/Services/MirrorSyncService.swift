@@ -97,36 +97,71 @@ final class MirrorSyncService {
     // MARK: - Private helpers
 
     private func ensureSubscription() async {
-        // Clean up any existing mirror subscriptions (alerting or otherwise) and recreate a single silent one.
-        if let all = try? await database.allSubscriptions() {
+        do {
+            let all = try await database.allSubscriptions()
+            var shouldCreateSubscription = true
+
+            if let current = all.first(where: { $0.subscriptionID == subscriptionID }),
+               let querySub = current as? CKQuerySubscription,
+               isDesiredMirrorSubscription(querySub) {
+                shouldCreateSubscription = false
+            }
+
             for sub in all {
-                let isMirrorType = (sub is CKQuerySubscription) &&
-                    (sub as? CKQuerySubscription)?.recordType == MirrorEventPayload.recordType
-                let alertText = (sub.notificationInfo?.alertBody ?? "").lowercased()
-                let hasMirrorAlert = alertText.contains("mirror your focus session")
-                    || (sub.notificationInfo?.title ?? "").lowercased().contains("mirror your focus session")
-                    || (sub.notificationInfo?.subtitle ?? "").lowercased().contains("mirror your focus session")
-                if isMirrorType || hasMirrorAlert {
-                    logger.debug("Deleting existing mirror subscription \(sub.subscriptionID, privacy: .public)")
+                let isCanonical = sub.subscriptionID == subscriptionID
+                let isMirrorType = (sub as? CKQuerySubscription)?.recordType == MirrorEventPayload.recordType
+                let isLegacyAlert = containsLegacyMirrorAlert(sub)
+
+                if isCanonical {
+                    if shouldCreateSubscription {
+                        logger.debug("Replacing outdated mirror subscription \(sub.subscriptionID, privacy: .public)")
+                        _ = try? await database.deleteSubscription(withID: sub.subscriptionID)
+                    }
+                    continue
+                }
+
+                if isMirrorType || isLegacyAlert {
+                    logger.debug("Deleting legacy mirror subscription \(sub.subscriptionID, privacy: .public)")
                     _ = try? await database.deleteSubscription(withID: sub.subscriptionID)
                 }
             }
-        }
 
-        let subscription = CKQuerySubscription(recordType: MirrorEventPayload.recordType,
-                                               predicate: NSPredicate(value: true),
-                                               subscriptionID: subscriptionID,
-                                               options: [.firesOnRecordCreation])
-        let info = CKSubscription.NotificationInfo()
-        info.shouldSendContentAvailable = true // silent push only
-        subscription.notificationInfo = info
+            guard shouldCreateSubscription else {
+                logger.debug("Mirror subscription already configured")
+                return
+            }
 
-        do {
+            let subscription = CKQuerySubscription(recordType: MirrorEventPayload.recordType,
+                                                   predicate: NSPredicate(value: true),
+                                                   subscriptionID: subscriptionID,
+                                                   options: [.firesOnRecordCreation])
+            let info = CKSubscription.NotificationInfo()
+            info.shouldSendContentAvailable = true // silent push only
+            subscription.notificationInfo = info
+
             _ = try await database.save(subscription)
             logger.debug("Mirror subscription created")
         } catch {
-            logger.error("Failed to create mirror subscription: \(error.localizedDescription, privacy: .public)")
+            logger.error("Failed to ensure mirror subscription: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private func isDesiredMirrorSubscription(_ subscription: CKQuerySubscription) -> Bool {
+        guard subscription.recordType == MirrorEventPayload.recordType else { return false }
+        let info = subscription.notificationInfo
+        return info?.shouldSendContentAvailable == true &&
+            info?.alertBody == nil &&
+            info?.title == nil &&
+            info?.subtitle == nil
+    }
+
+    private func containsLegacyMirrorAlert(_ subscription: CKSubscription) -> Bool {
+        let alertBody = subscription.notificationInfo?.alertBody?.lowercased() ?? ""
+        let title = subscription.notificationInfo?.title?.lowercased() ?? ""
+        let subtitle = subscription.notificationInfo?.subtitle?.lowercased() ?? ""
+        return alertBody.contains("mirror your focus session") ||
+            title.contains("mirror your focus session") ||
+            subtitle.contains("mirror your focus session")
     }
 
     /// Remove any pending/delivered legacy notifications that used alert text.
@@ -348,8 +383,8 @@ final class MirrorSyncService {
         }
 
         let content = UNMutableNotificationContent()
-        content.title = "Shields applied on this device."
-        content.body = "Enjoy your focus :)"
+        content.title = "Open Monk to finish shield setup."
+        content.body = reason
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: "mirror.shieldFailure.\(UUID().uuidString)",

@@ -7,6 +7,7 @@ struct ProjectGridListView: View {
     @AppStorage("projects.sortMode") private var sortModeRaw: String = ProjectSortMode.recent.rawValue
     @AppStorage("projects.showArchived") private var showArchived: Bool = false
     let embedInScroll: Bool
+    var showsToolbar: Bool = true
 
     let projects: [Project]
     let onSelect: (Project) -> Void
@@ -63,12 +64,14 @@ private extension ProjectGridListView {
 
     var contentBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProjectDisplayToolbar(viewMode: viewMode,
-                                  sortMode: sortMode,
-                                  showArchived: showArchived,
-                                  onSetViewMode: { mode in viewModeRaw = mode.rawValue },
-                                  onToggleSort: toggleSortMode,
-                                  onToggleArchived: { showArchived.toggle() })
+            if showsToolbar {
+                ProjectDisplayToolbar(viewMode: viewMode,
+                                      sortMode: sortMode,
+                                      showArchived: showArchived,
+                                      onSetViewMode: { mode in viewModeRaw = mode.rawValue },
+                                      onToggleSort: toggleSortMode,
+                                      onToggleArchived: { showArchived.toggle() })
+            }
 
             if filteredProjects.isEmpty {
                 Spacer(minLength: 0)
@@ -151,28 +154,30 @@ private extension ProjectGridListView {
     }
 
     var emptyState: some View {
-        VStack(spacing: 12) {
-            Text("No projects yet.")
-                .font(.headline)
-                .foregroundStyle(.white)
+        ContentUnavailableView {
+            Label("No projects yet.", systemImage: "square.grid.2x2")
+                .font(.title3.weight(.semibold))
+        } description: {
             Text("Create one to start tracking your focus.")
-                .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.72))
+        } actions: {
             Button {
                 Haptics.heavy()
                 onCreate()
             } label: {
                 Label("New Project", systemImage: "plus.circle.fill")
                     .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.14), in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.regular)
+            .tint(Color.white.opacity(0.24))
+            .foregroundStyle(.white)
+            .guidedTutorialAnchor(.projectsEmptyCreateButton)
         }
+        .foregroundStyle(.white)
         .padding(16)
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     func toggleSortMode() {

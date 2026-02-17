@@ -1,195 +1,149 @@
 import SwiftUI
-import UIKit
 
-/// Story-style onboarding (tap left/right) with four narrative screens.
 struct OnboardingStoryView: View {
-    enum Step: Int, CaseIterable {
-        case timeIdentity
-        case attentionConstraint
-        case focusSkill
-        case completion
-
-        var isLast: Bool { self == .completion }
+    struct Scene: Identifiable {
+        let id: Int
+        let symbol: String
+        let title: String
+        let body: String
     }
 
     let onFinish: () -> Void
 
-    @State private var step: Step = .timeIdentity
+    @State private var page = 0
+
+    private let scenes: [Scene] = [
+        Scene(
+            id: 0,
+            symbol: "scope",
+            title: "Pick what matters.",
+            body: "Create a project, define one task, and point your attention there."
+        ),
+        Scene(
+            id: 1,
+            symbol: "eye.trianglebadge.exclamationmark",
+            title: "Protect your attention.",
+            body: "Monk helps you reduce distractions so your time stays on purpose."
+        ),
+        Scene(
+            id: 2,
+            symbol: "chart.line.uptrend.xyaxis",
+            title: "Let focus compound.",
+            body: "Every session is tracked to your project and synced to calendar so progress is visible."
+        )
+    ]
 
     var body: some View {
         ZStack {
             AnimatingBackground()
+                .ignoresSafeArea()
 
-            GeometryReader { proxy in
-                if let slide = slide(for: step) {
-                    ZStack(alignment: .topLeading) {
-                        VStack(alignment: .center, spacing: 14) {
-                            Text(slide.headline)
-                                .font(.system(size: 30, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.95))
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, slide.titleTopPadding)
-                        .frame(maxWidth: .infinity, alignment: .center)
+            VStack(spacing: 20) {
+                Spacer(minLength: 48)
 
-                        HStack(alignment: .center, spacing: 0) {
-                            VStack(alignment: .center, spacing: 12) {
-                                Text(slide.body)
-                                    .font(.system(size: 20, weight: .regular, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.72))
-                                    .lineSpacing(6)
-                                    .multilineTextAlignment(.center)
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 24)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                TabView(selection: $page) {
+                    ForEach(Array(scenes.enumerated()), id: \.offset) { index, scene in
+                        OnboardingSceneCard(scene: scene, isActive: page == index)
+                            .tag(index)
+                            .padding(.horizontal, 4)
                     }
-                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-                } else {
-                    Color.clear
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .onAppear { finish() }
                 }
-            }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(maxHeight: 440)
 
-            gestureOverlay
-        }
-        .overlay(alignment: .top) {
-            GeometryReader { proxy in
-                pageIndicator(for: step)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24)
-                    .padding(.top, proxy.size.height * 0.9)
-                    .allowsHitTesting(false)
+                HStack(spacing: 6) {
+                    ForEach(0..<scenes.count, id: \.self) { index in
+                        Capsule()
+                            .fill(Color.white.opacity(index == page ? 0.92 : 0.35))
+                            .frame(width: index == page ? 20 : 6, height: 6)
+                    }
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.9), value: page)
+
+                Button(action: advance) {
+                    Text(page == scenes.count - 1 ? "Continue" : "Next")
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle)
+                .controlSize(.large)
+                .tint(Color.white.opacity(0.22))
+                .foregroundStyle(.white)
+
+                Spacer(minLength: 24)
             }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
         .preferredColorScheme(.dark)
     }
-}
 
-// MARK: - Layout helpers
-
-private extension OnboardingStoryView {
-    var tapNavigationEnabled: Bool { true }
-    var totalSteps: Int { Step.allCases.count }
-
-    struct Slide {
-        let headline: String
-        let body: String
-        let titleTopPadding: CGFloat
-    }
-
-    func slide(for step: Step) -> Slide? {
-        switch step {
-        case .timeIdentity:
-            return Slide(
-                headline: "A life is built in hours.",
-                body: """
-Everyone has the same amount of time in a week, but how you spend it shapes your work, your relationships, and who you become.
-
-To become the person you want, there are two things you can change: your attention and your focus.
-""",
-                titleTopPadding: 130
-            )
-        case .attentionConstraint:
-            return Slide(
-                headline: "Attention determines where time goes.",
-                body: """
-What we pay attention to is what our time is spent on, often without us noticing.
-
-Many things compete for our attention, and when they take it, time is pulled away from the work, relationships, and pursuits that matter most.
-""",
-                titleTopPadding: 120
-            )
-        case .focusSkill:
-            return Slide(
-                headline: "Focus is what keeps attention from drifting.",
-                body: """
-Once your attention is on something, focus is what allows you to stay with it. Not by forcing yourself, but by returning when your mind begins to wander.
-
-It isn’t something you either have or don’t. It’s a skill that develops with practice, and one that shapes how your time is lived.
-""",
-                titleTopPadding: 120
-            )
-        case .completion:
-            return nil
-        }
-    }
-
-    @ViewBuilder
-    func pageIndicator(for step: Step) -> some View {
-        HStack(spacing: 6) {
-            ForEach(0..<totalSteps, id: \.self) { index in
-                Capsule()
-                    .frame(width: index == step.rawValue ? 18 : 6, height: 6)
-                    .opacity(index == step.rawValue ? 0.9 : 0.35)
-            }
-        }
-        .foregroundStyle(Color.white.opacity(0.6))
-    }
-
-    func goForward() {
-        if let next = Step(rawValue: step.rawValue + 1) {
+    private func advance() {
+        if page < scenes.count - 1 {
             Haptics.medium()
-            if next == .completion {
-                finish()
-            } else {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    step = next
-                }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                page += 1
             }
-        } else {
-            finish()
+            return
         }
-    }
-
-    func goBack() {
-        if let previous = Step(rawValue: step.rawValue - 1), previous.rawValue >= 0 {
-            Haptics.medium()
-            withAnimation(.easeInOut(duration: 0.15)) {
-                step = previous
-            }
-        }
-    }
-
-    func finish() {
+        Haptics.heavy()
         onFinish()
     }
 }
 
-// MARK: - Gestures
+private struct OnboardingSceneCard: View {
+    let scene: OnboardingStoryView.Scene
+    let isActive: Bool
 
-private extension OnboardingStoryView {
-    @ViewBuilder
-    var gestureOverlay: some View {
-        GeometryReader { proxy in
-            HStack(spacing: 0) {
-                Color.clear
-                    .frame(width: proxy.size.width * 0.28)
-                    .contentShape(Rectangle())
-                    .onTapGesture { goBack() }
-                Spacer()
-                    .allowsHitTesting(false)
-                Color.clear
-                    .frame(width: proxy.size.width * 0.28)
-                    .contentShape(Rectangle())
-                    .onTapGesture { goForward() }
+    @State private var drift = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 122, height: 122)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.24), lineWidth: 1)
+                    )
+
+                Image(systemName: scene.symbol)
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .symbolEffect(.pulse.byLayer, options: .repeating, value: isActive)
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onEnded { value in
-                        let threshold: CGFloat = 30
-                        if value.translation.width < -threshold {
-                            goForward()
-                        } else if value.translation.width > threshold {
-                            goBack()
-                        }
-                    }
-            )
-            .ignoresSafeArea()
+            .scaleEffect(isActive ? 1.0 : 0.94)
+            .offset(y: drift ? -4 : 4)
+            .opacity(isActive ? 1 : 0.82)
+            .animation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true), value: drift)
+            .animation(.spring(response: 0.35, dampingFraction: 0.88), value: isActive)
+
+            Text(scene.title)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+
+            Text(scene.body)
+                .font(.system(size: 18, weight: .regular, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.84))
+                .lineSpacing(4)
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+        )
+        .onAppear {
+            drift = true
         }
     }
 }

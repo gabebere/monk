@@ -11,6 +11,9 @@ struct SettingsView: View {
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .forward)]) private var projects: [Project]
     @AppStorage("telemetry_enabled") private var telemetryEnabled: Bool = true
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @AppStorage("hasCompletedSetupChecklist") private var hasCompletedSetupChecklist = false
+    @AppStorage("needsGuidedTutorial") private var needsGuidedTutorial = false
+    @AppStorage("hasCompletedGuidedTutorial") private var hasCompletedGuidedTutorial = false
 
     @State private var calendarOptions: [CalendarDisplayInfo] = []
     @State private var calendarStatusMessage: String?
@@ -60,6 +63,9 @@ struct SettingsView: View {
                         healthCard
                         goalCard
                         sessionsCard
+#if DEBUG
+                        debugCard
+#endif
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 36)
@@ -530,9 +536,9 @@ private extension SettingsView {
 
                 Button {
                     Haptics.heavy()
-                    hasSeenOnboarding = false
+                    restartOnboardingFlow()
                 } label: {
-                    Text("Reset onboarding flag")
+                    Text("Restart onboarding flow")
                         .font(.footnote.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -617,6 +623,14 @@ private extension SettingsView {
             calendarBusy = false
             calendarStatusMessage = nil
         }
+    }
+
+    func restartOnboardingFlow() {
+        hasSeenOnboarding = false
+        hasCompletedSetupChecklist = false
+        needsGuidedTutorial = false
+        hasCompletedGuidedTutorial = false
+        showingOnboardingPreview = false
     }
 }
 

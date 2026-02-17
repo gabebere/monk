@@ -1,9 +1,12 @@
 import Foundation
+import OSLog
 #if canImport(SwiftData)
 import SwiftData
 #endif
 
 enum SnapshotWriter {
+    private static let logger = Logger(subsystem: "com.gbr.Monk", category: "SnapshotWriter")
+
     static func write(_ snapshot: LiveSnapshot) {
         guard let url = SnapshotStorage.containerURL?.appendingPathComponent(SnapshotStorage.snapshotFileName) else { return }
         do {
@@ -11,11 +14,8 @@ enum SnapshotWriter {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
             SnapshotStorage.userDefaults?.set(data, forKey: SnapshotStorage.userDefaultsKey)
-            SnapshotStorage.userDefaults?.synchronize()
         } catch {
-            #if DEBUG
-            print("SnapshotWriter error: \(error.localizedDescription)")
-            #endif
+            logger.error("Snapshot write failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

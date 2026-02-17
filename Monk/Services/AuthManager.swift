@@ -1,28 +1,34 @@
 import Foundation
 import AuthenticationServices
+import OSLog
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
 
 @MainActor
 final class AuthManager: ObservableObject {
-    private let googleClientID = "767517007770-v4i7a49e9qi2b3tmgpgu7s1nrtmf9enb.apps.googleusercontent.com"
+    private let logger = Logger(subsystem: "com.gbr.Monk", category: "AuthManager")
+    private let googleClientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String
+#if DEBUG
     private let passwordUsers: [PasswordCredential] = [
         .init(email: "reviewer@monk.app", password: "Demo123!", displayName: "Review Account")
     ]
+#else
+    private let passwordUsers: [PasswordCredential] = []
+#endif
 
-@Published private(set) var isAuthenticated: Bool
-@Published private(set) var displayName: String?
-@Published private(set) var userEmail: String?
-@Published private(set) var newsletterEmail: String?
-@Published private(set) var newsletterOptIn: Bool = false
+    @Published private(set) var isAuthenticated: Bool
+    @Published private(set) var displayName: String?
+    @Published private(set) var userEmail: String?
+    @Published private(set) var newsletterEmail: String?
+    @Published private(set) var newsletterOptIn: Bool = false
 
-private let accessKey = "auth.isAuthenticated"
-private let userIDKey = "auth.userID"
-private let nameKey = "auth.name"
-private let emailKey = "auth.email"
-private let newsletterEmailKey = "auth.newsletterEmail"
-private let newsletterOptInKey = "auth.newsletterOptIn"
+    private let accessKey = "auth.isAuthenticated"
+    private let userIDKey = "auth.userID"
+    private let nameKey = "auth.name"
+    private let emailKey = "auth.email"
+    private let newsletterEmailKey = "auth.newsletterEmail"
+    private let newsletterOptInKey = "auth.newsletterOptIn"
 
     init() {
         let defaults = UserDefaults.standard
@@ -33,7 +39,11 @@ private let newsletterOptInKey = "auth.newsletterOptIn"
         self.newsletterOptIn = defaults.bool(forKey: newsletterOptInKey)
 
 #if canImport(GoogleSignIn)
-        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: googleClientID)
+        if let googleClientID, !googleClientID.isEmpty {
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: googleClientID)
+        } else {
+            logger.error("Missing GIDClientID in Info.plist; Google sign-in is disabled.")
+        }
 #endif
     }
 
@@ -56,13 +66,16 @@ private let newsletterOptInKey = "auth.newsletterOptIn"
                            name: name.isEmpty ? nil : name,
                            email: email)
             if email == nil {
-                print("[Auth] Apple sign-in returned no email (likely re-auth). Consider capturing email on first consent.")
+                logger.debug("Apple sign-in returned no email (likely re-auth).")
             }
         }
     }
 
     func signInWithGoogle(presenting viewController: UIViewController) async -> Result<Void, Error> {
 #if canImport(GoogleSignIn)
+        guard GIDSignIn.sharedInstance.configuration != nil else {
+            return .failure(PasswordAuthError.googleUnavailable)
+        }
         do {
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: viewController)
             let user = result.user
@@ -93,7 +106,6 @@ private let newsletterOptInKey = "auth.newsletterOptIn"
         defaults.removeObject(forKey: emailKey)
         defaults.removeObject(forKey: newsletterEmailKey)
         defaults.removeObject(forKey: newsletterOptInKey)
-        defaults.synchronize()
 #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.signOut()
 #endif
@@ -102,7 +114,7 @@ private let newsletterOptInKey = "auth.newsletterOptIn"
         userEmail = nil
         newsletterEmail = nil
         newsletterOptIn = false
-        print("[Auth] Signed out locally")
+        logger.debug("Signed out locally")
     }
 
     func applyNewsletterPreference(email: String?, optedIn: Bool) {
@@ -119,10 +131,12 @@ private let newsletterOptInKey = "auth.newsletterOptIn"
             newsletterEmail = nil
             newsletterOptIn = false
         }
-        defaults.synchronize()
     }
 
     func signInWithPassword(email: String, password: String) -> Result<Void, Error> {
+        guard !passwordUsers.isEmpty else {
+            return .failure(PasswordAuthError.unavailable)
+        }
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let match = passwordUsers.first(where: { $0.email.caseInsensitiveCompare(trimmedEmail) == .orderedSame }) else {
             return .failure(PasswordAuthError.invalid)
@@ -144,11 +158,14 @@ private extension AuthManager {
         defaults.set(userID, forKey: userIDKey)
         if let name {
             defaults.set(name, forKey: nameKey)
+        } else {
+            defaults.removeObject(forKey: nameKey)
         }
         if let email {
             defaults.set(email, forKey: emailKey)
+        } else {
+            defaults.removeObject(forKey: emailKey)
         }
-        defaults.synchronize()
         isAuthenticated = true
         displayName = name
         userEmail = email
@@ -163,8 +180,17 @@ private struct PasswordCredential {
 
 enum PasswordAuthError: LocalizedError {
     case invalid
+    case unavailable
+    case googleUnavailable
 
     var errorDescription: String? {
-        "Invalid email or password."
+        switch self {
+        case .invalid:
+            return "Invalid email or password."
+        case .unavailable:
+            return "Email/password sign-in is not available in this build."
+        case .googleUnavailable:
+            return "Google sign-in is unavailable in this build."
+        }
     }
 }

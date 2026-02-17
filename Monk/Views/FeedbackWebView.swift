@@ -7,7 +7,7 @@ struct FeedbackWebView: UIViewRepresentable {
     let email: String?
     let firstName: String?
     let lastName: String?
-    let signature: String
+    let signature: String?
     let onClose: () -> Void
 
     func makeUIView(context: Context) -> WKWebView {
@@ -39,7 +39,11 @@ struct FeedbackWebView: UIViewRepresentable {
     }
 
     private var html: String {
-        """
+        let signatureField: String = {
+            guard let signature, !signature.isEmpty else { return "" }
+            return ",\n                  signature: '\(escape(signature))'"
+        }()
+        return """
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -110,8 +114,7 @@ struct FeedbackWebView: UIViewRepresentable {
                   id: '\(escape(userId))',
                   email: '\(escape(email ?? ""))',
                   firstName: '\(escape(firstName ?? ""))',
-                  lastName: '\(escape(lastName ?? ""))',
-                  signature: '\(escape(signature))'
+                  lastName: '\(escape(lastName ?? ""))'\(signatureField)
                 });
                 uj.showWidget({ section: 'feedback' });
               } catch (err) {

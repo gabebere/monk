@@ -9,9 +9,6 @@ import OSLog
 import SwiftData
 import SwiftUI
 import UIKit
-#if canImport(PostHog)
-import PostHog
-#endif
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
@@ -78,23 +75,23 @@ struct MonkApp: App {
 }
 
 final class MonkAppDelegate: NSObject, UIApplicationDelegate {
+    private let logger = Logger(subsystem: "com.gbr.Monk", category: "AppDelegate")
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         application.registerForRemoteNotifications()
-#if canImport(PostHog)
-        configurePostHog()
-#endif
         return true
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         #if DEBUG
         let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
-        print("Registered for remote notifications with token: \(token)")
+        let preview = token.prefix(12)
+        logger.debug("Registered for remote notifications. Token preview: \(preview, privacy: .public)")
         #endif
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("Failed to register for remote notifications: \(error.localizedDescription)")
+        logger.error("Failed to register for remote notifications: \(error.localizedDescription, privacy: .public)")
     }
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
@@ -114,15 +111,4 @@ final class MonkAppDelegate: NSObject, UIApplicationDelegate {
             completionHandler(.newData)
         }
     }
-
-    #if canImport(PostHog)
-    private func configurePostHog() {
-        let apiKey = "phc_RIJV9E1BDMFveINBk49EbdUWEIVjy9VkoGjoKH69xrX"
-        let host = "https://us.i.posthog.com"
-        let config = PostHogConfig(apiKey: apiKey, host: host)
-        config.captureApplicationLifecycleEvents = false
-        config.captureScreenViews = false
-        PostHogSDK.shared.setup(config)
-    }
-    #endif
 }

@@ -39,8 +39,11 @@ final class AnalyticsService {
     private var enabled: Bool = true
     private var distinctId: String?
     private var dedupe: [String: Date] = [:]
+    private var didConfigure = false
 
     func configure() {
+        guard !didConfigure else { return }
+        didConfigure = true
         enabled = UserDefaults.standard.object(forKey: telemetryFlagKey) as? Bool ?? true
         let id = loadOrCreateDistinctId()
         distinctId = id
@@ -51,7 +54,7 @@ final class AnalyticsService {
         PostHogSDK.shared.setup(config)
         PostHogSDK.shared.identify(id)
 #endif
-        logger.debug("Analytics configured with id \(id, privacy: .public), enabled=\(self.enabled, privacy: .public)")
+        logger.debug("Analytics configured; enabled=\(self.enabled, privacy: .public)")
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -80,7 +83,7 @@ final class AnalyticsService {
         PostHogSDK.shared.reset()
         if enabled { PostHogSDK.shared.identify(newId) }
 #endif
-        logger.debug("Analytics reset with new id \(newId, privacy: .public)")
+        logger.debug("Analytics reset with new distinct id")
     }
 
     func track(_ name: String, _ props: [String: Any] = [:]) {

@@ -41,7 +41,7 @@ struct SetupChecklistView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 24) {
-                    Text("Getting started")
+                    Text("Some Technicalities...")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -54,17 +54,15 @@ struct SetupChecklistView: View {
                     Button {
                         onDone()
                     } label: {
-                        Text("Next")
+                        Text("Done")
                             .font(.headline.weight(.semibold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                            )
-                            .foregroundStyle(.white)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.roundedRectangle)
+                    .controlSize(.large)
+                    .tint(Color.white.opacity(0.22))
+                    .foregroundStyle(.white)
                 }
                 .padding(24)
             }
@@ -75,12 +73,12 @@ struct SetupChecklistView: View {
                         if calendarBusy {
                             ProgressView()
                                 .progressViewStyle(.circular)
-                                .tint(.black)
+                                .tint(.primary)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else if calendars.isEmpty {
                             Text("No writable calendars available.")
                                 .font(.footnote)
-                                .foregroundStyle(.black.opacity(0.7))
+                                .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             List(calendars, id: \.id) { calendar in
@@ -89,12 +87,12 @@ struct SetupChecklistView: View {
                                 } label: {
                                     HStack {
                                         Text(calendar.title)
-                                            .foregroundStyle(.black)
+                                            .foregroundStyle(.primary)
                                         Spacer()
                                         if selectedCalendarId == calendar.id {
                                             Image(systemName: "checkmark")
                                                 .font(.body.weight(.semibold))
-                                                .foregroundStyle(.black)
+                                                .foregroundStyle(.tint)
                                         }
                                     }
                                 }
@@ -112,7 +110,6 @@ struct SetupChecklistView: View {
                             Button("Cancel") {
                                 showCalendarPicker = false
                             }
-                            .foregroundStyle(.black)
                         }
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Done") {
@@ -123,13 +120,11 @@ struct SetupChecklistView: View {
                                 showCalendarPicker = false
                             }
                             .disabled(calendars.isEmpty || selectedCalendarId == nil || calendarBusy)
-                            .foregroundStyle(.black)
                         }
                     }
                 }
                 .presentationDetents([.fraction(0.5), .large])
                 .presentationBackground(.ultraThinMaterial)
-                .preferredColorScheme(.light)
             }
         }
         .ignoresSafeArea()
@@ -197,20 +192,22 @@ struct SetupChecklistView: View {
                     Button(action: action) {
                         Text(grantedActionTitle)
                             .font(.footnote.weight(.semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.14), in: Capsule())
-                            .foregroundStyle(.white)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.small)
+                    .tint(Color.white.opacity(0.2))
+                    .foregroundStyle(.white)
                 } else {
-                    Text("Done")
+                    Button("Done") {}
                         .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.14), in: Capsule())
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.small)
+                        .tint(Color.white.opacity(0.2))
                         .foregroundStyle(.white)
-                        .opacity(0.6)
+                        .disabled(true)
+                        .opacity(0.7)
                 }
             } else if isLoading {
                 ProgressView()
@@ -220,12 +217,12 @@ struct SetupChecklistView: View {
                 Button(action: action) {
                     Text("Enable")
                         .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.14), in: Capsule())
-                        .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(Color.white.opacity(0.2))
+                .foregroundStyle(.white)
             }
         }
         .padding(14)

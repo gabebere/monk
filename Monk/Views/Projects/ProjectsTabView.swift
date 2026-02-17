@@ -33,6 +33,7 @@ struct ProjectsTabView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .guidedTutorialAnchor(.projectsAddButton)
             }
         }
         .sheet(isPresented: $showingNewProject) {

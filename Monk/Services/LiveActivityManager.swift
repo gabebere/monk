@@ -1,12 +1,14 @@
 #if canImport(ActivityKit)
 import ActivityKit
 import Foundation
+import OSLog
 
 @available(iOS 16.2, *)
 @MainActor
 final class LiveActivityManager {
     static let shared = LiveActivityManager()
 
+    private let logger = Logger(subsystem: "com.gbr.Monk", category: "LiveActivity")
     private var currentActivity: Activity<FocusSessionActivityAttributes>?
     private var cachedSnapshot: FocusScoreSnapshot?
 
@@ -25,7 +27,7 @@ final class LiveActivityManager {
                 content: content
             )
         } catch {
-            print("Failed to start live activity: \(error)")
+            logger.error("Failed to start live activity: \(error.localizedDescription, privacy: .public)")
         }
     }
 

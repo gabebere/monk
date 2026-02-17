@@ -1,6 +1,7 @@
 import EventKit
 import Foundation
 import CoreLocation
+import OSLog
 
 struct CalendarDisplayInfo: Identifiable, Hashable {
     let id: String
@@ -12,6 +13,7 @@ actor CalendarIntegration {
     static let shared = CalendarIntegration()
 
     private let eventStore = EKEventStore()
+    private let logger = Logger(subsystem: "com.gbr.Monk", category: "CalendarIntegration")
 
     /// Shared cleanup window (±1 year)
     private func cleanupWindow() -> (start: Date, end: Date) {
@@ -76,6 +78,7 @@ actor CalendarIntegration {
             applyLocation(session: session, to: event)
             try eventStore.save(event, span: .thisEvent)
         } catch {
+            logger.error("Failed to log focus session to calendar: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -94,6 +97,7 @@ actor CalendarIntegration {
         do {
             try eventStore.save(event, span: .thisEvent)
         } catch {
+            logger.error("Failed to update calendar event location: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -180,6 +184,7 @@ actor CalendarIntegration {
             try eventStore.save(event, span: .thisEvent)
             return event.eventIdentifier
         } catch {
+            logger.error("Failed to upsert health event: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
