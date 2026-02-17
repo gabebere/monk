@@ -1,5 +1,8 @@
 import Foundation
 import OSLog
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 #if canImport(SwiftData)
 import SwiftData
 #endif
@@ -14,6 +17,10 @@ enum SnapshotWriter {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
             SnapshotStorage.userDefaults?.set(data, forKey: SnapshotStorage.userDefaultsKey)
+#if canImport(WidgetKit)
+            WidgetCenter.shared.reloadTimelines(ofKind: "WeeklyGoalWidget")
+            WidgetCenter.shared.reloadTimelines(ofKind: "FocusedTodayWidget")
+#endif
         } catch {
             logger.error("Snapshot write failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -50,6 +57,8 @@ enum SnapshotWriter {
         }()
 
         let projectProgress = weeklyProgress(for: resolvedSession?.project ?? resolvedSession?.task?.project, now: now)
+        let focusedToday = focusedTodaySeconds(sessions: sessions, now: now)
+        let calmLane = calmLaneWindow(sessions: sessions, now: now, analyzer: analyzer)
 
         let snapshot = LiveSnapshot(
             sessionID: resolvedSession?.id,
@@ -66,6 +75,9 @@ enum SnapshotWriter {
             todayCompletedSeconds: nil,
             todayRemainingSeconds: nil,
             projectGoals: goalsSnapshot,
+            focusedTodaySeconds: focusedToday,
+            calmLaneStartHour: calmLane?.startHour,
+            calmLaneEndHour: calmLane?.endHour,
             lastUpdatedAt: now
         )
         write(snapshot)
@@ -119,6 +131,39 @@ enum SnapshotWriter {
         let start = interval?.start ?? startOfDay
         let end = calendar.date(byAdding: .day, value: 7, to: start) ?? startOfDay
         return (start, end)
+    }
+
+    private static func focusedTodaySeconds(sessions: [FocusSession], now: Date) -> TimeInterval {
+        let calendar = Calendar(identifier: .gregorian)
+        let todayStart = calendar.startOfDay(for: now)
+        let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? now
+
+        return sessions.reduce(0) { partial, session in
+            let end = session.endedAt ?? now
+            let clippedStart = max(session.startedAt, todayStart)
+            let clippedEnd = min(end, tomorrowStart)
+            guard clippedEnd > clippedStart else { return partial }
+            return partial + clippedEnd.timeIntervalSince(clippedStart)
+        }
+    }
+
+    private static func calmLaneWindow(sessions: [FocusSession],
+                                       now: Date,
+                                       analyzer: InsightsAnalyzer) -> (startHour: Int, endHour: Int)? {
+        let calendar = Calendar(identifier: .gregorian)
+        let todayStart = calendar.startOfDay(for: now)
+        let endOfYesterday = todayStart.addingTimeInterval(-1)
+        let summary = analyzer.summarize(
+            sessions: sessions,
+            now: endOfYesterday,
+            config: TemporalInsightsConfig(lookbackDays: 14, bestWindowWidthHours: 2)
+        )
+        guard summary.activeDayCount >= 3,
+              summary.totalFocusSeconds >= 7200,
+              let best = summary.bestWindow else {
+            return nil
+        }
+        return (best.startHour, best.endHour)
     }
 #endif
 }

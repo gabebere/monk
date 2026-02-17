@@ -327,7 +327,10 @@ struct InsightsAnalyzer {
         let config = TemporalInsightsConfig(lookbackDays: 14)
         let hasGoal = (weeklyGoalHours ?? 0) > 0
         let goalSessions = hasGoal
-            ? sessions.filter { ($0.project?.weeklyGoalHours ?? 0) > 0 }
+            ? sessions.filter {
+                guard let project = $0.project else { return false }
+                return project.canTrackWeeklyGoal && (project.weeklyGoalHours ?? 0) > 0
+            }
             : sessions
         let summary = summarize(sessions: goalSessions, now: now, config: config)
         let dailyTargetHours = max((weeklyGoalHours ?? fallbackWeeklyGoal) / 7, 0)
@@ -567,7 +570,9 @@ struct InsightsAnalyzer {
         let weekEnd = calendar.date(byAdding: .day, value: 7, to: weekStart) ?? now
 
         let goalProjects: [(project: Project, goalHours: Double)] = projects.compactMap { project in
-            guard let goal = project.weeklyGoalHours, goal > 0 else { return nil }
+            guard project.canTrackWeeklyGoal,
+                  let goal = project.weeklyGoalHours,
+                  goal > 0 else { return nil }
             return (project, goal)
         }
         let goalProjectIDs = Set(goalProjects.map { $0.project.id })

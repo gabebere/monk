@@ -34,6 +34,15 @@ final class Project {
 }
 
 extension Project {
+    var canTrackWeeklyGoal: Bool { !isArchived }
+
+    func setArchived(_ archived: Bool) {
+        isArchived = archived
+        if archived {
+            weeklyGoalHours = nil
+        }
+    }
+
     func totalDuration(now: Date = .now) -> TimeInterval {
         sessionsUnwrapped.reduce(0) { partialResult, session in
             let end = session.endedAt ?? now

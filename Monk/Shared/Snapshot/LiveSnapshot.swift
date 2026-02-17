@@ -22,6 +22,9 @@ struct LiveSnapshot: Codable {
     var todayCompletedSeconds: TimeInterval?
     var todayRemainingSeconds: TimeInterval?
     var projectGoals: WeeklyGoalsSnapshot?
+    var focusedTodaySeconds: TimeInterval?
+    var calmLaneStartHour: Int?
+    var calmLaneEndHour: Int?
     var lastUpdatedAt: Date
 
     static var empty: LiveSnapshot {
@@ -40,6 +43,9 @@ struct LiveSnapshot: Codable {
             todayCompletedSeconds: nil,
             todayRemainingSeconds: nil,
             projectGoals: nil,
+            focusedTodaySeconds: nil,
+            calmLaneStartHour: nil,
+            calmLaneEndHour: nil,
             lastUpdatedAt: Date()
         )
     }

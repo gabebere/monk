@@ -460,6 +460,7 @@ private extension SettingsView {
 
     var rawProjectGoalTotal: Double {
         projects
+            .filter(\.canTrackWeeklyGoal)
             .compactMap { $0.weeklyGoalHours }
             .filter { $0 > 0 }
             .reduce(0, +)

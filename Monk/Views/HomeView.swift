@@ -738,7 +738,9 @@ private struct ProjectSelectionSheet: View {
     }
 
     private func projectDetail(for project: Project) -> String {
-        if let goal = project.weeklyGoalHours, goal > 0 {
+        if project.canTrackWeeklyGoal,
+           let goal = project.weeklyGoalHours,
+           goal > 0 {
             return String(format: "Goal %.0fh/week", goal)
         }
         let hours = focus.totalDuration(for: project) / 3600
@@ -1143,6 +1145,7 @@ struct NewProjectView: View {
 
     private var existingGoalHours: Double {
         allProjects
+            .filter(\.canTrackWeeklyGoal)
             .compactMap { $0.weeklyGoalHours }
             .filter { $0 > 0 }
             .reduce(0, +)
@@ -1211,6 +1214,7 @@ struct ProjectDetailView: View {
     private var sessionCount: Int { project.sessionsUnwrapped.count }
     private var sessionActive: Bool { focus.currentSession != nil }
     private var weeklyProgress: ProjectGoalProgress { focus.weeklyGoalProgress(for: project) }
+    private var weeklyGoalLockedByArchive: Bool { !project.canTrackWeeklyGoal }
 
     var body: some View {
         NavigationStack {
@@ -1294,7 +1298,11 @@ struct ProjectDetailView: View {
                                     }
                                 }
 
-                                if hasWeeklyGoal, weeklyProgress.goalHours != nil {
+                                if weeklyGoalLockedByArchive {
+                                    Text("Unarchive this project to track a weekly target.")
+                                        .font(.footnote)
+                                        .foregroundStyle(.white.opacity(0.8))
+                                } else if hasWeeklyGoal, weeklyProgress.goalHours != nil {
                                     ProgressView(value: weeklyProgress.progressFraction, total: 1)
                                         .tint(Color.cyan)
                                     Text(goalStatusText(for: weeklyProgress))
@@ -1312,15 +1320,15 @@ struct ProjectDetailView: View {
                                         .foregroundStyle(.white)
                                 }
                                 .tint(Color.cyan)
-                                .disabled(goalCapReachedForNewHours)
+                                .disabled(weeklyGoalLockedByArchive || goalCapReachedForNewHours)
 
-                                if goalCapReachedForNewHours && !hasWeeklyGoal {
+                                if !weeklyGoalLockedByArchive && goalCapReachedForNewHours && !hasWeeklyGoal {
                                     Text("Total weekly goals are capped at \(Int(goalCapHours))h. Lower another project's goal to add one here.")
                                         .font(.footnote)
                                         .foregroundStyle(.white.opacity(0.7))
                                 }
 
-                                if hasWeeklyGoal {
+                                if hasWeeklyGoal && !weeklyGoalLockedByArchive {
                                     VStack(alignment: .leading, spacing: 10) {
                                         if sliderUpperBound < 1 {
                                             Text("Weekly goal cap reached. Lower another project's goal to add hours here.")
@@ -1428,7 +1436,9 @@ struct ProjectDetailView: View {
                                         icon: "archivebox") {
                             Button {
                                 Haptics.heavy()
-                                project.isArchived.toggle()
+                                let shouldArchive = !project.isArchived
+                                project.setArchived(shouldArchive)
+                                hasWeeklyGoal = false
                                 modelContext.saveOrRollback()
                             } label: {
                                 Text(project.isArchived ? "Unarchive project" : "Archive project")
@@ -1508,8 +1518,16 @@ struct ProjectDetailView: View {
         .onChange(of: hasWeeklyGoal) { _, newValue in
             applyGoalToggle(newValue)
         }
+        .onChange(of: project.isArchived) { _, isArchived in
+            guard isArchived else { return }
+            hasWeeklyGoal = false
+            if project.weeklyGoalHours != nil {
+                project.weeklyGoalHours = nil
+                modelContext.saveOrRollback()
+            }
+        }
         .onChange(of: weeklyGoalHoursInput) { _, newValue in
-            guard hasWeeklyGoal else { return }
+            guard hasWeeklyGoal, project.canTrackWeeklyGoal else { return }
             let clamped = clampedGoalInput(newValue)
             if clamped != weeklyGoalHoursInput {
                 weeklyGoalHoursInput = clamped
@@ -1562,6 +1580,15 @@ struct ProjectDetailView: View {
 
     private func bootstrapWeeklyGoalStateIfNeeded() {
         guard !didLoadGoalState else { return }
+        if !project.canTrackWeeklyGoal {
+            hasWeeklyGoal = false
+            if project.weeklyGoalHours != nil {
+                project.weeklyGoalHours = nil
+                modelContext.saveOrRollback()
+            }
+            didLoadGoalState = true
+            return
+        }
         if let stored = project.weeklyGoalHours, stored > 0 {
             weeklyGoalHoursInput = stored
             hasWeeklyGoal = true
@@ -1573,6 +1600,16 @@ struct ProjectDetailView: View {
     }
 
     private func applyGoalToggle(_ isEnabled: Bool) {
+        if !project.canTrackWeeklyGoal {
+            if hasWeeklyGoal {
+                hasWeeklyGoal = false
+            }
+            if project.weeklyGoalHours != nil {
+                project.weeklyGoalHours = nil
+                modelContext.saveOrRollback()
+            }
+            return
+        }
         if isEnabled {
             let clamped = clampedGoalInput(weeklyGoalHoursInput > 0 ? weeklyGoalHoursInput : 1)
             guard clamped >= 1 else {
@@ -1591,7 +1628,7 @@ struct ProjectDetailView: View {
 
     private var otherGoalHours: Double {
         allProjects
-            .filter { $0.id != project.id }
+            .filter { $0.id != project.id && $0.canTrackWeeklyGoal }
             .compactMap { $0.weeklyGoalHours }
             .filter { $0 > 0 }
             .reduce(0, +)

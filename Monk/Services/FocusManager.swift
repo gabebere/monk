@@ -293,7 +293,9 @@ extension FocusManager {
                 total += clampedEnd.timeIntervalSince(clampedStart)
             }
         }
-        let goalSeconds = project.weeklyGoalHours.map { max(0, $0) * 3600 }
+        let goalSeconds = project.canTrackWeeklyGoal
+            ? project.weeklyGoalHours.map { max(0, $0) * 3600 }
+            : nil
         return ProjectGoalProgress(actualSeconds: total, goalSeconds: goalSeconds)
     }
 

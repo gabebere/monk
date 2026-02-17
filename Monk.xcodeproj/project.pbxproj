@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		36B9113F98084EA99379D668 /* WeeklyGoalWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */; };
+		5CF2B7B40F2848B19C4A9D11 /* FocusedTodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A6D42A0E84F4B66BA9EE2E8 /* FocusedTodayWidget.swift */; };
 		740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 740996632EE058A9009DF533 /* GoogleSignIn */; };
 		740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 740996652EE058A9009DF533 /* GoogleSignInSwift */; };
 		740996692EE05BFF009DF533 /* UserJot in Frameworks */ = {isa = PBXBuildFile; productRef = 740996682EE05BFF009DF533 /* UserJot */; };
@@ -62,6 +63,7 @@
 /* Begin PBXFileReference section */
 		041AEA59AD634B4BBC888C46 /* Monk/Utilities/DateUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Utilities/DateUtils.swift; sourceTree = SOURCE_ROOT; };
 		23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyGoalWidget.swift; sourceTree = "<group>"; };
+		9A6D42A0E84F4B66BA9EE2E8 /* FocusedTodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedTodayWidget.swift; sourceTree = "<group>"; };
 		39DFBEB3FDC443799326FBEF /* Monk/Models/FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/FocusSession.swift; sourceTree = SOURCE_ROOT; };
 		4D461856453C4D339642C15F /* Monk/Shared/Snapshot/SnapshotReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/Snapshot/SnapshotReader.swift; sourceTree = SOURCE_ROOT; };
 		5363E89AAFA742E6B0B0CB6E /* Monk/Models/Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/Preferences.swift; sourceTree = SOURCE_ROOT; };
@@ -205,6 +207,7 @@
 			children = (
 				74F7A0B03000D00000784214 /* Assets.xcassets */,
 				74F7A0003000D00000784214 /* MonkLiveActivities.swift */,
+				9A6D42A0E84F4B66BA9EE2E8 /* FocusedTodayWidget.swift */,
 				23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */,
 				74F7A0013000D00000784214 /* Info.plist */,
 				8CFF0616EDB5442C90064883 /* MonkLiveActivities/MonkLiveActivities.entitlements */,
@@ -390,6 +393,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5CF2B7B40F2848B19C4A9D11 /* FocusedTodayWidget.swift in Sources */,
 				36B9113F98084EA99379D668 /* WeeklyGoalWidget.swift in Sources */,
 				74F7A0A03000D00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift in Sources */,
 				74F7A0803000D00000784214 /* MonkLiveActivities.swift in Sources */,

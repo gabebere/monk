@@ -129,12 +129,18 @@ struct ContentView: View {
                     .environmentObject(authManager)
             }
         }
+        .onAppear {
+            normalizeArchivedProjectGoalsIfNeeded()
+        }
         .onChange(of: authManager.isAuthenticated) { _, _ in
             if !authManager.isAuthenticated {
                 guidedTutorialStep = nil
             } else {
                 startGuidedTutorialIfNeeded(currentSessionActive: manager?.currentSession != nil)
             }
+        }
+        .onChange(of: archivedProjectsWithGoalsCount) { _, _ in
+            normalizeArchivedProjectGoalsIfNeeded()
         }
         .onChange(of: hasSeenOnboarding) { _, _ in
             startGuidedTutorialIfNeeded(currentSessionActive: manager?.currentSession != nil)
@@ -147,6 +153,7 @@ struct ContentView: View {
                 Task {
                     await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext)
                 }
+                normalizeArchivedProjectGoalsIfNeeded()
                 startGuidedTutorialIfNeeded(currentSessionActive: manager?.currentSession != nil)
             }
         }
@@ -171,6 +178,21 @@ private extension ContentView {
 
     var activeTaskCount: Int {
         focusTasks.filter { !$0.isCompleted }.count
+    }
+
+    var archivedProjectsWithGoalsCount: Int {
+        projects.filter { $0.isArchived && $0.weeklyGoalHours != nil }.count
+    }
+
+    func normalizeArchivedProjectGoalsIfNeeded() {
+        var didMutate = false
+        for project in projects where project.isArchived && project.weeklyGoalHours != nil {
+            project.weeklyGoalHours = nil
+            didMutate = true
+        }
+        if didMutate {
+            modelContext.saveOrRollback()
+        }
     }
 
     func startGuidedTutorialIfNeeded(currentSessionActive: Bool) {
