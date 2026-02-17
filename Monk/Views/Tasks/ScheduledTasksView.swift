@@ -62,9 +62,9 @@ struct ScheduledTasksView: View {
             }
 
             if !sections.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     ForEach(sections) { section in
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 2) {
                             dayHeader(for: section.date)
 
                             VStack(spacing: 2) {
@@ -90,6 +90,9 @@ struct ScheduledTasksView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 0)
         .background(Color.clear)
+        .onAppear {
+            Haptics.primeTaskCompletion()
+        }
         .onChange(of: showCompleted) { _, enabled in
             if enabled {
                 clearAllCompletionBuffers()
@@ -165,19 +168,15 @@ private extension ScheduledTasksView {
         } label: {
             HStack(spacing: 0) {
                 Text(sectionDisplay(date))
-                    .font(isPrimarySectionDate(date) ? .title3.weight(.semibold) : .headline.weight(.semibold))
+                    .font(calendar.isDateInToday(date) ? .title3.weight(.semibold) : .subheadline.weight(.semibold))
                     .foregroundStyle(calendar.isDateInToday(date) ? .white : .white.opacity(0.75))
                 Spacer()
             }
-            .padding(.top, 6)
-            .padding(.bottom, 2)
+            .padding(.top, 2)
+            .padding(.bottom, 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    func isPrimarySectionDate(_ date: Date) -> Bool {
-        sections.first?.id == date
     }
 
     func inlineComposer(for day: Date) -> some View {
@@ -300,32 +299,36 @@ private extension ScheduledTasksView {
     func toggleCompletion(for task: FocusTask) {
         let now = Date()
         let wasCompleted = task.isCompleted
+        var noAnimationTransaction = Transaction(animation: nil)
+        noAnimationTransaction.disablesAnimations = true
+        withTransaction(noAnimationTransaction) {
+            Haptics.taskCompletion()
 
-        if task.isCompleted {
-            task.isCompleted = false
-            task.completedAt = nil
-        } else {
-            task.isCompleted = true
-            task.completedAt = now
-            if let next = task.nextRecurrenceInstance(now: now, calendar: calendar) {
-                modelContext.insert(next)
+            if task.isCompleted {
+                task.isCompleted = false
+                task.completedAt = nil
+            } else {
+                task.isCompleted = true
+                task.completedAt = now
+                if let next = task.nextRecurrenceInstance(now: now, calendar: calendar) {
+                    modelContext.insert(next)
+                }
             }
-            Haptics.success()
-        }
-        task.updatedAt = now
+            task.updatedAt = now
 
-        if modelContext.saveOrRollback() {
-            if wasCompleted {
+            if modelContext.saveOrRollback() {
+                if wasCompleted {
+                    clearCompletionBuffer(for: task.id)
+                } else if !showCompleted {
+                    startCompletionBuffer(for: task.id)
+                }
+
+                if !showCompleted && task.isCompleted && selectedTaskID == task.id {
+                    selectedTaskID = nil
+                }
+            } else if !wasCompleted {
                 clearCompletionBuffer(for: task.id)
-            } else if !showCompleted {
-                startCompletionBuffer(for: task.id)
             }
-
-            if !showCompleted && task.isCompleted && selectedTaskID == task.id {
-                selectedTaskID = nil
-            }
-        } else if !wasCompleted {
-            clearCompletionBuffer(for: task.id)
         }
     }
 

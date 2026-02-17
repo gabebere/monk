@@ -12,9 +12,16 @@ struct ScheduledTaskRow: View {
 
     @State private var isDeleteRevealed = false
     @State private var dragOffset: CGFloat = 0
+    @State private var dragAxis: DragAxis = .none
 
     private let revealWidth: CGFloat = 96
     private let revealThreshold: CGFloat = 34
+
+    private enum DragAxis {
+        case none
+        case horizontal
+        case vertical
+    }
 
     private var titleColor: Color {
         if entry.task.isCompleted {
@@ -67,6 +74,10 @@ struct ScheduledTaskRow: View {
                             .frame(width: 11, height: 11)
                     }
                 }
+                .animation(nil, value: entry.task.isCompleted)
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
             }
             .buttonStyle(.plain)
 
@@ -89,6 +100,23 @@ struct ScheduledTaskRow: View {
 
             Spacer()
 
+            swipeZone
+            .opacity(max(0, 1 - ((-currentOffset) / revealWidth) * 1.2))
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .animation(nil, value: entry.task.isCompleted)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+    }
+
+    private var swipeZone: some View {
+        ZStack {
+            Color.clear
+                .frame(width: 44, height: 32)
             Button(action: {
                 Haptics.soft()
                 onEdit()
@@ -99,11 +127,7 @@ struct ScheduledTaskRow: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
-            .opacity(max(0, 1 - ((-currentOffset) / revealWidth) * 1.2))
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 
@@ -161,16 +185,33 @@ struct ScheduledTaskRow: View {
     }
 
     private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 6)
+        DragGesture(minimumDistance: 12)
             .onChanged { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                if dragAxis == .none {
+                    let dx = abs(value.translation.width)
+                    let dy = abs(value.translation.height)
+                    if dx < 6, dy < 6 {
+                        return
+                    }
+                    if dx > dy + 6 {
+                        dragAxis = .horizontal
+                    } else if dy > dx + 6 {
+                        dragAxis = .vertical
+                    } else {
+                        return
+                    }
+                }
+
+                guard dragAxis == .horizontal else { return }
                 let base = isDeleteRevealed ? -revealWidth : 0
                 let proposed = base + value.translation.width
                 let clamped = max(-revealWidth, min(0, proposed))
                 dragOffset = clamped - base
             }
             .onEnded { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else {
+                defer { dragAxis = .none }
+
+                guard dragAxis == .horizontal else {
                     dragOffset = 0
                     return
                 }

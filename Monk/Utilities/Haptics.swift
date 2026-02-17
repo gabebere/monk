@@ -1,6 +1,8 @@
 import UIKit
 
 enum Haptics {
+    private static let taskCompletionGenerator = UISelectionFeedbackGenerator()
+
     static func light() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.65)
     }
@@ -20,6 +22,19 @@ enum Haptics {
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
     }
 
+    static func taskCompletion() {
+        performOnMain {
+            taskCompletionGenerator.selectionChanged()
+            taskCompletionGenerator.prepare()
+        }
+    }
+
+    static func primeTaskCompletion() {
+        performOnMain {
+            taskCompletionGenerator.prepare()
+        }
+    }
+
     static func moodSoft() {
         impact(style: .soft, intensity: 0.35)
     }
@@ -35,5 +50,13 @@ enum Haptics {
     private static func impact(style: UIImpactFeedbackGenerator.FeedbackStyle, intensity: CGFloat) {
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.impactOccurred(intensity: intensity)
+    }
+
+    private static func performOnMain(_ work: @escaping () -> Void) {
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
     }
 }
