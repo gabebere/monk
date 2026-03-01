@@ -19,11 +19,17 @@ struct ContentView: View {
     @AppStorage("hasCompletedSetupChecklist") private var hasCompletedSetupChecklist = false
     @AppStorage("needsGuidedTutorial") private var needsGuidedTutorial = false
     @AppStorage("hasCompletedGuidedTutorial") private var hasCompletedGuidedTutorial = false
+    @AppStorage("guidedTutorialRestartTrigger") private var guidedTutorialRestartTrigger = ""
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
     @Query(sort: [SortDescriptor(\FocusTask.updatedAt, order: .reverse)]) private var focusTasks: [FocusTask]
     @State private var manager: FocusManager?
     @State private var selectedTab: AppTab = .home
     @State private var guidedTutorialStep: GuidedTutorialStep? = nil
+    @State private var guidedTutorialBaselineProjectIDs: Set<UUID> = []
+    @State private var guidedTutorialBaselineTaskIDs: Set<UUID> = []
+    @State private var guidedTutorialCreatedProjectID: UUID? = nil
+    @State private var guidedTutorialCreatedTaskID: UUID? = nil
+    @State private var guidedTutorialPresentedModals: Set<GuidedTutorialModalKind> = []
 
     var body: some View {
         Group {
@@ -81,13 +87,15 @@ struct ContentView: View {
                     .coordinateSpace(name: "guidedTutorialSpace")
                     .overlayPreferenceValue(GuidedTutorialAnchorPreferenceKey.self) { anchors in
                         GeometryReader { proxy in
-                            if let step = guidedTutorialStep {
+                            if let step = guidedTutorialStep, !isGuidedTutorialOverlayPaused {
                                 let holes = tutorialHoles(for: step, anchors: anchors, proxy: proxy)
                                 GuidedTutorialSpotlightOverlay(
                                     step: step,
                                     holes: holes,
                                     topInset: proxy.safeAreaInsets.top,
-                                    blocksTouchesOutsideHoles: !holes.isEmpty,
+                                    bottomInset: proxy.safeAreaInsets.bottom,
+                                    blocksTouchesOutsideHoles: step == .ready,
+                                    onPrimaryAction: step == .ready ? completeGuidedTutorial : nil,
                                     onSkip: completeGuidedTutorial
                                 )
                                 .transition(.opacity)
@@ -95,20 +103,27 @@ struct ContentView: View {
                         }
                     }
                     .onAppear {
-                        startGuidedTutorialIfNeeded(currentSessionActive: manager.currentSession != nil)
+                        startGuidedTutorialIfNeeded()
+                        refreshGuidedTutorialProgress(currentSessionActive: manager.currentSession != nil)
                     }
                     .onChange(of: selectedTab) { _, _ in
                         Haptics.heavy()
                     }
-                    .onChange(of: activeProjectCount) { _, _ in
-                        advanceGuidedTutorialIfNeeded(currentSessionActive: manager.currentSession != nil)
+                    .onChange(of: projectIDsSignature) { _, _ in
+                        refreshGuidedTutorialProgress(currentSessionActive: manager.currentSession != nil)
                     }
-                    .onChange(of: activeTaskCount) { _, _ in
-                        advanceGuidedTutorialIfNeeded(currentSessionActive: manager.currentSession != nil)
+                    .onChange(of: taskIDsSignature) { _, _ in
+                        refreshGuidedTutorialProgress(currentSessionActive: manager.currentSession != nil)
                     }
                     .onChange(of: manager.currentSession != nil) { _, hasSession in
-                        advanceGuidedTutorialIfNeeded(currentSessionActive: hasSession)
+                        refreshGuidedTutorialProgress(currentSessionActive: hasSession)
                     }
+                    .environment(\.activeGuidedTutorialStep, guidedTutorialStep)
+                    .environment(\.guidedTutorialCreatedProjectID, guidedTutorialCreatedProjectID)
+                    .environment(\.guidedTutorialCreatedTaskID, guidedTutorialCreatedTaskID)
+                    .environment(\.guidedTutorialBaselineProjectIDs, guidedTutorialBaselineProjectIDs)
+                    .environment(\.guidedTutorialBaselineTaskIDs, guidedTutorialBaselineTaskIDs)
+                    .environment(\.guidedTutorialEventHandler, handleGuidedTutorialEvent(_:))
                     .environmentObject(manager)
                     .environmentObject(authManager)
                     .onOpenURL { url in
@@ -134,19 +149,28 @@ struct ContentView: View {
         }
         .onChange(of: authManager.isAuthenticated) { _, _ in
             if !authManager.isAuthenticated {
-                guidedTutorialStep = nil
+                resetGuidedTutorialRuntime()
             } else {
-                startGuidedTutorialIfNeeded(currentSessionActive: manager?.currentSession != nil)
+                startGuidedTutorialIfNeeded()
             }
         }
         .onChange(of: archivedProjectsWithGoalsCount) { _, _ in
             normalizeArchivedProjectGoalsIfNeeded()
         }
         .onChange(of: hasSeenOnboarding) { _, _ in
-            startGuidedTutorialIfNeeded(currentSessionActive: manager?.currentSession != nil)
+            startGuidedTutorialIfNeeded()
         }
         .onChange(of: hasCompletedSetupChecklist) { _, _ in
-            startGuidedTutorialIfNeeded(currentSessionActive: manager?.currentSession != nil)
+            startGuidedTutorialIfNeeded()
+        }
+        .onChange(of: needsGuidedTutorial) { _, _ in
+            startGuidedTutorialIfNeeded()
+        }
+        .onChange(of: hasCompletedGuidedTutorial) { _, _ in
+            startGuidedTutorialIfNeeded()
+        }
+        .onChange(of: guidedTutorialRestartTrigger) { _, _ in
+            forceRestartGuidedTutorialFromDebug()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -154,7 +178,8 @@ struct ContentView: View {
                     await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext)
                 }
                 normalizeArchivedProjectGoalsIfNeeded()
-                startGuidedTutorialIfNeeded(currentSessionActive: manager?.currentSession != nil)
+                startGuidedTutorialIfNeeded()
+                refreshGuidedTutorialProgress(currentSessionActive: manager?.currentSession != nil)
             }
         }
     }
@@ -172,16 +197,40 @@ struct ContentView: View {
 }
 
 private extension ContentView {
-    var activeProjectCount: Int {
-        projects.filter { !$0.isArchived }.count
+    var projectIDsSignature: String {
+        projects.map(\.id).map(\.uuidString).sorted().joined(separator: "|")
     }
 
-    var activeTaskCount: Int {
-        focusTasks.filter { !$0.isCompleted }.count
+    var taskIDsSignature: String {
+        focusTasks.map(\.id).map(\.uuidString).sorted().joined(separator: "|")
     }
 
     var archivedProjectsWithGoalsCount: Int {
         projects.filter { $0.isArchived && $0.weeklyGoalHours != nil }.count
+    }
+
+    var allProjectIDs: Set<UUID> {
+        Set(projects.map(\.id))
+    }
+
+    var allTaskIDs: Set<UUID> {
+        Set(focusTasks.map(\.id))
+    }
+
+    var newlyCreatedProjects: [Project] {
+        projects
+            .filter { !guidedTutorialBaselineProjectIDs.contains($0.id) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    var newlyCreatedTasks: [FocusTask] {
+        focusTasks
+            .filter { !guidedTutorialBaselineTaskIDs.contains($0.id) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    var isGuidedTutorialOverlayPaused: Bool {
+        !guidedTutorialPresentedModals.isEmpty
     }
 
     func normalizeArchivedProjectGoalsIfNeeded() {
@@ -195,56 +244,67 @@ private extension ContentView {
         }
     }
 
-    func startGuidedTutorialIfNeeded(currentSessionActive: Bool) {
+    func startGuidedTutorialIfNeeded() {
         guard authManager.isAuthenticated,
               hasSeenOnboarding,
               hasCompletedSetupChecklist,
               needsGuidedTutorial,
               !hasCompletedGuidedTutorial else {
-            guidedTutorialStep = nil
+            resetGuidedTutorialRuntime()
             return
         }
         guard guidedTutorialStep == nil else { return }
 
-        if currentSessionActive {
-            completeGuidedTutorial()
-            return
-        }
-
-        if activeTaskCount > 0 {
-            selectedTab = .home
-            guidedTutorialStep = .startFocus
-            return
-        }
-
-        if activeProjectCount > 0 {
-            selectedTab = .home
-            guidedTutorialStep = .createTask
-            return
-        }
-
         selectedTab = .home
+        guidedTutorialBaselineProjectIDs = allProjectIDs
+        guidedTutorialBaselineTaskIDs = allTaskIDs
+        guidedTutorialCreatedProjectID = nil
+        guidedTutorialCreatedTaskID = nil
+        guidedTutorialPresentedModals = []
         guidedTutorialStep = .createProject
     }
 
-    func advanceGuidedTutorialIfNeeded(currentSessionActive: Bool) {
+    func refreshGuidedTutorialProgress(currentSessionActive: Bool) {
         guard let step = guidedTutorialStep, !hasCompletedGuidedTutorial else { return }
+        selectedTab = .home
+
+        if step != .createProject,
+           let createdProjectID = guidedTutorialCreatedProjectID,
+           !allProjectIDs.contains(createdProjectID) {
+            guidedTutorialCreatedProjectID = nil
+            guidedTutorialCreatedTaskID = nil
+            guidedTutorialStep = .createProject
+            return
+        }
 
         switch step {
         case .createProject:
-            if activeProjectCount > 0 {
-                selectedTab = .home
+            if guidedTutorialCreatedProjectID == nil,
+               let created = newlyCreatedProjects.first {
+                guidedTutorialCreatedProjectID = created.id
+                guidedTutorialStep = .openTasks
+            }
+        case .openTasks:
+            break
+        case .createTask:
+            if guidedTutorialCreatedTaskID == nil,
+               let created = newlyCreatedTasks.first {
+                guidedTutorialCreatedTaskID = created.id
+                guidedTutorialStep = .startFocusChoice
+            }
+        case .startFocusChoice, .startFocusButtonOnly:
+            if let createdTaskID = guidedTutorialCreatedTaskID,
+               !allTaskIDs.contains(createdTaskID) {
+                guidedTutorialCreatedTaskID = nil
                 guidedTutorialStep = .createTask
             }
-        case .createTask:
-            if activeTaskCount > 0 {
-                selectedTab = .home
-                guidedTutorialStep = .startFocus
+        case .stopFocus:
+            if !currentSessionActive,
+               !guidedTutorialPresentedModals.contains(.completedSession) {
+                guidedTutorialStep = .ready
             }
-        case .startFocus:
-            if currentSessionActive {
-                completeGuidedTutorial()
-            }
+        case .finishSession, .ready:
+            break
         }
     }
 
@@ -252,8 +312,78 @@ private extension ContentView {
         withAnimation(.easeInOut(duration: 0.2)) {
             hasCompletedGuidedTutorial = true
             needsGuidedTutorial = false
-            guidedTutorialStep = nil
+            resetGuidedTutorialRuntime()
         }
+    }
+
+    func resetGuidedTutorialRuntime() {
+        guidedTutorialStep = nil
+        guidedTutorialBaselineProjectIDs = []
+        guidedTutorialBaselineTaskIDs = []
+        guidedTutorialCreatedProjectID = nil
+        guidedTutorialCreatedTaskID = nil
+        guidedTutorialPresentedModals = []
+    }
+
+    func forceRestartGuidedTutorialFromDebug() {
+        guard authManager.isAuthenticated else { return }
+        hasSeenOnboarding = true
+        hasCompletedSetupChecklist = true
+        needsGuidedTutorial = true
+        hasCompletedGuidedTutorial = false
+        resetGuidedTutorialRuntime()
+        selectedTab = .home
+        startGuidedTutorialIfNeeded()
+        refreshGuidedTutorialProgress(currentSessionActive: manager?.currentSession != nil)
+    }
+
+    func handleGuidedTutorialEvent(_ event: GuidedTutorialEvent) {
+        guard let step = guidedTutorialStep, !hasCompletedGuidedTutorial else { return }
+
+        switch event {
+        case .homeSectionChanged(let section):
+            if step == .openTasks, section == .tasks {
+                guidedTutorialStep = .createTask
+            }
+        case .modalChanged(let kind, let isPresented):
+            if isPresented {
+                guidedTutorialPresentedModals.insert(kind)
+            } else {
+                guidedTutorialPresentedModals.remove(kind)
+            }
+        case .taskSelectionChanged(let selectedTaskID):
+            if let createdTaskID = guidedTutorialCreatedTaskID {
+                if step == .startFocusChoice, selectedTaskID == createdTaskID {
+                    guidedTutorialStep = .startFocusButtonOnly
+                } else if step == .startFocusButtonOnly, selectedTaskID != createdTaskID {
+                    guidedTutorialStep = .startFocusChoice
+                }
+            }
+        case .focusStarted(let projectID, let taskID):
+            switch step {
+            case .startFocusChoice:
+                let startedWithCreatedTask = (taskID != nil && taskID == guidedTutorialCreatedTaskID)
+                let startedWithCreatedProject = (taskID == nil && projectID != nil && projectID == guidedTutorialCreatedProjectID)
+                if startedWithCreatedTask || startedWithCreatedProject {
+                    guidedTutorialStep = .stopFocus
+                }
+            case .startFocusButtonOnly:
+                if taskID != nil && taskID == guidedTutorialCreatedTaskID {
+                    guidedTutorialStep = .stopFocus
+                }
+            default:
+                break
+            }
+        case .focusStopped(let willShowCompletionSheet):
+            guard step == .stopFocus else { break }
+            guidedTutorialStep = willShowCompletionSheet ? .finishSession : .ready
+        case .completionDone:
+            if step == .finishSession {
+                guidedTutorialStep = .ready
+            }
+        }
+
+        refreshGuidedTutorialProgress(currentSessionActive: manager?.currentSession != nil)
     }
 
     func tutorialHoles(for step: GuidedTutorialStep,
@@ -269,13 +399,24 @@ private extension ContentView {
         switch step {
         case .createProject:
             add(.projectsAddButton)
+            add(.projectsContentArea)
             add(.projectsEmptyCreateButton)
+        case .openTasks:
+            add(.homeTasksSectionButton)
         case .createTask:
             add(.homeNewTaskButton)
             add(.homeEmptyNewTaskButton)
-        case .startFocus:
+        case .startFocusChoice:
             add(.homeTimeToFocusButton)
-            add(.homeFirstTaskRow)
+            if let createdTaskID = guidedTutorialCreatedTaskID {
+                add(.homeTaskRow(createdTaskID))
+            }
+        case .startFocusButtonOnly:
+            add(.homeTimeToFocusButton)
+        case .stopFocus:
+            add(.homeStopButton)
+        case .finishSession, .ready:
+            break
         }
 
         return holes

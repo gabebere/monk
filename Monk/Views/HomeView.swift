@@ -6,6 +6,11 @@ import UIKit
 struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.activeGuidedTutorialStep) private var activeGuidedTutorialStep
+    @Environment(\.guidedTutorialCreatedTaskID) private var guidedTutorialCreatedTaskID
+    @Environment(\.guidedTutorialBaselineProjectIDs) private var guidedTutorialBaselineProjectIDs
+    @Environment(\.guidedTutorialBaselineTaskIDs) private var guidedTutorialBaselineTaskIDs
+    @Environment(\.guidedTutorialEventHandler) private var guidedTutorialEventHandler
     @AppStorage("tasks.showCompleted") private var showCompleted = false
     @AppStorage("projects.viewMode") private var projectViewModeRaw: String = ProjectViewMode.grid.rawValue
     @AppStorage("projects.sortMode") private var projectSortModeRaw: String = ProjectSortMode.recent.rawValue
@@ -30,10 +35,29 @@ struct HomeView: View {
                 return "Tasks"
             }
         }
+
+        var tutorialSection: GuidedTutorialHomeSection {
+            switch self {
+            case .projects:
+                return .projects
+            case .tasks:
+                return .tasks
+            }
+        }
     }
 
     private var selectedTask: FocusTask? {
-        focusTasks.first(where: { $0.id == selectedTaskID })
+        visibleFocusTasks.first(where: { $0.id == selectedTaskID })
+    }
+
+    private var visibleProjects: [Project] {
+        guard activeGuidedTutorialStep != nil else { return projects }
+        return projects.filter { !guidedTutorialBaselineProjectIDs.contains($0.id) }
+    }
+
+    private var visibleFocusTasks: [FocusTask] {
+        guard activeGuidedTutorialStep != nil else { return focusTasks }
+        return focusTasks.filter { !guidedTutorialBaselineTaskIDs.contains($0.id) }
     }
 
     private enum LandscapeLayout {
@@ -51,7 +75,7 @@ struct HomeView: View {
         ProjectGridListView(
             embedInScroll: embedInScroll,
             showsToolbar: false,
-            projects: projects,
+            projects: visibleProjects,
             onSelect: { project in
                 projectDetail = project
             },
@@ -79,7 +103,9 @@ struct HomeView: View {
                 selectedTaskID: $selectedTaskID,
                 onAdd: { taskEditorRoute = .create(defaultProject: nil) },
                 onEdit: { task in taskEditorRoute = .edit(task) },
-                showsHeader: false
+                showsHeader: false,
+                hiddenTaskIDs: activeGuidedTutorialStep == nil ? [] : guidedTutorialBaselineTaskIDs,
+                tutorialTargetTaskID: guidedTutorialCreatedTaskID
             )
         }
     }
@@ -208,19 +234,29 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
+    @ViewBuilder
     private func sectionButton(_ section: HomeSection) -> some View {
-        Button(section.title) {
-            guard section != selectedHomeSection else { return }
-            Haptics.soft()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedHomeSection = section
-                if section == .projects {
-                    selectedTaskID = nil
+        let button = Button(section.title) {
+            let isAlreadySelected = (section == selectedHomeSection)
+            if !isAlreadySelected {
+                Haptics.soft()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedHomeSection = section
+                    if section == .projects {
+                        selectedTaskID = nil
+                    }
                 }
             }
+            guidedTutorialEventHandler(.homeSectionChanged(section.tutorialSection))
         }
         .buttonStyle(.plain)
         .foregroundStyle(selectedHomeSection == section ? .white : .white.opacity(0.52))
+
+        if section == .tasks {
+            button.guidedTutorialAnchor(.homeTasksSectionButton)
+        } else {
+            button
+        }
     }
 
     var body: some View {
@@ -301,12 +337,54 @@ struct HomeView: View {
             if !FeatureFlags.tasksV1Enabled {
                 selectedHomeSection = .projects
             }
+            syncSectionToGuidedTutorial()
+            clearSelectedTaskIfHidden()
         }
+        .onChange(of: activeGuidedTutorialStep) { _, _ in
+            syncSectionToGuidedTutorial()
+            clearSelectedTaskIfHidden()
+        }
+        .onChange(of: selectedTaskID) { _, newValue in
+            guidedTutorialEventHandler(.taskSelectionChanged(newValue))
+        }
+        .onChange(of: showingNewProject) { _, isPresented in
+            guidedTutorialEventHandler(.modalChanged(kind: .newProject, isPresented: isPresented))
+        }
+        .onChange(of: taskEditorRoute != nil) { _, isPresented in
+            guidedTutorialEventHandler(.modalChanged(kind: .taskEditor, isPresented: isPresented))
+        }
+        .onChange(of: visibleFocusTasks.map(\.id)) { _, _ in
+            clearSelectedTaskIfHidden()
+        }
+    }
+
+    private func syncSectionToGuidedTutorial() {
+        guard let step = activeGuidedTutorialStep else { return }
+        switch step {
+        case .createProject:
+            selectedHomeSection = .projects
+        case .openTasks:
+            selectedHomeSection = .projects
+        case .createTask, .startFocusChoice, .startFocusButtonOnly:
+            selectedHomeSection = .tasks
+        case .stopFocus, .finishSession, .ready:
+            break
+        }
+    }
+
+    private func clearSelectedTaskIfHidden() {
+        guard let selectedTaskID else { return }
+        guard !visibleFocusTasks.contains(where: { $0.id == selectedTaskID }) else { return }
+        self.selectedTaskID = nil
     }
 }
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.activeGuidedTutorialStep) private var activeGuidedTutorialStep
+    @Environment(\.guidedTutorialCreatedProjectID) private var guidedTutorialCreatedProjectID
+    @Environment(\.guidedTutorialBaselineProjectIDs) private var guidedTutorialBaselineProjectIDs
+    @Environment(\.guidedTutorialEventHandler) private var guidedTutorialEventHandler
     @Query private var prefsList: [Preferences]
     let selectedTask: FocusTask?
 
@@ -323,6 +401,11 @@ private struct TimerCard: View {
     @State private var showStopDetails: Bool = false
     @State private var stoppedSession: FocusSession? = nil
     @State private var showingProjectPicker: Bool = false
+
+    private var tutorialLimitedProjectID: UUID? {
+        guard activeGuidedTutorialStep == .startFocusChoice, selectedTask == nil else { return nil }
+        return guidedTutorialCreatedProjectID
+    }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -437,6 +520,7 @@ private struct TimerCard: View {
                             }
                         }
                         .accessibilityLabel("Stop")
+                        .guidedTutorialAnchor(.homeStopButton)
                     }
                     .padding(.bottom, 0)
                 }
@@ -450,12 +534,15 @@ private struct TimerCard: View {
         .sheet(isPresented: $showStopDetails) {
             if let session = stoppedSession {
                 CompletedSessionView(session: session) {
-                    // No-op; stop already occurred
+                    guidedTutorialEventHandler(.completionDone)
                 }
             }
         }
         .sheet(isPresented: $showingProjectPicker) {
-            ProjectSelectionSheet { selection in
+            ProjectSelectionSheet(
+                allowedProjectID: tutorialLimitedProjectID,
+                hiddenProjectIDs: activeGuidedTutorialStep == nil ? [] : guidedTutorialBaselineProjectIDs
+            ) { selection in
                 startSession(with: selection, task: selectedTask)
             }
         }
@@ -470,12 +557,21 @@ private struct TimerCard: View {
                 innerLoopTask?.cancel(); innerLoopTask = nil
             }
         }
+        .onChange(of: showingProjectPicker) { _, isPresented in
+            guidedTutorialEventHandler(.modalChanged(kind: .projectPicker, isPresented: isPresented))
+        }
+        .onChange(of: showStopDetails) { _, isPresented in
+            guidedTutorialEventHandler(.modalChanged(kind: .completedSession, isPresented: isPresented))
+        }
     }
 
     private func startSession(with project: Project?, task: FocusTask?) {
         let sessionID = UUID().uuidString
         let resolvedProject = project ?? task?.project
         focus.start(project: resolvedProject, task: task)
+        let startedProjectID = focus.currentSession?.project?.id ?? resolvedProject?.id
+        let startedTaskID = focus.currentSession?.task?.id ?? task?.id
+        guidedTutorialEventHandler(.focusStarted(projectID: startedProjectID, taskID: startedTaskID))
         if let current = focus.currentSession {
             Analytics.track("focus_started", [
                 "session_id": current.id.uuidString,
@@ -507,6 +603,7 @@ private struct TimerCard: View {
             let discardShort = prefsList.first?.discardShortSessions == true
             let duration = Date().timeIntervalSince(start)
             let willDiscard = discardShort && duration < 120
+            guidedTutorialEventHandler(.focusStopped(willShowCompletionSheet: !willDiscard))
             if !willDiscard {
                 stoppedSession = s
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showStopDetails = true }
@@ -597,6 +694,8 @@ private struct ProjectSelectionSheet: View {
     @AppStorage("projects.showArchived") private var showArchived: Bool = false
     @AppStorage("projects.viewMode") private var viewModeRaw: String = ProjectViewMode.grid.rawValue
     @AppStorage("projects.sortMode") private var sortModeRaw: String = ProjectSortMode.recent.rawValue
+    let allowedProjectID: UUID?
+    let hiddenProjectIDs: Set<UUID>
     let onSelect: (Project?) -> Void
 
     @State private var searchText: String = ""
@@ -609,6 +708,11 @@ private struct ProjectSelectionSheet: View {
     private var filteredProjects: [Project] {
         projects
             .filter { showArchived || !$0.isArchived }
+            .filter { !hiddenProjectIDs.contains($0.id) }
+            .filter { project in
+                guard let allowedProjectID else { return true }
+                return project.id == allowedProjectID
+            }
             .filter { project in
                 guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return true }
                 return project.title.localizedCaseInsensitiveContains(searchText)
@@ -662,7 +766,7 @@ private struct ProjectSelectionSheet: View {
                                               onToggleSort: toggleSortMode,
                                               onToggleArchived: { showArchived.toggle() })
 
-                        if projects.isEmpty {
+                        if sortedProjects.isEmpty {
                             EmptyProjectsView()
                         } else {
                             Group {
@@ -703,9 +807,11 @@ private struct ProjectSelectionSheet: View {
                             }
                         }
 
-                        ProjectSelectionNoProjectTile {
-                            onSelect(nil)
-                            dismiss()
+                        if allowedProjectID == nil {
+                            ProjectSelectionNoProjectTile {
+                                onSelect(nil)
+                                dismiss()
+                            }
                         }
                     }
                     .padding(.horizontal, 24)
@@ -1975,6 +2081,8 @@ private extension AnyTransition {
 private struct CompletedSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.activeGuidedTutorialStep) private var activeGuidedTutorialStep
+    @Environment(\.guidedTutorialBaselineProjectIDs) private var guidedTutorialBaselineProjectIDs
     @EnvironmentObject private var focus: FocusManager
     @Bindable var session: FocusSession
     var onStop: () -> Void
@@ -1984,6 +2092,11 @@ private struct CompletedSessionView: View {
     @State private var selectedProjectID: UUID?
 
     private var prefs: Preferences? { prefsList.first }
+    private var isTutorialFinishStep: Bool { activeGuidedTutorialStep == .finishSession }
+    private var visibleProjects: [Project] {
+        guard activeGuidedTutorialStep != nil else { return projects }
+        return projects.filter { !guidedTutorialBaselineProjectIDs.contains($0.id) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -2011,12 +2124,18 @@ private struct CompletedSessionView: View {
                         }
                         .padding(.top, 12)
 
+                        if isTutorialFinishStep {
+                            Text("Tap Done to finish the tutorial.")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+
                         ProjectFormCard(title: "Assign to project",
                                         subtitle: "Log these focus hours against a project (optional).",
                                         icon: "target") {
                             Picker("Project", selection: $selectedProjectID) {
                                 Text("None").tag(UUID?.none)
-                                ForEach(projects) { project in
+                                ForEach(visibleProjects) { project in
                                     Text(project.title).tag(Optional(project.id))
                                 }
                             }
@@ -2042,15 +2161,17 @@ private struct CompletedSessionView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        Haptics.heavy()
-                        dismiss()
+                if !isTutorialFinishStep {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") {
+                            Haptics.heavy()
+                            dismiss()
+                        }
+                            .foregroundStyle(.white.opacity(0.8))
                     }
-                        .foregroundStyle(.white.opacity(0.8))
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    Button("Done") {
                         Haptics.success()
                         saveAndFinish()
                     }
@@ -2059,14 +2180,19 @@ private struct CompletedSessionView: View {
             }
         }
         .tint(.white)
+        .interactiveDismissDisabled(isTutorialFinishStep)
         .onAppear {
             selectedProjectID = session.project?.id
+            if let selectedProjectID,
+               !visibleProjects.contains(where: { $0.id == selectedProjectID }) {
+                self.selectedProjectID = nil
+            }
         }
     }
 
     private func saveAndFinish() {
         if let selectedProjectID,
-           let matched = projects.first(where: { $0.id == selectedProjectID }) {
+           let matched = visibleProjects.first(where: { $0.id == selectedProjectID }) {
             session.project = matched
         } else {
             session.project = nil
@@ -2080,7 +2206,7 @@ private struct CompletedSessionView: View {
 
     private var selectedProjectTitle: String? {
         if let id = selectedProjectID,
-           let project = projects.first(where: { $0.id == id }) {
+           let project = visibleProjects.first(where: { $0.id == id }) {
             return project.title
         }
         return session.project?.title

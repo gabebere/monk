@@ -139,6 +139,31 @@ final class FocusManager: ObservableObject {
         }
     }
 
+    func abandonCurrentSessionForAccountDeletion() {
+        guard let session = currentSession else { return }
+        modelContext.delete(session)
+        guard modelContext.saveOrRollback() else { return }
+
+        currentSession = nil
+        todayTotalSeconds = 0
+        HardBlockManager.shared.deactivateHardBlock()
+#if canImport(ActivityKit)
+        if #available(iOS 16.2, *) {
+            LiveActivityManager.shared.endActivity(for: session)
+        }
+#endif
+        focusScoreTickCounter = 0
+        SnapshotWriter.refresh(modelContext: modelContext, currentSession: nil, stateOverride: .idle)
+    }
+
+    func refreshAfterDataReset() {
+        currentSession = nil
+        recalcTodayTotal()
+        HardBlockManager.shared.deactivateHardBlock()
+        focusScoreTickCounter = 0
+        SnapshotWriter.refresh(modelContext: modelContext, currentSession: nil, stateOverride: .idle)
+    }
+
     func recalcTodayTotal(now: Date = .now) {
         let startOfToday = calendar.startOfDay(for: now)
         guard let startOfTomorrow = calendar.date(byAdding: .day, value: 1, to: startOfToday) else { return }

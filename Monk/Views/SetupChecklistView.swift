@@ -5,6 +5,7 @@ import SwiftData
 import UserNotifications
 import UIKit
 import HealthKit
+import EventKit
 
 struct SetupChecklistView: View {
     @Environment(\.modelContext) private var modelContext
@@ -63,6 +64,15 @@ struct SetupChecklistView: View {
                     .controlSize(.large)
                     .tint(Color.white.opacity(0.22))
                     .foregroundStyle(.white)
+                    .disabled(!canFinishChecklist)
+                    .opacity(canFinishChecklist ? 1 : 0.6)
+
+                    if !canFinishChecklist {
+                        Text("Continue through Calendar, Health, and Location prompts to proceed.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 .padding(24)
             }
@@ -95,6 +105,8 @@ struct SetupChecklistView: View {
                                                 .foregroundStyle(.tint)
                                         }
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                                 .listRowBackground(Color.clear)
@@ -215,7 +227,7 @@ struct SetupChecklistView: View {
                     .tint(.white)
             } else {
                 Button(action: action) {
-                    Text("Enable")
+                    Text("Continue")
                         .font(.footnote.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
@@ -243,12 +255,22 @@ struct SetupChecklistView: View {
         }
     }
 
+    private var calendarPermissionStatus: ChecklistStatus {
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .authorized, .fullAccess, .writeOnly:
+            return .granted
+        case .denied, .restricted:
+            return .denied
+        case .notDetermined:
+            return .pending
+        @unknown default:
+            return .pending
+        }
+    }
+
     private var calendarStatusView: ChecklistStatus {
         if calendarBusy { return .pending }
-        if prefs.calendarIntegrationEnabled == true, let id = prefs.calendarCalendarIdentifier, !id.isEmpty {
-            return .granted
-        }
-        return .pending
+        return calendarPermissionStatus
     }
 
     private var calendarButtonTitle: String {
@@ -267,6 +289,12 @@ struct SetupChecklistView: View {
         case .denied, .restricted: return .denied
         default: return .pending
         }
+    }
+
+    private var canFinishChecklist: Bool {
+        calendarPermissionStatus != .pending &&
+        healthStatus != .pending &&
+        locationStatus != .pending
     }
 
     // MARK: - Actions

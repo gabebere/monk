@@ -14,15 +14,15 @@ struct SettingsView: View {
     @AppStorage("hasCompletedSetupChecklist") private var hasCompletedSetupChecklist = false
     @AppStorage("needsGuidedTutorial") private var needsGuidedTutorial = false
     @AppStorage("hasCompletedGuidedTutorial") private var hasCompletedGuidedTutorial = false
+    @AppStorage("guidedTutorialRestartTrigger") private var guidedTutorialRestartTrigger = ""
 
     @State private var calendarOptions: [CalendarDisplayInfo] = []
     @State private var calendarStatusMessage: String?
     @State private var calendarBusy = false
-    @State private var feedbackStatusMessage: String?
-    @State private var showingFeedback = false
-    @State private var selectedBoard: String?
     @State private var showingFeedbackWeb = false
-    @State private var showingOnboardingPreview = false
+    @State private var showingDeleteAccountConfirmation = false
+    @State private var deleteAccountBusy = false
+    @State private var deleteAccountStatusMessage: String?
     @AppStorage("mirroring.enabled") private var mirroringEnabled: Bool = true
     @AppStorage("calendar.logging.enabled") private var calendarLoggingEnabled: Bool = true
 
@@ -57,15 +57,13 @@ struct SettingsView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
                         feedbackCard
-                        accountCard
                         mirroringCard
                         calendarCard
                         healthCard
                         goalCard
                         sessionsCard
-#if DEBUG
-                        debugCard
-#endif
+                        debugTutorialCard
+                        accountCard
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 36)
@@ -88,12 +86,15 @@ struct SettingsView: View {
             )
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showingOnboardingPreview) {
-            OnboardingStoryView {
-                showingOnboardingPreview = false
+        .confirmationDialog("Delete account permanently?",
+                            isPresented: $showingDeleteAccountConfirmation,
+                            titleVisibility: .visible) {
+            Button("Delete account", role: .destructive) {
+                Task { await deleteAccount() }
             }
-            .environmentObject(auth)
-            .environmentObject(focus)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes your account data from this device and signs you out.")
         }
     }
 }
@@ -321,36 +322,75 @@ private extension SettingsView {
         SettingsCard(title: "Account",
                      subtitle: nil,
                      icon: "person.crop.circle") {
-            HStack {
-                if auth.isAuthenticated {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(auth.displayName ?? "Signed in")
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    if auth.isAuthenticated {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(auth.displayName ?? "Signed in")
+                                .font(.headline.weight(.semibold))
+                                .foregroundStyle(.white)
+                            if let email = auth.userEmail {
+                                Text(email)
+                                    .font(.footnote)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                        }
+                    } else {
+                        Text("Not signed in")
                             .font(.headline.weight(.semibold))
                             .foregroundStyle(.white)
-                        if let email = auth.userEmail {
-                            Text(email)
-                                .font(.footnote)
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
                     }
-                } else {
-                    Text("Not signed in")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
+                    Spacer()
+                    Button(role: auth.isAuthenticated ? .destructive : .none) {
+                        Haptics.heavy()
+                        auth.signOut()
+                    } label: {
+                        Text(auth.isAuthenticated ? "Sign out" : "Sign in")
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.14), in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(deleteAccountBusy)
                 }
-                Spacer()
-                Button(role: auth.isAuthenticated ? .destructive : .none) {
-                    Haptics.heavy()
-                    auth.signOut()
-                } label: {
-                    Text(auth.isAuthenticated ? "Sign out" : "Sign in")
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.14), in: Capsule())
+
+                if auth.isAuthenticated {
+                    Button(role: .destructive) {
+                        Haptics.heavy()
+                        showingDeleteAccountConfirmation = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            if deleteAccountBusy {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            Text(deleteAccountBusy ? "Deleting account..." : "Delete account permanently")
+                                .font(.footnote.weight(.semibold))
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        .padding(.vertical, 12)
+                        .background(Color.red.opacity(0.25), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.red.opacity(0.45), lineWidth: 1)
+                        )
                         .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(deleteAccountBusy)
+
+                    Text("This action is permanent and clears your account data from this device.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    if let deleteAccountStatusMessage {
+                        Text(deleteAccountStatusMessage)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -479,7 +519,6 @@ private extension SettingsView {
             Button {
                 Haptics.heavy()
                 showingFeedbackWeb = true
-                feedbackStatusMessage = nil
             } label: {
                 Text("I have some!")
                     .font(.headline.weight(.semibold))
@@ -496,62 +535,26 @@ private extension SettingsView {
         }
     }
 
-    var debugCard: some View {
-        SettingsCard(title: "Debug",
-                     subtitle: "Onboarding tools for testing.",
-                     icon: "hammer.fill") {
-            VStack(alignment: .leading, spacing: 10) {
-                Button {
-                    Haptics.heavy()
-                    Analytics.track("debug_test_event", ["monetization_model": "paid_app"])
-                } label: {
-                    Text("Send test analytics event")
-                        .font(.footnote.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                        )
-                        .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    Haptics.heavy()
-                    showingOnboardingPreview = true
-                } label: {
-                    Text("Show onboarding (preview)")
-                        .font(.footnote.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                        )
-                        .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    Haptics.heavy()
-                    restartOnboardingFlow()
-                } label: {
-                    Text("Restart onboarding flow")
-                        .font(.footnote.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                        )
-                        .foregroundStyle(.white.opacity(0.9))
-                }
-                .buttonStyle(.plain)
+    var debugTutorialCard: some View {
+        SettingsCard(title: "Guided tutorial",
+                     subtitle: "Replay the app walkthrough anytime.",
+                     icon: "questionmark.circle.fill") {
+            Button {
+                Haptics.heavy()
+                restartGuidedTutorial()
+            } label: {
+                Text("Restart guided tutorial")
+                    .font(.footnote.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                    .foregroundStyle(.white)
             }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -607,31 +610,55 @@ private extension SettingsView {
         }
     }
 
-    func requestLocationPermission() async {
-        _ = await LocationProvider.shared.requestLocation()
-        await MainActor.run {
-            calendarStatusMessage = nil
-        }
+    func restartGuidedTutorial() {
+        hasSeenOnboarding = true
+        hasCompletedSetupChecklist = true
+        needsGuidedTutorial = true
+        hasCompletedGuidedTutorial = false
+        guidedTutorialRestartTrigger = UUID().uuidString
     }
 
-    func removeAllMonkEvents() async {
-        await MainActor.run {
-            calendarBusy = true
-            calendarStatusMessage = nil
+    func deleteAccount() async {
+        guard !deleteAccountBusy else { return }
+        deleteAccountBusy = true
+        deleteAccountStatusMessage = nil
+
+        focus.abandonCurrentSessionForAccountDeletion()
+        HardBlockManager.shared.deactivateHardBlock()
+
+        let healthLinks = (try? modelContext.fetch(FetchDescriptor<HealthSampleLink>())) ?? []
+        for link in healthLinks {
+            if let eventIdentifier = link.eventIdentifier {
+                await CalendarIntegration.shared.deleteEvent(identifier: eventIdentifier)
+            }
         }
         _ = await CalendarIntegration.shared.purgeAllMonkEvents()
-        await MainActor.run {
-            calendarBusy = false
-            calendarStatusMessage = nil
+
+        guard purgeSwiftDataModels() else {
+            deleteAccountStatusMessage = "Unable to delete local account data. Please try again."
+            deleteAccountBusy = false
+            return
         }
+        focus.refreshAfterDataReset()
+        deleteAccountBusy = false
+        deleteAccountStatusMessage = nil
+        auth.deleteAccount()
     }
 
-    func restartOnboardingFlow() {
-        hasSeenOnboarding = false
-        hasCompletedSetupChecklist = false
-        needsGuidedTutorial = false
-        hasCompletedGuidedTutorial = false
-        showingOnboardingPreview = false
+    @discardableResult
+    func purgeSwiftDataModels() -> Bool {
+        let sessions = (try? modelContext.fetch(FetchDescriptor<FocusSession>())) ?? []
+        let tasks = (try? modelContext.fetch(FetchDescriptor<FocusTask>())) ?? []
+        let projects = (try? modelContext.fetch(FetchDescriptor<Project>())) ?? []
+        let links = (try? modelContext.fetch(FetchDescriptor<HealthSampleLink>())) ?? []
+        let preferences = (try? modelContext.fetch(FetchDescriptor<Preferences>())) ?? []
+
+        sessions.forEach(modelContext.delete)
+        tasks.forEach(modelContext.delete)
+        projects.forEach(modelContext.delete)
+        links.forEach(modelContext.delete)
+        preferences.forEach(modelContext.delete)
+        return modelContext.saveOrRollback()
     }
 }
 

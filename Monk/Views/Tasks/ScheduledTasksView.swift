@@ -37,6 +37,8 @@ struct ScheduledTasksView: View {
     let onAdd: () -> Void
     let onEdit: (FocusTask) -> Void
     var showsHeader: Bool = true
+    var hiddenTaskIDs: Set<UUID> = []
+    var tutorialTargetTaskID: UUID? = nil
 
     private var sections: [ScheduledTaskSection] {
         let taskEntries = entries(for: allTasks)
@@ -255,9 +257,12 @@ private extension ScheduledTasksView {
             onToggleCompletion: { toggleCompletion(for: entry.task) }
         )
 
-        if isPrimaryTutorialTask(entry, section: section) {
+        if let tutorialTargetTaskID, entry.task.id == tutorialTargetTaskID {
             baseRow
-                .guidedTutorialAnchor(.homeFirstTaskRow)
+                .guidedTutorialAnchor(.homeTaskRow(tutorialTargetTaskID))
+        } else if isPrimaryTutorialTask(entry, section: section) {
+            baseRow
+                .guidedTutorialAnchor(.homeTaskRow(entry.task.id))
         } else {
             baseRow
         }
@@ -271,6 +276,7 @@ private extension ScheduledTasksView {
 
     func entries(for tasks: [FocusTask]) -> [ScheduledTaskEntry] {
         tasks.compactMap { task in
+            guard !hiddenTaskIDs.contains(task.id) else { return nil }
             guard let due = task.dueDate else { return nil }
             guard showCompleted || !task.isCompleted || recentlyCompletedTaskIDs.contains(task.id) else { return nil }
             return ScheduledTaskEntry(task: task, date: due, calendar: calendar)

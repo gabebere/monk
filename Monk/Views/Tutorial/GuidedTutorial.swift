@@ -3,43 +3,166 @@ import UIKit
 
 enum GuidedTutorialStep: Int, CaseIterable {
     case createProject
+    case openTasks
     case createTask
-    case startFocus
+    case startFocusChoice
+    case startFocusButtonOnly
+    case stopFocus
+    case finishSession
+    case ready
 
     var title: String {
         switch self {
         case .createProject:
             return "Create Your First Project"
+        case .openTasks:
+            return "Open Tasks"
         case .createTask:
             return "Create Your First Task"
-        case .startFocus:
+        case .startFocusChoice:
             return "Start Your First Focus"
+        case .startFocusButtonOnly:
+            return "Start Focus"
+        case .stopFocus:
+            return "Stop Focus"
+        case .finishSession:
+            return "Finish Session"
+        case .ready:
+            return "You're Ready"
         }
     }
 
     var message: String {
         switch self {
         case .createProject:
-            return "Use + or New Project on Home. Keep it simple and save your first project."
+            return "Use + or Add Project to create your first project."
+        case .openTasks:
+            return "Great. Now tap Tasks."
         case .createTask:
-            return "Now on Home, create one task linked to your project."
-        case .startFocus:
-            return "Tap Time to focus, or select your task first and then tap Time to focus. Monk will track time to the project and log it to calendar."
+            return "Create one task. If you cancel, just try again."
+        case .startFocusChoice:
+            return "To focus a task: select the task, then tap Time to focus. Or tap Time to focus directly to start without selecting a task first."
+        case .startFocusButtonOnly:
+            return "Task selected. Tap Time to focus to start a focus session on this task."
+        case .stopFocus:
+            return "Now stop this focus session."
+        case .finishSession:
+            return "Tap Done in the completion sheet to finish."
+        case .ready:
+            return "Great, now you're set to start using Monk."
         }
     }
 
     var progressText: String {
         "Step \(rawValue + 1) of \(Self.allCases.count)"
     }
+
+    var primaryButtonTitle: String? {
+        switch self {
+        case .ready:
+            return "Start using Monk"
+        default:
+            return nil
+        }
+    }
+
+    var prefersBottomInstructionCard: Bool {
+        switch self {
+        case .startFocusChoice, .startFocusButtonOnly:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 enum GuidedTutorialAnchor: Hashable {
     case projectsAddButton
+    case projectsContentArea
     case projectsEmptyCreateButton
+    case homeTasksSectionButton
     case homeNewTaskButton
     case homeEmptyNewTaskButton
-    case homeFirstTaskRow
+    case homeTaskRow(UUID)
     case homeTimeToFocusButton
+    case homeStopButton
+}
+
+enum GuidedTutorialModalKind: Hashable {
+    case newProject
+    case taskEditor
+    case projectPicker
+    case completedSession
+}
+
+enum GuidedTutorialHomeSection: Equatable {
+    case projects
+    case tasks
+}
+
+enum GuidedTutorialEvent {
+    case homeSectionChanged(GuidedTutorialHomeSection)
+    case modalChanged(kind: GuidedTutorialModalKind, isPresented: Bool)
+    case taskSelectionChanged(UUID?)
+    case focusStarted(projectID: UUID?, taskID: UUID?)
+    case focusStopped(willShowCompletionSheet: Bool)
+    case completionDone
+}
+
+private struct ActiveGuidedTutorialStepKey: EnvironmentKey {
+    static let defaultValue: GuidedTutorialStep? = nil
+}
+
+private struct GuidedTutorialCreatedProjectIDKey: EnvironmentKey {
+    static let defaultValue: UUID? = nil
+}
+
+private struct GuidedTutorialCreatedTaskIDKey: EnvironmentKey {
+    static let defaultValue: UUID? = nil
+}
+
+private struct GuidedTutorialBaselineProjectIDsKey: EnvironmentKey {
+    static let defaultValue: Set<UUID> = []
+}
+
+private struct GuidedTutorialBaselineTaskIDsKey: EnvironmentKey {
+    static let defaultValue: Set<UUID> = []
+}
+
+private struct GuidedTutorialEventHandlerKey: EnvironmentKey {
+    static let defaultValue: (GuidedTutorialEvent) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var activeGuidedTutorialStep: GuidedTutorialStep? {
+        get { self[ActiveGuidedTutorialStepKey.self] }
+        set { self[ActiveGuidedTutorialStepKey.self] = newValue }
+    }
+
+    var guidedTutorialCreatedProjectID: UUID? {
+        get { self[GuidedTutorialCreatedProjectIDKey.self] }
+        set { self[GuidedTutorialCreatedProjectIDKey.self] = newValue }
+    }
+
+    var guidedTutorialCreatedTaskID: UUID? {
+        get { self[GuidedTutorialCreatedTaskIDKey.self] }
+        set { self[GuidedTutorialCreatedTaskIDKey.self] = newValue }
+    }
+
+    var guidedTutorialBaselineProjectIDs: Set<UUID> {
+        get { self[GuidedTutorialBaselineProjectIDsKey.self] }
+        set { self[GuidedTutorialBaselineProjectIDsKey.self] = newValue }
+    }
+
+    var guidedTutorialBaselineTaskIDs: Set<UUID> {
+        get { self[GuidedTutorialBaselineTaskIDsKey.self] }
+        set { self[GuidedTutorialBaselineTaskIDsKey.self] = newValue }
+    }
+
+    var guidedTutorialEventHandler: (GuidedTutorialEvent) -> Void {
+        get { self[GuidedTutorialEventHandlerKey.self] }
+        set { self[GuidedTutorialEventHandlerKey.self] = newValue }
+    }
 }
 
 struct GuidedTutorialAnchorPreferenceKey: PreferenceKey {
@@ -60,30 +183,27 @@ struct GuidedTutorialSpotlightOverlay: View {
     let step: GuidedTutorialStep
     let holes: [CGRect]
     let topInset: CGFloat
+    let bottomInset: CGFloat
     let blocksTouchesOutsideHoles: Bool
+    let onPrimaryAction: (() -> Void)?
     let onSkip: () -> Void
 
-    @State private var pulse = false
+    private var spotlightHoles: [CGRect] {
+        holes.map { $0.insetBy(dx: -TutorialSpotlightStyle.holeInset, dy: -TutorialSpotlightStyle.holeInset) }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             if blocksTouchesOutsideHoles {
-                TutorialTouchShield(holes: holes)
+                TutorialTouchShield(holes: spotlightHoles)
                     .ignoresSafeArea()
             }
 
-            TutorialMaskShape(holes: holes)
-                .fill(Color.black.opacity(0.64), style: FillStyle(eoFill: true))
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-
-            ForEach(Array(holes.enumerated()), id: \.offset) { _, rect in
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.92), lineWidth: 2)
-                    .frame(width: rect.width + 16, height: rect.height + 16)
+            ForEach(Array(spotlightHoles.enumerated()), id: \.offset) { _, rect in
+                RoundedRectangle(cornerRadius: TutorialSpotlightStyle.cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.92), lineWidth: TutorialSpotlightStyle.strokeLineWidth)
+                    .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
-                    .scaleEffect(pulse ? 1.03 : 0.98)
-                    .animation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true), value: pulse)
                     .allowsHitTesting(false)
             }
 
@@ -102,6 +222,16 @@ struct GuidedTutorialSpotlightOverlay: View {
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.white.opacity(0.72))
                     Spacer()
+                    if let title = step.primaryButtonTitle, let onPrimaryAction {
+                        Button(title) {
+                            onPrimaryAction()
+                        }
+                        .font(.caption.weight(.semibold))
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
+                        .tint(.white)
+                        .foregroundStyle(.black)
+                    }
                     Button("Skip") {
                         onSkip()
                     }
@@ -119,11 +249,12 @@ struct GuidedTutorialSpotlightOverlay: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.white.opacity(0.2), lineWidth: 1)
             )
+            .frame(maxWidth: .infinity,
+                   maxHeight: .infinity,
+                   alignment: step.prefersBottomInstructionCard ? .bottom : .top)
             .padding(.horizontal, 16)
-            .padding(.top, topInset + 16)
-        }
-        .onAppear {
-            pulse = true
+            .padding(.top, step.prefersBottomInstructionCard ? 0 : topInset + 16)
+            .padding(.bottom, step.prefersBottomInstructionCard ? bottomInset + TutorialSpotlightStyle.bottomCardClearance : 0)
         }
     }
 }
@@ -138,7 +269,7 @@ private struct TutorialTouchShield: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: TutorialTouchShieldView, context: Context) {
-        uiView.holes = holes.map { $0.insetBy(dx: -8, dy: -8) }
+        uiView.holes = holes
     }
 }
 
@@ -153,16 +284,9 @@ private final class TutorialTouchShieldView: UIView {
     }
 }
 
-private struct TutorialMaskShape: Shape {
-    let holes: [CGRect]
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.addRect(rect)
-        for hole in holes {
-            let expanded = hole.insetBy(dx: -8, dy: -8)
-            path.addRoundedRect(in: expanded, cornerSize: CGSize(width: 18, height: 18))
-        }
-        return path
-    }
+private enum TutorialSpotlightStyle {
+    static let holeInset: CGFloat = 4
+    static let cornerRadius: CGFloat = 18
+    static let strokeLineWidth: CGFloat = 2
+    static let bottomCardClearance: CGFloat = 96
 }

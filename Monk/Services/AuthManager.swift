@@ -99,22 +99,20 @@ final class AuthManager: ObservableObject {
     }
 
     func signOut() {
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: accessKey)
-        defaults.removeObject(forKey: userIDKey)
-        defaults.removeObject(forKey: nameKey)
-        defaults.removeObject(forKey: emailKey)
-        defaults.removeObject(forKey: newsletterEmailKey)
-        defaults.removeObject(forKey: newsletterOptInKey)
+        clearLocalAuthState(clearAllAppDefaults: false)
 #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.signOut()
 #endif
-        isAuthenticated = false
-        displayName = nil
-        userEmail = nil
-        newsletterEmail = nil
-        newsletterOptIn = false
         logger.debug("Signed out locally")
+    }
+
+    func deleteAccount() {
+#if canImport(GoogleSignIn)
+        GIDSignIn.sharedInstance.disconnect { _ in }
+#endif
+        clearLocalAuthState(clearAllAppDefaults: true)
+        Analytics.reset()
+        logger.info("Deleted account and local data")
     }
 
     func applyNewsletterPreference(email: String?, optedIn: Bool) {
@@ -152,6 +150,25 @@ final class AuthManager: ObservableObject {
 }
 
 private extension AuthManager {
+    func clearLocalAuthState(clearAllAppDefaults: Bool) {
+        let defaults = UserDefaults.standard
+        if clearAllAppDefaults,
+           let bundleID = Bundle.main.bundleIdentifier {
+            defaults.removePersistentDomain(forName: bundleID)
+        }
+        defaults.removeObject(forKey: accessKey)
+        defaults.removeObject(forKey: userIDKey)
+        defaults.removeObject(forKey: nameKey)
+        defaults.removeObject(forKey: emailKey)
+        defaults.removeObject(forKey: newsletterEmailKey)
+        defaults.removeObject(forKey: newsletterOptInKey)
+        isAuthenticated = false
+        displayName = nil
+        userEmail = nil
+        newsletterEmail = nil
+        newsletterOptIn = false
+    }
+
     func completeSignIn(userID: String, name: String?, email: String?) {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: accessKey)

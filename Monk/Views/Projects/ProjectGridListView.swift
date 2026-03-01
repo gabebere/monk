@@ -155,17 +155,17 @@ private extension ProjectGridListView {
 
     var emptyState: some View {
         ContentUnavailableView {
-            Label("No projects yet.", systemImage: "square.grid.2x2")
+            Label("No projects yet", systemImage: "square.grid.2x2")
                 .font(.title3.weight(.semibold))
         } description: {
-            Text("Create one to start tracking your focus.")
+            Text("Monk works through projects. Add your first project, set a weekly goal, and choose blocked apps.")
                 .foregroundStyle(.white.opacity(0.72))
         } actions: {
             Button {
                 Haptics.heavy()
                 onCreate()
             } label: {
-                Label("New Project", systemImage: "plus.circle.fill")
+                Label("Add Project", systemImage: "plus.circle.fill")
                     .font(.subheadline.weight(.semibold))
             }
             .buttonStyle(.borderedProminent)
@@ -177,7 +177,8 @@ private extension ProjectGridListView {
         }
         .foregroundStyle(.white)
         .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .guidedTutorialAnchor(.projectsContentArea)
     }
 
     func toggleSortMode() {
