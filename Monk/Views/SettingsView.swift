@@ -25,6 +25,7 @@ struct SettingsView: View {
     @State private var deleteAccountStatusMessage: String?
     @AppStorage("mirroring.enabled") private var mirroringEnabled: Bool = true
     @AppStorage("calendar.logging.enabled") private var calendarLoggingEnabled: Bool = true
+    @AppStorage("focus.nudges.deviceEnabled") private var focusNudgesDeviceEnabled: Bool = true
 
     private var prefs: Preferences {
         if let existing = prefsList.first {
@@ -58,6 +59,7 @@ struct SettingsView: View {
                     VStack(spacing: 24) {
                         feedbackCard
                         mirroringCard
+                        nudgesCard
                         calendarCard
                         healthCard
                         goalCard
@@ -73,6 +75,11 @@ struct SettingsView: View {
         }
         .task {
             await refreshCalendars()
+            await FocusNudgeScheduler.shared.refresh(
+                modelContext: modelContext,
+                currentSession: focus.currentSession,
+                reason: "settings_opened"
+            )
         }
         .sheet(isPresented: $showingFeedbackWeb) {
             FeedbackWebView(
@@ -82,7 +89,10 @@ struct SettingsView: View {
                 firstName: auth.displayName,
                 lastName: nil,
                 signature: UserJotSigner.signature(for: auth.currentUserId ?? UUID().uuidString),
-                onClose: { showingFeedbackWeb = false }
+                onClose: {
+                    showingFeedbackWeb = false
+                    Analytics.track("feedback_closed", ["source": "settings"])
+                }
             )
             .ignoresSafeArea()
         }
@@ -395,6 +405,46 @@ private extension SettingsView {
         }
     }
 
+    var nudgesCard: some View {
+        SettingsCard(title: "Focus nudges",
+                     subtitle: "Adaptive reminders and daily recap.",
+                     icon: "bell.badge.fill") {
+            VStack(alignment: .leading, spacing: 16) {
+                Toggle(isOn: focusNudgesEnabledBinding) {
+                    Text("Enable focus nudges")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.cyan)
+
+                Toggle(isOn: $focusNudgesDeviceEnabled) {
+                    Text("Send nudges from this device")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.cyan)
+                .onChange(of: focusNudgesDeviceEnabled) { _, newValue in
+                    if newValue {
+                        refreshFocusNudges(reason: "settings_device_sender_enabled")
+                    } else {
+                        FocusNudgeScheduler.shared.clearAll()
+                    }
+                }
+
+                Toggle(isOn: focusDailySummaryBinding) {
+                    Text("Send 8:00 PM daily summary")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.cyan)
+
+                Text("Monk adapts the first nudge to 8:00 or 9:00 from your recent 14-day first-focus pattern.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+    }
+
     var discardShortBinding: Binding<Bool> {
         Binding(
             get: { prefs.discardShortSessions ?? false },
@@ -403,6 +453,30 @@ private extension SettingsView {
                 let didSave = modelContext.saveOrRollback()
                 if newValue && didSave {
                     focus.purgeShortSessionsIfNeeded()
+                }
+            }
+        )
+    }
+
+    var focusNudgesEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { prefs.focusNudgesEnabled },
+            set: { newValue in
+                prefs.focusNudgesEnabled = newValue
+                if modelContext.saveOrRollback() {
+                    refreshFocusNudges(reason: "settings_nudges_toggled")
+                }
+            }
+        )
+    }
+
+    var focusDailySummaryBinding: Binding<Bool> {
+        Binding(
+            get: { prefs.focusDailySummaryEnabled },
+            set: { newValue in
+                prefs.focusDailySummaryEnabled = newValue
+                if modelContext.saveOrRollback() {
+                    refreshFocusNudges(reason: "settings_daily_summary_toggled")
                 }
             }
         )
@@ -519,6 +593,7 @@ private extension SettingsView {
             Button {
                 Haptics.heavy()
                 showingFeedbackWeb = true
+                Analytics.track("feedback_opened", ["source": "settings"])
             } label: {
                 Text("I have some!")
                     .font(.headline.weight(.semibold))
@@ -607,6 +682,16 @@ private extension SettingsView {
               let current = prefs.calendarCalendarIdentifier else { return }
         Task {
             await handleCalendarSelectionChange(from: nil, to: current)
+        }
+    }
+
+    func refreshFocusNudges(reason: String) {
+        Task { @MainActor in
+            await FocusNudgeScheduler.shared.refresh(
+                modelContext: modelContext,
+                currentSession: focus.currentSession,
+                reason: reason
+            )
         }
     }
 

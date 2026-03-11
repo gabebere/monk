@@ -16,8 +16,10 @@ enum Analytics {
         shared.setEnabled(enabled)
     }
 
-    static func identify(_ id: String) {
-        shared.identify(id)
+    static func identify(_ id: String,
+                         userProperties: [String: Any]? = nil,
+                         userPropertiesSetOnce: [String: Any]? = nil) {
+        shared.identify(id, userProperties: userProperties, userPropertiesSetOnce: userPropertiesSetOnce)
     }
 
     static func reset() {
@@ -66,12 +68,14 @@ final class AnalyticsService {
         logger.debug("Analytics enabled set to \(enabled, privacy: .public)")
     }
 
-    func identify(_ id: String) {
+    func identify(_ id: String,
+                  userProperties: [String: Any]? = nil,
+                  userPropertiesSetOnce: [String: Any]? = nil) {
         distinctId = id
         saveDistinctId(id)
 #if canImport(PostHog)
         guard enabled else { return }
-        PostHogSDK.shared.identify(id)
+        PostHogSDK.shared.identify(id, userProperties: userProperties, userPropertiesSetOnce: userPropertiesSetOnce)
 #endif
     }
 

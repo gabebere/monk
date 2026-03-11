@@ -115,7 +115,7 @@ private struct FocusedTodayWidgetView: View {
                     .font(.system(size: valueSize, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .minimumScaleFactor(0.6)
-                    .lineLimit(1)
+                    .lineLimit(1) 
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 0) {

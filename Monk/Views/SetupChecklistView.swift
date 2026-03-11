@@ -434,6 +434,7 @@ struct SetupChecklistView: View {
                 notificationsStatus = .denied
                 notificationsBusy = false
             }
+            FocusNudgeScheduler.shared.clearAll()
             return
         }
         await refreshNotificationStatus()
@@ -442,6 +443,13 @@ struct SetupChecklistView: View {
             await MainActor.run {
                 UIApplication.shared.registerForRemoteNotifications()
             }
+            await FocusNudgeScheduler.shared.refresh(
+                modelContext: modelContext,
+                currentSession: nil,
+                reason: "setup_notifications_granted"
+            )
+        } else {
+            FocusNudgeScheduler.shared.clearAll()
         }
     }
 

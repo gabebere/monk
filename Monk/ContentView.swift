@@ -41,6 +41,7 @@ struct ContentView: View {
                     hasCompletedSetupChecklist = true
                     hasSeenOnboarding = true
                     needsGuidedTutorial = true
+                    Analytics.track("setup_checklist_completed")
                 }
                 .environmentObject(authManager)
             } else if authManager.isAuthenticated {
@@ -174,8 +175,20 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                UsageAnalyticsService.shared.trackAppOpenedIfNeeded()
+                UsageAnalyticsService.shared.trackDailyFocusSnapshotIfNeeded(
+                    totalSeconds: manager?.todayTotalSeconds ?? 0,
+                    source: "scene_active"
+                )
                 Task {
                     await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext)
+                }
+                Task { @MainActor in
+                    await FocusNudgeScheduler.shared.refresh(
+                        modelContext: modelContext,
+                        currentSession: manager?.currentSession,
+                        reason: "scene_active"
+                    )
                 }
                 normalizeArchivedProjectGoalsIfNeeded()
                 startGuidedTutorialIfNeeded()
@@ -314,6 +327,7 @@ private extension ContentView {
             needsGuidedTutorial = false
             resetGuidedTutorialRuntime()
         }
+        Analytics.track("guided_tutorial_completed")
     }
 
     func resetGuidedTutorialRuntime() {

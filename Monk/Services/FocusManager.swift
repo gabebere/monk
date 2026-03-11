@@ -34,6 +34,14 @@ final class FocusManager: ObservableObject {
             _ = HardBlockManager.shared.activateHardBlock(for: activeProject)
         }
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: currentSession)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await FocusNudgeScheduler.shared.refresh(
+                modelContext: self.modelContext,
+                currentSession: self.currentSession,
+                reason: "focus_manager_init"
+            )
+        }
 
         mirrorObserver = NotificationCenter.default.addObserver(
             forName: .mirrorSessionDidChange,
@@ -97,6 +105,13 @@ final class FocusManager: ObservableObject {
             _ = HardBlockManager.shared.activateHardBlock(for: resolvedProject)
         }
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: session)
+        Task { @MainActor in
+            await FocusNudgeScheduler.shared.refresh(
+                modelContext: self.modelContext,
+                currentSession: self.currentSession,
+                reason: "focus_start"
+            )
+        }
     }
 
     func stop() {
@@ -119,8 +134,19 @@ final class FocusManager: ObservableObject {
         currentSession = nil
         recalcTodayTotal()
         Haptics.success()
+        UsageAnalyticsService.shared.trackDailyFocusSnapshotIfNeeded(
+            totalSeconds: todayTotalSeconds,
+            source: "focus_stop"
+        )
 
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: session, stateOverride: .stopped)
+        Task { @MainActor in
+            await FocusNudgeScheduler.shared.refresh(
+                modelContext: self.modelContext,
+                currentSession: self.currentSession,
+                reason: "focus_stop"
+            )
+        }
 
         if activeProject != nil {
             HardBlockManager.shared.deactivateHardBlock()
@@ -154,6 +180,7 @@ final class FocusManager: ObservableObject {
 #endif
         focusScoreTickCounter = 0
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: nil, stateOverride: .idle)
+        FocusNudgeScheduler.shared.clearAll()
     }
 
     func refreshAfterDataReset() {
@@ -162,6 +189,7 @@ final class FocusManager: ObservableObject {
         HardBlockManager.shared.deactivateHardBlock()
         focusScoreTickCounter = 0
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: nil, stateOverride: .idle)
+        FocusNudgeScheduler.shared.clearAll()
     }
 
     func recalcTodayTotal(now: Date = .now) {

@@ -67,6 +67,7 @@ struct HomeView: View {
         static let heroHeight: CGFloat = 40
         static let heroBottomSpacing: CGFloat = 40         // gap between hero and projects/tasks row
         static let heroMaxWidth: CGFloat = 340            // max width for the hero button container
+        static let columnSpacing: CGFloat = 16
         static let bottomPadding: CGFloat = 0             // keep content off the home indicator
         static let listTopContentInset: CGFloat = 24      // clearance so fade does not cover first row
     }
@@ -93,7 +94,7 @@ struct HomeView: View {
             .padding(.top, LandscapeLayout.listTopContentInset)
         }
         .mask(verticalFadeMask)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -210,6 +211,81 @@ struct HomeView: View {
         }
     }
 
+    private var projectsColumnHeader: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text("Projects")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            projectHeaderIconButton(systemName: "square.grid.2x2", isActive: projectViewMode == .grid) {
+                guard projectViewMode != .grid else { return }
+                Haptics.soft()
+                projectViewModeRaw = ProjectViewMode.grid.rawValue
+            }
+
+            projectHeaderIconButton(systemName: "list.bullet", isActive: projectViewMode == .list) {
+                guard projectViewMode != .list else { return }
+                Haptics.soft()
+                projectViewModeRaw = ProjectViewMode.list.rawValue
+            }
+
+            projectHeaderIconButton(systemName: projectSortMode == .recent ? "clock.arrow.circlepath" : "textformat.abc", isActive: true) {
+                Haptics.soft()
+                projectSortModeRaw = (projectSortMode == .recent ? ProjectSortMode.name : ProjectSortMode.recent).rawValue
+            }
+
+            projectHeaderIconButton(systemName: showArchivedProjects ? "archivebox.fill" : "archivebox", isActive: showArchivedProjects) {
+                Haptics.soft()
+                showArchivedProjects.toggle()
+            }
+
+            circularPlusButton(action: {
+                Haptics.heavy()
+                showingNewProject = true
+            })
+            .guidedTutorialAnchor(.projectsAddButton)
+        }
+    }
+
+    private var tasksColumnHeader: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Button("Tasks") {
+                Haptics.soft()
+                selectedHomeSection = .tasks
+                guidedTutorialEventHandler(.homeSectionChanged(.tasks))
+            }
+            .buttonStyle(.plain)
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(.white)
+            .guidedTutorialAnchor(.homeTasksSectionButton)
+
+            Spacer()
+
+            Button(action: {
+                Haptics.heavy()
+                withAnimation(.none) {
+                    showCompleted.toggle()
+                }
+            }) {
+                Text(showCompleted ? "Hide" : "Show all")
+                    .font(.footnote.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .controlSize(.mini)
+            .tint(Color.white.opacity(0.2))
+            .foregroundStyle(.white)
+
+            circularPlusButton(action: {
+                Haptics.heavy()
+                taskEditorRoute = .create(defaultProject: nil)
+            })
+            .guidedTutorialAnchor(.homeNewTaskButton)
+        }
+    }
+
     private func circularPlusButton(action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "plus")
@@ -276,14 +352,19 @@ struct HomeView: View {
                                 .frame(maxWidth: LandscapeLayout.heroMaxWidth, minHeight: LandscapeLayout.heroHeight)
                                 .position(x: outer.size.width / 2, y: heroTop + LandscapeLayout.heroHeight / 2)
 
-                            VStack(alignment: .leading, spacing: 12) {
-                                sectionHeader
-
-                                if selectedHomeSection == .projects {
+                            HStack(alignment: .top, spacing: LandscapeLayout.columnSpacing) {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    projectsColumnHeader
                                     projectsPane(embedInScroll: true)
-                                } else {
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                                VStack(alignment: .leading, spacing: 12) {
+                                    tasksColumnHeader
                                     splitTasksPane
                                 }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                             }
                             .padding(.top, listsTop)
                             .padding(.horizontal, 12)

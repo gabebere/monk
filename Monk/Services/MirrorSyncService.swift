@@ -4,6 +4,9 @@ import OSLog
 import SwiftData
 import UserNotifications
 import UIKit
+#if canImport(ActivityKit)
+import ActivityKit
+#endif
 
 /// Handles emitting and receiving live session mirror events across devices using CloudKit subscriptions.
 @MainActor
@@ -236,6 +239,11 @@ final class MirrorSyncService {
             active.endedAt = Date()
             _ = context.saveOrRollback()
             HardBlockManager.shared.deactivateHardBlock()
+#if canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                LiveActivityManager.shared.endActivity(for: active)
+            }
+#endif
         }
 
         let session = FocusSession(
@@ -258,6 +266,16 @@ final class MirrorSyncService {
             }
         }
         SnapshotWriter.refresh(modelContext: context, currentSession: session)
+#if canImport(ActivityKit)
+        if #available(iOS 16.2, *) {
+            LiveActivityManager.shared.startActivity(for: session, focusSnapshot: nil)
+        }
+#endif
+        await FocusNudgeScheduler.shared.refresh(
+            modelContext: context,
+            currentSession: session,
+            reason: "mirror_start"
+        )
         NotificationCenter.default.post(name: .mirrorSessionDidChange, object: session.id)
         logger.debug("Mirrored session started \(session.id.uuidString, privacy: .public)")
     }
@@ -278,12 +296,27 @@ final class MirrorSyncService {
         guard let session = try resolveSessionToStop(payload: payload, context: context) else {
             logger.debug("Mirror stop: no matching session found; lifting shields if active")
             HardBlockManager.shared.deactivateHardBlock()
+#if canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                LiveActivityManager.shared.endActivity()
+            }
+#endif
             return
         }
         session.endedAt = Date()
         if context.saveOrRollback() {
             HardBlockManager.shared.deactivateHardBlock()
             SnapshotWriter.refresh(modelContext: context, currentSession: session, stateOverride: .stopped)
+#if canImport(ActivityKit)
+            if #available(iOS 16.2, *) {
+                LiveActivityManager.shared.endActivity(for: session)
+            }
+#endif
+            await FocusNudgeScheduler.shared.refresh(
+                modelContext: context,
+                currentSession: nil,
+                reason: "mirror_stop"
+            )
             NotificationCenter.default.post(name: .mirrorSessionDidChange, object: session.id)
             logger.debug("Mirrored session stopped \(session.id.uuidString, privacy: .public)")
         } else {

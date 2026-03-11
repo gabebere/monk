@@ -9,13 +9,9 @@ import GoogleSignIn
 final class AuthManager: ObservableObject {
     private let logger = Logger(subsystem: "com.gbr.Monk", category: "AuthManager")
     private let googleClientID = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String
-#if DEBUG
     private let passwordUsers: [PasswordCredential] = [
         .init(email: "reviewer@monk.app", password: "Demo123!", displayName: "Review Account")
     ]
-#else
-    private let passwordUsers: [PasswordCredential] = []
-#endif
 
     @Published private(set) var isAuthenticated: Bool
     @Published private(set) var displayName: String?
@@ -29,6 +25,7 @@ final class AuthManager: ObservableObject {
     private let emailKey = "auth.email"
     private let newsletterEmailKey = "auth.newsletterEmail"
     private let newsletterOptInKey = "auth.newsletterOptIn"
+    private let knownUsersKey = "auth.knownUserIDs"
 
     init() {
         let defaults = UserDefaults.standard
@@ -45,6 +42,22 @@ final class AuthManager: ObservableObject {
             logger.error("Missing GIDClientID in Info.plist; Google sign-in is disabled.")
         }
 #endif
+
+        if isAuthenticated,
+           let restoredUserID = defaults.string(forKey: userIDKey),
+           !restoredUserID.isEmpty {
+            Analytics.identify(restoredUserID,
+                               userProperties: analyticsTraits(name: displayName, email: userEmail))
+            Task {
+                await WelcomeEmailService.shared.sendWelcomeIfNeeded(
+                    userID: restoredUserID,
+                    email: userEmail,
+                    firstName: firstName(from: displayName),
+                    provider: SignInProvider.restored.rawValue,
+                    isFirstSeenOnDevice: false
+                )
+            }
+        }
     }
 
     var currentUserId: String? {
@@ -64,7 +77,8 @@ final class AuthManager: ObservableObject {
                 .joined(separator: " ")
             completeSignIn(userID: userID,
                            name: name.isEmpty ? nil : name,
-                           email: email)
+                           email: email,
+                           provider: .apple)
             if email == nil {
                 logger.debug("Apple sign-in returned no email (likely re-auth).")
             }
@@ -85,7 +99,8 @@ final class AuthManager: ObservableObject {
             let email = user.profile?.email
             completeSignIn(userID: user.userID ?? UUID().uuidString,
                            name: name.isEmpty ? nil : name,
-                           email: email)
+                           email: email,
+                           provider: .google)
             return .success(())
         } catch {
             return .failure(error)
@@ -99,6 +114,9 @@ final class AuthManager: ObservableObject {
     }
 
     func signOut() {
+        Analytics.track("auth_signed_out", [
+            "had_email": (currentUserEmail?.isEmpty == false)
+        ])
         clearLocalAuthState(clearAllAppDefaults: false)
 #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.signOut()
@@ -107,6 +125,9 @@ final class AuthManager: ObservableObject {
     }
 
     func deleteAccount() {
+        Analytics.track("auth_account_deleted", [
+            "had_email": (currentUserEmail?.isEmpty == false)
+        ])
 #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.disconnect { _ in }
 #endif
@@ -144,7 +165,8 @@ final class AuthManager: ObservableObject {
         }
         completeSignIn(userID: "password:\(match.email.lowercased())",
                        name: match.displayName,
-                       email: match.email)
+                       email: match.email,
+                       provider: .password)
         return .success(())
     }
 }
@@ -169,23 +191,88 @@ private extension AuthManager {
         newsletterOptIn = false
     }
 
-    func completeSignIn(userID: String, name: String?, email: String?) {
+    func completeSignIn(userID: String,
+                        name: String?,
+                        email: String?,
+                        provider: SignInProvider) {
         let defaults = UserDefaults.standard
+        let previousUserID = defaults.string(forKey: userIDKey)
+        let previousName = defaults.string(forKey: nameKey)
+        let previousEmail = defaults.string(forKey: emailKey)
+        let sameUserAsBefore = previousUserID == userID
+
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = (trimmedName?.isEmpty == false ? trimmedName : nil) ?? (sameUserAsBefore ? previousName : nil)
+        let resolvedEmail = (trimmedEmail?.isEmpty == false ? trimmedEmail : nil) ?? (sameUserAsBefore ? previousEmail : nil)
+
+        var knownUsers = Set(defaults.stringArray(forKey: knownUsersKey) ?? [])
+        let isFirstSeenOnDevice = !knownUsers.contains(userID)
+        knownUsers.insert(userID)
+
         defaults.set(true, forKey: accessKey)
         defaults.set(userID, forKey: userIDKey)
-        if let name {
-            defaults.set(name, forKey: nameKey)
+        defaults.set(Array(knownUsers).sorted(), forKey: knownUsersKey)
+
+        if let resolvedName {
+            defaults.set(resolvedName, forKey: nameKey)
         } else {
             defaults.removeObject(forKey: nameKey)
         }
-        if let email {
-            defaults.set(email, forKey: emailKey)
+        if let resolvedEmail {
+            defaults.set(resolvedEmail, forKey: emailKey)
         } else {
             defaults.removeObject(forKey: emailKey)
         }
         isAuthenticated = true
-        displayName = name
-        userEmail = email
+        displayName = resolvedName
+        userEmail = resolvedEmail
+
+        Analytics.identify(userID,
+                           userProperties: analyticsTraits(name: resolvedName, email: resolvedEmail),
+                           userPropertiesSetOnce: [
+                            "first_seen_on_device_at": iso8601Now(),
+                            "signup_provider": provider.rawValue
+                           ])
+        Analytics.track("auth_signed_in", [
+            "provider": provider.rawValue,
+            "has_email": resolvedEmail != nil,
+            "is_first_seen_on_device": isFirstSeenOnDevice
+        ])
+
+        Task {
+            await WelcomeEmailService.shared.sendWelcomeIfNeeded(
+                userID: userID,
+                email: resolvedEmail,
+                firstName: firstName(from: resolvedName),
+                provider: provider.rawValue,
+                isFirstSeenOnDevice: isFirstSeenOnDevice
+            )
+        }
+    }
+
+    func analyticsTraits(name: String?, email: String?) -> [String: Any] {
+        var traits: [String: Any] = [:]
+        if let name, !name.isEmpty {
+            traits["name"] = name
+        }
+        if let email, !email.isEmpty {
+            traits["email"] = email
+        }
+        return traits
+    }
+
+    func firstName(from fullName: String?) -> String? {
+        guard let fullName else { return nil }
+        let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.split(separator: " ").first.map(String.init)
+    }
+
+    func iso8601Now() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date())
     }
 }
 
@@ -193,6 +280,13 @@ private struct PasswordCredential {
     let email: String
     let password: String
     let displayName: String?
+}
+
+private enum SignInProvider: String {
+    case apple
+    case google
+    case password
+    case restored
 }
 
 enum PasswordAuthError: LocalizedError {
