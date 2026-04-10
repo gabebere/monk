@@ -13,7 +13,11 @@ struct ProjectsTabView: View {
             ProjectGridListView(
                 embedInScroll: true,
                 projects: projects,
-                onSelect: { projectDetail = $0 },
+                onFocus: { project in
+                    guard focus.currentSession == nil else { return }
+                    focus.start(project: project, task: nil)
+                },
+                onOpenDetails: { projectDetail = $0 },
                 onCreate: { showingNewProject = true }
             )
         }

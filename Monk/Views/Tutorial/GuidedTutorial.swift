@@ -16,13 +16,13 @@ enum GuidedTutorialStep: Int, CaseIterable {
         case .createProject:
             return "Create Your First Project"
         case .openTasks:
-            return "Open Tasks"
+            return "Open To-do's"
         case .createTask:
-            return "Create Your First Task"
+            return "Start With a To-do"
         case .startFocusChoice:
             return "Start Your First Focus"
         case .startFocusButtonOnly:
-            return "Start Focus"
+            return "Start With This To-do"
         case .stopFocus:
             return "Stop Focus"
         case .finishSession:
@@ -37,13 +37,13 @@ enum GuidedTutorialStep: Int, CaseIterable {
         case .createProject:
             return "Use + or Add Project to create your first project."
         case .openTasks:
-            return "Great. Now tap Tasks."
+            return "Great. Now tap To-do's."
         case .createTask:
-            return "Create one task. If you cancel, just try again."
+            return "Tap an upcoming to-do to start focus with a reminder. If nothing is scheduled yet, you can also start from a project."
         case .startFocusChoice:
-            return "To focus a task: select the task, then tap Time to focus. Or tap Time to focus directly to start without selecting a task first."
+            return "Tap a project or to-do to begin. Monk will remember the project you choose for a to-do."
         case .startFocusButtonOnly:
-            return "Task selected. Tap Time to focus to start a focus session on this task."
+            return "Tap this to-do to start a focus session. Monk will remember the project you choose for it."
         case .stopFocus:
             return "Now stop this focus session."
         case .finishSession:
@@ -84,7 +84,6 @@ enum GuidedTutorialAnchor: Hashable {
     case homeNewTaskButton
     case homeEmptyNewTaskButton
     case homeTaskRow(UUID)
-    case homeTimeToFocusButton
     case homeStopButton
 }
 
@@ -103,7 +102,6 @@ enum GuidedTutorialHomeSection: Equatable {
 enum GuidedTutorialEvent {
     case homeSectionChanged(GuidedTutorialHomeSection)
     case modalChanged(kind: GuidedTutorialModalKind, isPresented: Bool)
-    case taskSelectionChanged(UUID?)
     case focusStarted(projectID: UUID?, taskID: UUID?)
     case focusStopped(willShowCompletionSheet: Bool)
     case completionDone

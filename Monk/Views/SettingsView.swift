@@ -17,14 +17,21 @@ struct SettingsView: View {
     @AppStorage("guidedTutorialRestartTrigger") private var guidedTutorialRestartTrigger = ""
 
     @State private var calendarOptions: [CalendarDisplayInfo] = []
+    @State private var reminderListOptions: [ReminderListInfo] = []
     @State private var calendarStatusMessage: String?
     @State private var calendarBusy = false
+    @State private var remindersBusy = false
+    @State private var remindersStatusMessage: String?
     @State private var showingFeedbackWeb = false
     @State private var showingDeleteAccountConfirmation = false
     @State private var deleteAccountBusy = false
     @State private var deleteAccountStatusMessage: String?
     @AppStorage("mirroring.enabled") private var mirroringEnabled: Bool = true
     @AppStorage("calendar.logging.enabled") private var calendarLoggingEnabled: Bool = true
+    @AppStorage(RemindersSyncKeys.enabled) private var remindersSyncEnabled: Bool = false
+    @AppStorage(RemindersSyncKeys.destinationListIdentifier) private var remindersSyncDestinationListIdentifier: String = ""
+    @AppStorage(RemindersSyncKeys.excludedListIdentifiers) private var remindersSyncExcludedListIdentifiersRaw: String = ""
+    @AppStorage(RemindersSyncKeys.hasSeededGroceriesExclusions) private var remindersHasSeededGroceriesExclusions: Bool = false
     @AppStorage("focus.nudges.deviceEnabled") private var focusNudgesDeviceEnabled: Bool = true
 
     private var prefs: Preferences {
@@ -61,6 +68,7 @@ struct SettingsView: View {
                         mirroringCard
                         nudgesCard
                         calendarCard
+                        remindersCard
                         healthCard
                         goalCard
                         sessionsCard
@@ -75,6 +83,7 @@ struct SettingsView: View {
         }
         .task {
             await refreshCalendars()
+            await refreshReminderLists()
             await FocusNudgeScheduler.shared.refresh(
                 modelContext: modelContext,
                 currentSession: focus.currentSession,
@@ -291,6 +300,112 @@ private extension SettingsView {
                         .background(Color.white.opacity(0.14), in: Capsule())
                 }
                 .buttonStyle(.plain)
+            }
+        }
+    }
+
+    var remindersCard: some View {
+        SettingsCard(title: "Apple Reminders",
+                     subtitle: "Show scheduled reminders in Monk and migrate older Monk tasks once.",
+                     icon: "checklist.checked") {
+            VStack(alignment: .leading, spacing: 16) {
+                Toggle(isOn: $remindersSyncEnabled) {
+                    Text("Show scheduled reminders from Apple Reminders")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                .tint(.cyan)
+                .onChange(of: remindersSyncEnabled) { _, enabled in
+                    Task {
+                        if enabled {
+                            let granted = await RemindersSyncService.shared.requestAccess()
+                            guard granted else {
+                                await MainActor.run {
+                                    remindersSyncEnabled = false
+                                    remindersStatusMessage = "Reminders access is not granted."
+                                }
+                                return
+                            }
+                            await refreshReminderLists()
+                            await runRemindersSyncNow()
+                        } else {
+                            await MainActor.run {
+                                remindersStatusMessage = nil
+                            }
+                        }
+                    }
+                }
+
+                if remindersSyncEnabled {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Legacy Monk task export list")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.72))
+
+                        Picker("Destination list", selection: remindersDestinationListSelection) {
+                            Text("Default list").tag(String?.none)
+                            ForEach(writableReminderListOptions) { list in
+                                Text(list.title).tag(Optional<String>.some(list.id))
+                            }
+                            if let orphanTag = orphanedReminderDestinationSelectionTag {
+                                Text("Unavailable (\(orphanTag))").tag(Optional<String>.some(orphanTag))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .tint(.white)
+                        .disabled(remindersBusy)
+
+                        Text("Only scheduled Monk tasks without a matching reminder are exported here.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.58))
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Ignore these lists in Monk")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.72))
+
+                        if reminderListOptions.isEmpty {
+                            Text("No reminder lists available.")
+                                .font(.footnote)
+                                .foregroundStyle(.white.opacity(0.7))
+                        } else {
+                            ForEach(reminderListOptions) { list in
+                                Toggle(isOn: reminderListExclusionBinding(for: list.id)) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(list.title)
+                                            .font(.footnote.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                        Text(list.sourceName)
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.6))
+                                    }
+                                }
+                                .tint(.cyan)
+                                .disabled(remindersBusy)
+                            }
+                        }
+                    }
+
+                    Button {
+                        Task { await runRemindersSyncNow() }
+                    } label: {
+                        Label(remindersBusy ? "Syncing…" : "Sync now", systemImage: "arrow.clockwise")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.14), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(remindersBusy)
+
+                    if let remindersStatusMessage {
+                        Text(remindersStatusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                }
             }
         }
     }
@@ -572,6 +687,70 @@ private extension SettingsView {
         return calendarOptions.contains(where: { $0.id == current }) ? nil : current
     }
 
+    var writableReminderListOptions: [ReminderListInfo] {
+        reminderListOptions.filter(\.isWritable)
+    }
+
+    var remindersDestinationListSelection: Binding<String?> {
+        Binding(
+            get: {
+                let current = normalizedRemindersDestinationListIdentifier
+                if let current, writableReminderListOptions.contains(where: { $0.id == current }) {
+                    return current
+                }
+                return current
+            },
+            set: { newValue in
+                remindersSyncDestinationListIdentifier = newValue ?? ""
+                if let newValue {
+                    var excluded = normalizedExcludedReminderListIdentifiers
+                    if excluded.remove(newValue) != nil {
+                        remindersSyncExcludedListIdentifiersRaw = RemindersSyncStorage.encodeIdentifierSet(excluded)
+                    }
+                }
+                Task {
+                    await runRemindersSyncNow()
+                }
+            }
+        )
+    }
+
+    var orphanedReminderDestinationSelectionTag: String? {
+        guard let current = normalizedRemindersDestinationListIdentifier else { return nil }
+        return writableReminderListOptions.contains(where: { $0.id == current }) ? nil : current
+    }
+
+    var normalizedRemindersDestinationListIdentifier: String? {
+        RemindersSyncStorage.normalizedIdentifier(remindersSyncDestinationListIdentifier)
+    }
+
+    var normalizedExcludedReminderListIdentifiers: Set<String> {
+        RemindersSyncStorage.decodeIdentifierSet(remindersSyncExcludedListIdentifiersRaw)
+    }
+
+    func reminderListExclusionBinding(for listID: String) -> Binding<Bool> {
+        Binding(
+            get: {
+                normalizedExcludedReminderListIdentifiers.contains(listID)
+            },
+            set: { shouldExclude in
+                var excluded = normalizedExcludedReminderListIdentifiers
+                if shouldExclude {
+                    excluded.insert(listID)
+                    if normalizedRemindersDestinationListIdentifier == listID {
+                        remindersSyncDestinationListIdentifier = ""
+                    }
+                } else {
+                    excluded.remove(listID)
+                }
+                remindersSyncExcludedListIdentifiersRaw = RemindersSyncStorage.encodeIdentifierSet(excluded)
+                Task {
+                    await runRemindersSyncNow()
+                }
+            }
+        )
+    }
+
     var rawProjectGoalTotal: Double {
         projects
             .filter(\.canTrackWeeklyGoal)
@@ -652,6 +831,24 @@ private extension SettingsView {
         }
     }
 
+    func refreshReminderLists() async {
+        let lists = await RemindersSyncService.shared.availableLists()
+        await MainActor.run {
+            reminderListOptions = lists
+            let seeded = RemindersSyncStorage.seededGroceriesExclusions(
+                current: normalizedExcludedReminderListIdentifiers,
+                hasSeeded: remindersHasSeededGroceriesExclusions,
+                availableLists: lists
+            )
+            remindersSyncExcludedListIdentifiersRaw = RemindersSyncStorage.encodeIdentifierSet(seeded.identifiers)
+            remindersHasSeededGroceriesExclusions = seeded.hasSeeded
+            if let selected = normalizedRemindersDestinationListIdentifier,
+               !writableReminderListOptions.contains(where: { $0.id == selected }) {
+                remindersSyncDestinationListIdentifier = ""
+            }
+        }
+    }
+
     @MainActor
     func updateSelectionStatus() {
         // Suppress status text per request.
@@ -682,6 +879,23 @@ private extension SettingsView {
               let current = prefs.calendarCalendarIdentifier else { return }
         Task {
             await handleCalendarSelectionChange(from: nil, to: current)
+        }
+    }
+
+    func runRemindersSyncNow() async {
+        guard remindersSyncEnabled else { return }
+        await MainActor.run {
+            remindersBusy = true
+            remindersStatusMessage = nil
+        }
+        await RemindersSyncService.shared.sync(
+            modelContext: modelContext,
+            destinationListIdentifier: normalizedRemindersDestinationListIdentifier,
+            excludedListIdentifiers: normalizedExcludedReminderListIdentifiers
+        )
+        await MainActor.run {
+            remindersBusy = false
+            remindersStatusMessage = "Scheduled reminders refreshed."
         }
     }
 

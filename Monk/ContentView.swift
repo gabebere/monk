@@ -20,6 +20,10 @@ struct ContentView: View {
     @AppStorage("needsGuidedTutorial") private var needsGuidedTutorial = false
     @AppStorage("hasCompletedGuidedTutorial") private var hasCompletedGuidedTutorial = false
     @AppStorage("guidedTutorialRestartTrigger") private var guidedTutorialRestartTrigger = ""
+    @AppStorage(RemindersSyncKeys.enabled) private var remindersSyncEnabled = false
+    @AppStorage(RemindersSyncKeys.destinationListIdentifier) private var remindersSyncDestinationListIdentifier = ""
+    @AppStorage(RemindersSyncKeys.excludedListIdentifiers) private var remindersSyncExcludedListIdentifiersRaw = ""
+    @AppStorage(RemindersSyncKeys.hasSeededGroceriesExclusions) private var remindersHasSeededGroceriesExclusions = false
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
     @Query(sort: [SortDescriptor(\FocusTask.updatedAt, order: .reverse)]) private var focusTasks: [FocusTask]
     @State private var manager: FocusManager?
@@ -46,43 +50,7 @@ struct ContentView: View {
                 .environmentObject(authManager)
             } else if authManager.isAuthenticated {
                 if let manager {
-                    TabView(selection: $selectedTab) {
-                        NavigationStack {
-                            HomeView()
-                        }
-                        .tabItem {
-                            Label("", systemImage: "house")
-                                .accessibilityLabel("Home")
-                        }
-                        .tag(AppTab.home)
-
-                        NavigationStack {
-                            InsightsView()
-                        }
-                        .tabItem {
-                            Label("", systemImage: "chart.bar")
-                                .accessibilityLabel("Insights")
-                        }
-                        .tag(AppTab.insights)
-
-                        NavigationStack {
-                            HistoryView()
-                        }
-                        .tabItem {
-                            Label("", systemImage: "clock.arrow.circlepath")
-                                .accessibilityLabel("History")
-                        }
-                        .tag(AppTab.history)
-
-                        NavigationStack {
-                            SettingsView()
-                        }
-                        .tabItem {
-                            Label("", systemImage: "gearshape")
-                                .accessibilityLabel("Settings")
-                        }
-                        .tag(AppTab.settings)
-                    }
+                    appShellView()
                     .preferredColorScheme(.dark)
                     .tint(.white)
                     .coordinateSpace(name: "guidedTutorialSpace")
@@ -108,6 +76,7 @@ struct ContentView: View {
                         refreshGuidedTutorialProgress(currentSessionActive: manager.currentSession != nil)
                     }
                     .onChange(of: selectedTab) { _, _ in
+                        guard !FeatureFlags.homeSingleHubEnabled else { return }
                         Haptics.heavy()
                     }
                     .onChange(of: projectIDsSignature) { _, _ in
@@ -138,6 +107,7 @@ struct ContentView: View {
                             await MainActor.run {
                                 self.manager = FocusManager(modelContext: modelContext)
                             }
+                            await syncRemindersIfNeeded()
                     }
                 }
             } else {
@@ -183,6 +153,9 @@ struct ContentView: View {
                 Task {
                     await HealthSyncService.shared.performSyncIfNeeded(modelContext: modelContext)
                 }
+                Task {
+                    await syncRemindersIfNeeded()
+                }
                 Task { @MainActor in
                     await FocusNudgeScheduler.shared.refresh(
                         modelContext: modelContext,
@@ -210,6 +183,61 @@ struct ContentView: View {
 }
 
 private extension ContentView {
+    @ViewBuilder
+    func appShellView() -> some View {
+        if FeatureFlags.homeSingleHubEnabled {
+            NavigationStack {
+                HomeView()
+            }
+        } else {
+            TabView(selection: $selectedTab) {
+                NavigationStack {
+                    HomeView()
+                }
+                .tabItem {
+                    Label("", systemImage: "house")
+                        .accessibilityLabel("Home")
+                }
+                .tag(AppTab.home)
+
+                NavigationStack {
+                    InsightsView()
+                }
+                .tabItem {
+                    Label("", systemImage: "chart.bar")
+                        .accessibilityLabel("Insights")
+                }
+                .tag(AppTab.insights)
+
+                NavigationStack {
+                    HistoryView()
+                }
+                .tabItem {
+                    Label("", systemImage: "clock.arrow.circlepath")
+                        .accessibilityLabel("History")
+                }
+                .tag(AppTab.history)
+
+                NavigationStack {
+                    SettingsView()
+                }
+                .tabItem {
+                    Label("", systemImage: "gearshape")
+                        .accessibilityLabel("Settings")
+                }
+                .tag(AppTab.settings)
+            }
+        }
+    }
+
+    var normalizedRemindersSyncDestinationListIdentifier: String? {
+        RemindersSyncStorage.normalizedIdentifier(remindersSyncDestinationListIdentifier)
+    }
+
+    var normalizedRemindersSyncExcludedListIdentifiers: Set<String> {
+        RemindersSyncStorage.decodeIdentifierSet(remindersSyncExcludedListIdentifiersRaw)
+    }
+
     var projectIDsSignature: String {
         projects.map(\.id).map(\.uuidString).sorted().joined(separator: "|")
     }
@@ -236,10 +264,21 @@ private extension ContentView {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
-    var newlyCreatedTasks: [FocusTask] {
+    var tutorialSuggestedTaskID: UUID? {
         focusTasks
-            .filter { !guidedTutorialBaselineTaskIDs.contains($0.id) }
-            .sorted { $0.createdAt > $1.createdAt }
+            .filter(\.isScheduled)
+            .filter(\.isReminderBacked)
+            .filter { !$0.isCompleted }
+            .sorted { lhs, rhs in
+                let leftDue = lhs.dueDate ?? .distantFuture
+                let rightDue = rhs.dueDate ?? .distantFuture
+                if leftDue != rightDue {
+                    return leftDue < rightDue
+                }
+                return lhs.updatedAt > rhs.updatedAt
+            }
+            .first?
+            .id
     }
 
     var isGuidedTutorialOverlayPaused: Bool {
@@ -255,6 +294,30 @@ private extension ContentView {
         if didMutate {
             modelContext.saveOrRollback()
         }
+    }
+
+    @MainActor
+    func syncRemindersIfNeeded() async {
+        guard remindersSyncEnabled else { return }
+        await seedRemindersGroceriesExclusionsIfNeeded()
+        await RemindersSyncService.shared.sync(
+            modelContext: modelContext,
+            destinationListIdentifier: normalizedRemindersSyncDestinationListIdentifier,
+            excludedListIdentifiers: normalizedRemindersSyncExcludedListIdentifiers
+        )
+    }
+
+    @MainActor
+    func seedRemindersGroceriesExclusionsIfNeeded() async {
+        guard !remindersHasSeededGroceriesExclusions else { return }
+        let lists = await RemindersSyncService.shared.availableLists()
+        let seeded = RemindersSyncStorage.seededGroceriesExclusions(
+            current: normalizedRemindersSyncExcludedListIdentifiers,
+            hasSeeded: remindersHasSeededGroceriesExclusions,
+            availableLists: lists
+        )
+        remindersSyncExcludedListIdentifiersRaw = RemindersSyncStorage.encodeIdentifierSet(seeded.identifiers)
+        remindersHasSeededGroceriesExclusions = seeded.hasSeeded
     }
 
     func startGuidedTutorialIfNeeded() {
@@ -300,16 +363,19 @@ private extension ContentView {
         case .openTasks:
             break
         case .createTask:
-            if guidedTutorialCreatedTaskID == nil,
-               let created = newlyCreatedTasks.first {
-                guidedTutorialCreatedTaskID = created.id
+            guidedTutorialCreatedTaskID = tutorialSuggestedTaskID
+            if guidedTutorialCreatedTaskID == nil {
                 guidedTutorialStep = .startFocusChoice
             }
         case .startFocusChoice, .startFocusButtonOnly:
             if let createdTaskID = guidedTutorialCreatedTaskID,
                !allTaskIDs.contains(createdTaskID) {
-                guidedTutorialCreatedTaskID = nil
-                guidedTutorialStep = .createTask
+                guidedTutorialCreatedTaskID = tutorialSuggestedTaskID
+                if guidedTutorialCreatedTaskID == nil {
+                    guidedTutorialStep = .startFocusChoice
+                } else if step == .startFocusButtonOnly {
+                    guidedTutorialStep = .createTask
+                }
             }
         case .stopFocus:
             if !currentSessionActive,
@@ -357,6 +423,7 @@ private extension ContentView {
         switch event {
         case .homeSectionChanged(let section):
             if step == .openTasks, section == .tasks {
+                guidedTutorialCreatedTaskID = tutorialSuggestedTaskID
                 guidedTutorialStep = .createTask
             }
         case .modalChanged(let kind, let isPresented):
@@ -365,24 +432,18 @@ private extension ContentView {
             } else {
                 guidedTutorialPresentedModals.remove(kind)
             }
-        case .taskSelectionChanged(let selectedTaskID):
-            if let createdTaskID = guidedTutorialCreatedTaskID {
-                if step == .startFocusChoice, selectedTaskID == createdTaskID {
-                    guidedTutorialStep = .startFocusButtonOnly
-                } else if step == .startFocusButtonOnly, selectedTaskID != createdTaskID {
-                    guidedTutorialStep = .startFocusChoice
-                }
-            }
         case .focusStarted(let projectID, let taskID):
             switch step {
+            case .createTask:
+                if taskID != nil || projectID != nil {
+                    guidedTutorialStep = .stopFocus
+                }
             case .startFocusChoice:
-                let startedWithCreatedTask = (taskID != nil && taskID == guidedTutorialCreatedTaskID)
-                let startedWithCreatedProject = (taskID == nil && projectID != nil && projectID == guidedTutorialCreatedProjectID)
-                if startedWithCreatedTask || startedWithCreatedProject {
+                if taskID != nil || projectID != nil {
                     guidedTutorialStep = .stopFocus
                 }
             case .startFocusButtonOnly:
-                if taskID != nil && taskID == guidedTutorialCreatedTaskID {
+                if taskID != nil {
                     guidedTutorialStep = .stopFocus
                 }
             default:
@@ -418,15 +479,22 @@ private extension ContentView {
         case .openTasks:
             add(.homeTasksSectionButton)
         case .createTask:
-            add(.homeNewTaskButton)
-            add(.homeEmptyNewTaskButton)
+            if let createdTaskID = guidedTutorialCreatedTaskID {
+                add(.homeTaskRow(createdTaskID))
+            } else {
+                add(.projectsContentArea)
+            }
         case .startFocusChoice:
-            add(.homeTimeToFocusButton)
+            add(.projectsContentArea)
             if let createdTaskID = guidedTutorialCreatedTaskID {
                 add(.homeTaskRow(createdTaskID))
             }
         case .startFocusButtonOnly:
-            add(.homeTimeToFocusButton)
+            if let createdTaskID = guidedTutorialCreatedTaskID {
+                add(.homeTaskRow(createdTaskID))
+            } else {
+                add(.projectsContentArea)
+            }
         case .stopFocus:
             add(.homeStopButton)
         case .finishSession, .ready:

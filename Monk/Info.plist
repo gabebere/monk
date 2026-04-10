@@ -27,5 +27,9 @@
 	<string>Monk reads workouts and sleep from Health to mirror them into your calendar.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Monk only reads your Health workouts and sleep to mirror them into your calendar; it never writes or changes your Health data.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Monk reads and updates your reminders so scheduled Monk tasks stay in sync with Apple Reminders.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Monk reads and updates your reminders so scheduled Monk tasks stay in sync with Apple Reminders.</string>
 </dict>
 </plist>

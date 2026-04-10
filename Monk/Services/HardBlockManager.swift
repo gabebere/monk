@@ -16,7 +16,7 @@ final class HardBlockManager {
     func ensureAuthorization() async -> Bool {
         let center = AuthorizationCenter.shared
         switch center.authorizationStatus {
-        case .approved:
+        case .approved, .approvedWithDataAccess:
             return true
         case .denied:
             return false
@@ -54,7 +54,31 @@ final class HardBlockManager {
 
         store.shield.applicationCategories = categoryPolicy
         store.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
+        store.shield.webDomainCategories = nil
         HardBlockStateStore.save(selection: selection, projectTitle: project.title)
+        return true
+    }
+
+    @discardableResult
+    func activateFocusTools(for task: FocusTask) -> Bool {
+        guard task.hasConfiguredFocusTools,
+              AuthorizationCenter.shared.authorizationStatus == .approved,
+              let selection = decodeSelection(from: task.focusToolsSelectionData) else {
+            return false
+        }
+
+        let hasApplications = !selection.applicationTokens.isEmpty
+        let hasWebDomains = !selection.webDomainTokens.isEmpty
+        guard hasApplications || hasWebDomains else {
+            HardBlockStateStore.clear()
+            return false
+        }
+
+        store.shield.applications = nil
+        store.shield.applicationCategories = hasApplications ? .all(except: selection.applicationTokens) : .all()
+        store.shield.webDomains = nil
+        store.shield.webDomainCategories = hasWebDomains ? .all(except: selection.webDomainTokens) : .all()
+        HardBlockStateStore.save(selection: selection, projectTitle: task.title)
         return true
     }
 
@@ -62,6 +86,7 @@ final class HardBlockManager {
         store.shield.applications = nil
         store.shield.applicationCategories = nil
         store.shield.webDomains = nil
+        store.shield.webDomainCategories = nil
         HardBlockStateStore.clear()
     }
 

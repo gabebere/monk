@@ -18,6 +18,10 @@ final class FocusTask {
 
     var createdAt: Date = Foundation.Date()
     var updatedAt: Date = Foundation.Date()
+    var reminderExternalIdentifier: String?
+    var reminderCalendarItemIdentifier: String?
+    var focusToolsSelectionData: Data?
+    var hasConfiguredFocusTools: Bool = false
 
     @Relationship(deleteRule: .nullify) var project: Project?
     @Relationship(deleteRule: .nullify) var parent: FocusTask?
@@ -35,6 +39,10 @@ final class FocusTask {
          recurrenceWeekdays: [Int]? = nil,
          createdAt: Date = .now,
          updatedAt: Date = .now,
+         reminderExternalIdentifier: String? = nil,
+         reminderCalendarItemIdentifier: String? = nil,
+         focusToolsSelectionData: Data? = nil,
+         hasConfiguredFocusTools: Bool = false,
          project: Project? = nil,
          parent: FocusTask? = nil,
          subtasks: [FocusTask]? = nil,
@@ -50,6 +58,10 @@ final class FocusTask {
         self.recurrenceWeekdays = recurrenceWeekdays
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.reminderExternalIdentifier = reminderExternalIdentifier
+        self.reminderCalendarItemIdentifier = reminderCalendarItemIdentifier
+        self.focusToolsSelectionData = focusToolsSelectionData
+        self.hasConfiguredFocusTools = hasConfiguredFocusTools
         self.project = project
         self.parent = parent
         self.subtasks = subtasks
@@ -60,6 +72,15 @@ final class FocusTask {
 extension FocusTask {
     var subtasksUnwrapped: [FocusTask] { subtasks ?? [] }
     var sessionsUnwrapped: [FocusSession] { sessions ?? [] }
+    var isScheduled: Bool { dueDate != nil }
+    var isReminderBacked: Bool {
+        let external = reminderExternalIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let local = reminderCalendarItemIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !external.isEmpty || !local.isEmpty
+    }
+    var taskTree: [FocusTask] {
+        [self] + subtasksUnwrapped.flatMap { $0.taskTree }
+    }
 
     var displayTitle: String {
         if let parentTitle = parent?.title, !parentTitle.isEmpty {

@@ -5,23 +5,23 @@ import UIKit
 
 struct HomeView: View {
     @EnvironmentObject private var focus: FocusManager
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.activeGuidedTutorialStep) private var activeGuidedTutorialStep
     @Environment(\.guidedTutorialCreatedTaskID) private var guidedTutorialCreatedTaskID
     @Environment(\.guidedTutorialBaselineProjectIDs) private var guidedTutorialBaselineProjectIDs
-    @Environment(\.guidedTutorialBaselineTaskIDs) private var guidedTutorialBaselineTaskIDs
     @Environment(\.guidedTutorialEventHandler) private var guidedTutorialEventHandler
-    @AppStorage("tasks.showCompleted") private var showCompleted = false
+    @AppStorage(RemindersSyncKeys.enabled) private var remindersSyncEnabled = false
     @AppStorage("projects.viewMode") private var projectViewModeRaw: String = ProjectViewMode.grid.rawValue
     @AppStorage("projects.sortMode") private var projectSortModeRaw: String = ProjectSortMode.recent.rawValue
     @AppStorage("projects.showArchived") private var showArchivedProjects: Bool = false
     @Query(sort: [SortDescriptor(\FocusTask.updatedAt, order: .reverse)]) private var focusTasks: [FocusTask]
     @Query(sort: [SortDescriptor(\Project.createdAt, order: .reverse)]) private var projects: [Project]
-    @State private var taskEditorRoute: TaskEditorRoute?
-    @State private var selectedTaskID: UUID?
     @State private var showingNewProject: Bool = false
     @State private var projectDetail: Project?
     @State private var selectedHomeSection: HomeSection = .tasks
+    @State private var taskAwaitingProjectSelection: FocusTask?
+    @State private var taskAwaitingToolsSetup: FocusTask?
 
     private enum HomeSection {
         case projects
@@ -32,7 +32,7 @@ struct HomeView: View {
             case .projects:
                 return "Projects"
             case .tasks:
-                return "Tasks"
+                return "To-do's"
             }
         }
 
@@ -46,18 +46,25 @@ struct HomeView: View {
         }
     }
 
-    private var selectedTask: FocusTask? {
-        visibleFocusTasks.first(where: { $0.id == selectedTaskID })
-    }
-
     private var visibleProjects: [Project] {
         guard activeGuidedTutorialStep != nil else { return projects }
         return projects.filter { !guidedTutorialBaselineProjectIDs.contains($0.id) }
     }
 
     private var visibleFocusTasks: [FocusTask] {
-        guard activeGuidedTutorialStep != nil else { return focusTasks }
-        return focusTasks.filter { !guidedTutorialBaselineTaskIDs.contains($0.id) }
+        guard remindersSyncEnabled else { return [] }
+        return focusTasks
+            .filter(\.isScheduled)
+            .filter(\.isReminderBacked)
+            .filter { !$0.isCompleted }
+            .sorted { lhs, rhs in
+                let leftDue = lhs.dueDate ?? .distantFuture
+                let rightDue = rhs.dueDate ?? .distantFuture
+                if leftDue != rightDue {
+                    return leftDue < rightDue
+                }
+                return lhs.updatedAt > rhs.updatedAt
+            }
     }
 
     private enum LandscapeLayout {
@@ -69,15 +76,21 @@ struct HomeView: View {
         static let heroMaxWidth: CGFloat = 340            // max width for the hero button container
         static let columnSpacing: CGFloat = 16
         static let bottomPadding: CGFloat = 0             // keep content off the home indicator
-        static let listTopContentInset: CGFloat = 24      // clearance so fade does not cover first row
+        static let listTopContentInset: CGFloat = 6
     }
 
     private func projectsPane(embedInScroll: Bool) -> some View {
         ProjectGridListView(
             embedInScroll: embedInScroll,
             showsToolbar: false,
+            contentHorizontalPadding: 0,
+            contentTopPadding: 6,
+            contentBottomPadding: 0,
             projects: visibleProjects,
-            onSelect: { project in
+            onFocus: { project in
+                handleProjectTap(project)
+            },
+            onOpenDetails: { project in
                 projectDetail = project
             },
             onCreate: {
@@ -88,12 +101,41 @@ struct HomeView: View {
     }
 
     private var splitTasksPane: some View {
-        ScrollView(showsIndicators: false) {
-            tasksPane
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .padding(.top, LandscapeLayout.listTopContentInset)
+        Group {
+            if visibleFocusTasks.isEmpty {
+                tasksPane
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .padding(.top, LandscapeLayout.listTopContentInset)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    tasksPane
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.top, LandscapeLayout.listTopContentInset)
+                }
+            }
         }
-        .mask(verticalFadeMask)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var portraitProjectsPane: some View {
+        projectsPane(embedInScroll: true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var portraitTasksPane: some View {
+        Group {
+            if visibleFocusTasks.isEmpty {
+                tasksPane
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .padding(.top, 6)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    tasksPane
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.top, 6)
+                }
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -101,27 +143,12 @@ struct HomeView: View {
     private var tasksPane: some View {
         if FeatureFlags.tasksV1Enabled {
             ScheduledTasksView(
-                selectedTaskID: $selectedTaskID,
-                onAdd: { taskEditorRoute = .create(defaultProject: nil) },
-                onEdit: { task in taskEditorRoute = .edit(task) },
                 showsHeader: false,
-                hiddenTaskIDs: activeGuidedTutorialStep == nil ? [] : guidedTutorialBaselineTaskIDs,
-                tutorialTargetTaskID: guidedTutorialCreatedTaskID
+                hiddenTaskIDs: [],
+                tutorialTargetTaskID: guidedTutorialCreatedTaskID,
+                onStartTask: handleTaskTap(_:)
             )
         }
-    }
-
-    private var verticalFadeMask: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .clear, location: 0.0),
-                .init(color: .black, location: 0.06),
-                .init(color: .black, location: 0.94),
-                .init(color: .clear, location: 1.0)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
     }
 
     private func shouldUseSplitLayout(for size: CGSize) -> Bool {
@@ -147,7 +174,7 @@ struct HomeView: View {
     }
 
     private var sectionHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 sectionButton(.projects)
                 Text("|")
@@ -155,60 +182,63 @@ struct HomeView: View {
                 sectionButton(.tasks)
             }
             .font(.title3.weight(.semibold))
+            .frame(maxWidth: .infinity, alignment: .center)
 
-            Spacer()
-
-            if selectedHomeSection == .tasks {
-                Button(action: {
-                    Haptics.heavy()
-                    withAnimation(.none) {
-                        showCompleted.toggle()
+            if selectedHomeSection != .tasks {
+                HStack(spacing: 12) {
+                    projectHeaderIconButton(systemName: "square.grid.2x2", isActive: projectViewMode == .grid) {
+                        guard projectViewMode != .grid else { return }
+                        Haptics.soft()
+                        projectViewModeRaw = ProjectViewMode.grid.rawValue
                     }
-                }) {
-                    Text(showCompleted ? "Hide" : "Show all")
-                        .font(.footnote.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .controlSize(.mini)
-                .tint(Color.white.opacity(0.2))
-                .foregroundStyle(.white)
 
-                circularPlusButton(action: {
-                    Haptics.heavy()
-                    taskEditorRoute = .create(defaultProject: nil)
-                })
-                .guidedTutorialAnchor(.homeNewTaskButton)
-            } else {
-                projectHeaderIconButton(systemName: "square.grid.2x2", isActive: projectViewMode == .grid) {
-                    guard projectViewMode != .grid else { return }
-                    Haptics.soft()
-                    projectViewModeRaw = ProjectViewMode.grid.rawValue
-                }
+                    projectHeaderIconButton(systemName: "list.bullet", isActive: projectViewMode == .list) {
+                        guard projectViewMode != .list else { return }
+                        Haptics.soft()
+                        projectViewModeRaw = ProjectViewMode.list.rawValue
+                    }
 
-                projectHeaderIconButton(systemName: "list.bullet", isActive: projectViewMode == .list) {
-                    guard projectViewMode != .list else { return }
-                    Haptics.soft()
-                    projectViewModeRaw = ProjectViewMode.list.rawValue
-                }
+                    projectHeaderIconButton(systemName: projectSortMode == .recent ? "clock.arrow.circlepath" : "textformat.abc", isActive: true) {
+                        Haptics.soft()
+                        projectSortModeRaw = (projectSortMode == .recent ? ProjectSortMode.name : ProjectSortMode.recent).rawValue
+                    }
 
-                projectHeaderIconButton(systemName: projectSortMode == .recent ? "clock.arrow.circlepath" : "textformat.abc", isActive: true) {
-                    Haptics.soft()
-                    projectSortModeRaw = (projectSortMode == .recent ? ProjectSortMode.name : ProjectSortMode.recent).rawValue
-                }
+                    projectHeaderIconButton(systemName: showArchivedProjects ? "archivebox.fill" : "archivebox", isActive: showArchivedProjects) {
+                        Haptics.soft()
+                        showArchivedProjects.toggle()
+                    }
 
-                projectHeaderIconButton(systemName: showArchivedProjects ? "archivebox.fill" : "archivebox", isActive: showArchivedProjects) {
-                    Haptics.soft()
-                    showArchivedProjects.toggle()
-                }
+                    Spacer(minLength: 0)
 
-                circularPlusButton(action: {
-                    Haptics.heavy()
-                    showingNewProject = true
-                })
-                .guidedTutorialAnchor(.projectsAddButton)
+                    circularPlusButton(action: {
+                        Haptics.heavy()
+                        showingNewProject = true
+                    })
+                    .guidedTutorialAnchor(.projectsAddButton)
+                }
+                .frame(maxWidth: .infinity)
             }
         }
+    }
+
+    private var homeHeroTitle: some View {
+        Text("Home")
+            .font(.largeTitle.weight(.bold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var homeSectionSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+
+                if value.translation.width < -40 {
+                    setHomeSection(.tasks)
+                } else if value.translation.width > 40 {
+                    setHomeSection(.projects)
+                }
+            }
     }
 
     private var projectsColumnHeader: some View {
@@ -251,7 +281,7 @@ struct HomeView: View {
 
     private var tasksColumnHeader: some View {
         HStack(alignment: .center, spacing: 10) {
-            Button("Tasks") {
+            Button("To-do's") {
                 Haptics.soft()
                 selectedHomeSection = .tasks
                 guidedTutorialEventHandler(.homeSectionChanged(.tasks))
@@ -262,27 +292,6 @@ struct HomeView: View {
             .guidedTutorialAnchor(.homeTasksSectionButton)
 
             Spacer()
-
-            Button(action: {
-                Haptics.heavy()
-                withAnimation(.none) {
-                    showCompleted.toggle()
-                }
-            }) {
-                Text(showCompleted ? "Hide" : "Show all")
-                    .font(.footnote.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .controlSize(.mini)
-            .tint(Color.white.opacity(0.2))
-            .foregroundStyle(.white)
-
-            circularPlusButton(action: {
-                Haptics.heavy()
-                taskEditorRoute = .create(defaultProject: nil)
-            })
-            .guidedTutorialAnchor(.homeNewTaskButton)
         }
     }
 
@@ -313,17 +322,7 @@ struct HomeView: View {
     @ViewBuilder
     private func sectionButton(_ section: HomeSection) -> some View {
         let button = Button(section.title) {
-            let isAlreadySelected = (section == selectedHomeSection)
-            if !isAlreadySelected {
-                Haptics.soft()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedHomeSection = section
-                    if section == .projects {
-                        selectedTaskID = nil
-                    }
-                }
-            }
-            guidedTutorialEventHandler(.homeSectionChanged(section.tutorialSection))
+            setHomeSection(section)
         }
         .buttonStyle(.plain)
         .foregroundStyle(selectedHomeSection == section ? .white : .white.opacity(0.52))
@@ -338,6 +337,7 @@ struct HomeView: View {
     var body: some View {
         GeometryReader { outer in
             let isLandscapeSplitLayout = shouldUseSplitLayout(for: outer.size)
+            let showsSessionCard = focus.currentSession != nil
             ZStack(alignment: .top) {
                 AnimatingBackground()
                 Group {
@@ -345,12 +345,16 @@ struct HomeView: View {
                         let safeTop = outer.safeAreaInsets.top
                         let totalHeight = outer.size.height
                         let heroTop = max(safeTop + 4, totalHeight * LandscapeLayout.heroVerticalFraction)
-                        let listsTop = heroTop + LandscapeLayout.heroHeight + LandscapeLayout.heroBottomSpacing
+                        let listsTop = showsSessionCard
+                            ? heroTop + LandscapeLayout.heroHeight + LandscapeLayout.heroBottomSpacing
+                            : safeTop + 12
 
                         ZStack(alignment: .top) {
-                            TimerCard(selectedTask: selectedTask)
-                                .frame(maxWidth: LandscapeLayout.heroMaxWidth, minHeight: LandscapeLayout.heroHeight)
-                                .position(x: outer.size.width / 2, y: heroTop + LandscapeLayout.heroHeight / 2)
+                            if showsSessionCard {
+                                TimerCard()
+                                    .frame(maxWidth: LandscapeLayout.heroMaxWidth, minHeight: LandscapeLayout.heroHeight)
+                                    .position(x: outer.size.width / 2, y: heroTop + LandscapeLayout.heroHeight / 2)
+                            }
 
                             HStack(alignment: .top, spacing: LandscapeLayout.columnSpacing) {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -368,48 +372,58 @@ struct HomeView: View {
                             }
                             .padding(.top, listsTop)
                             .padding(.horizontal, 12)
-                            // Let the fades run all the way to the bottom; avoid extra inset in landscape.
+                            // Keep the lists flush to the available height in landscape.
                             .padding(.bottom, LandscapeLayout.bottomPadding)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         }
                         .frame(width: outer.size.width, height: outer.size.height, alignment: .top)
                         .transition(layoutTransition)
                     } else {
-                        ScrollView(showsIndicators: false) {
-                            VStack(spacing: 12) {
-                                TimerCard(selectedTask: selectedTask)
+                        VStack(spacing: 12) {
+                            if showsSessionCard {
+                                TimerCard()
+                            }
 
-                                sectionHeader
-                                    .padding(.top, 32)
+                            homeHeroTitle
 
+                            sectionHeader
+
+                            Group {
                                 if selectedHomeSection == .projects {
-                                    projectsPane(embedInScroll: false)
+                                    portraitProjectsPane
                                 } else {
-                                    tasksPane
+                                    portraitTasksPane
                                 }
                             }
-                            .frame(maxWidth: .infinity, alignment: .top)
-                            .padding(.horizontal)
-                            .padding(.top, 64)
-                            .padding(.bottom, 48)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.horizontal)
+                        .padding(.top, max(outer.safeAreaInsets.top + 8, 8))
+                        .padding(.bottom, max(outer.safeAreaInsets.bottom, 12))
+                        .simultaneousGesture(homeSectionSwipeGesture)
                         .transition(layoutTransition)
                     }
                 }
                 .animation(.easeInOut(duration: 0.28), value: isLandscapeSplitLayout)
             }
         }
-        .navigationTitle("Home")
-        .sheet(item: $taskEditorRoute) { route in
-            switch route.mode {
-            case .create(let defaultProject):
-                TaskEditorView(mode: .create(defaultProject: defaultProject))
-            case .edit(let task):
-                TaskEditorView(mode: .edit(task: task))
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingNewProject) {
             NewProjectView()
+        }
+        .sheet(item: $taskAwaitingProjectSelection) { task in
+            ProjectSelectionSheet(
+                allowedProjectID: nil,
+                hiddenProjectIDs: []
+            ) { selection in
+                completeProjectSelection(for: task, project: selection)
+            }
+        }
+        .sheet(item: $taskAwaitingToolsSetup) { task in
+            TaskToolsSetupSheet(task: task) { selection in
+                completeToolsSetup(for: task, selection: selection)
+            }
         }
         .sheet(item: $projectDetail) { project in
             ProjectDetailView(project: project)
@@ -419,23 +433,12 @@ struct HomeView: View {
                 selectedHomeSection = .projects
             }
             syncSectionToGuidedTutorial()
-            clearSelectedTaskIfHidden()
         }
         .onChange(of: activeGuidedTutorialStep) { _, _ in
             syncSectionToGuidedTutorial()
-            clearSelectedTaskIfHidden()
-        }
-        .onChange(of: selectedTaskID) { _, newValue in
-            guidedTutorialEventHandler(.taskSelectionChanged(newValue))
         }
         .onChange(of: showingNewProject) { _, isPresented in
             guidedTutorialEventHandler(.modalChanged(kind: .newProject, isPresented: isPresented))
-        }
-        .onChange(of: taskEditorRoute != nil) { _, isPresented in
-            guidedTutorialEventHandler(.modalChanged(kind: .taskEditor, isPresented: isPresented))
-        }
-        .onChange(of: visibleFocusTasks.map(\.id)) { _, _ in
-            clearSelectedTaskIfHidden()
         }
     }
 
@@ -453,123 +456,99 @@ struct HomeView: View {
         }
     }
 
-    private func clearSelectedTaskIfHidden() {
-        guard let selectedTaskID else { return }
-        guard !visibleFocusTasks.contains(where: { $0.id == selectedTaskID }) else { return }
-        self.selectedTaskID = nil
+}
+private extension HomeView {
+    func handleProjectTap(_ project: Project) {
+        guard focus.currentSession == nil else { return }
+        startSession(with: project, task: nil)
+    }
+
+    private func setHomeSection(_ section: HomeSection) {
+        guard selectedHomeSection != section else { return }
+        Haptics.soft()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedHomeSection = section
+        }
+        guidedTutorialEventHandler(.homeSectionChanged(section.tutorialSection))
+    }
+
+    func handleTaskTap(_ task: FocusTask) {
+        guard focus.currentSession == nil else { return }
+        if task.project == nil {
+            taskAwaitingProjectSelection = task
+            return
+        }
+        presentToolsSetupIfNeeded(for: task)
+    }
+
+    func completeProjectSelection(for task: FocusTask, project: Project?) {
+        task.project = project
+        task.updatedAt = Date()
+        _ = modelContext.saveOrRollback()
+        taskAwaitingProjectSelection = nil
+        DispatchQueue.main.async {
+            presentToolsSetupIfNeeded(for: task)
+        }
+    }
+
+    func presentToolsSetupIfNeeded(for task: FocusTask) {
+        if task.hasConfiguredFocusTools {
+            startSession(with: task.project, task: task)
+        } else {
+            taskAwaitingToolsSetup = task
+        }
+    }
+
+    func completeToolsSetup(for task: FocusTask, selection: FamilyActivitySelection?) {
+        task.focusToolsSelectionData = HardBlockManager.shared.encodeSelection(selection)
+        task.hasConfiguredFocusTools = true
+        task.updatedAt = Date()
+        _ = modelContext.saveOrRollback()
+        taskAwaitingToolsSetup = nil
+        startSession(with: task.project, task: task)
+    }
+
+    func startSession(with project: Project?, task: FocusTask?) {
+        if let task, task.project?.id != project?.id {
+            task.project = project
+            _ = modelContext.saveOrRollback()
+        }
+
+        let sessionID = UUID().uuidString
+        let resolvedProject = project ?? task?.project
+        focus.start(project: resolvedProject, task: task)
+        let startedProjectID = focus.currentSession?.project?.id ?? resolvedProject?.id
+        let startedTaskID = focus.currentSession?.task?.id ?? task?.id
+        guidedTutorialEventHandler(.focusStarted(projectID: startedProjectID, taskID: startedTaskID))
+        if let current = focus.currentSession {
+            Analytics.track("focus_started", [
+                "session_id": current.id.uuidString,
+                "project_id": current.project?.id.uuidString ?? "none",
+                "task_id": current.task?.id.uuidString ?? task?.id.uuidString ?? "none",
+                "ts": Date().timeIntervalSince1970
+            ])
+        } else {
+            Analytics.track("focus_started", [
+                "session_id": sessionID,
+                "project_id": resolvedProject?.id.uuidString ?? "none",
+                "task_id": task?.id.uuidString ?? "none",
+                "ts": Date().timeIntervalSince1970
+            ])
+        }
     }
 }
+
 private struct TimerCard: View {
     @EnvironmentObject private var focus: FocusManager
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.activeGuidedTutorialStep) private var activeGuidedTutorialStep
-    @Environment(\.guidedTutorialCreatedProjectID) private var guidedTutorialCreatedProjectID
-    @Environment(\.guidedTutorialBaselineProjectIDs) private var guidedTutorialBaselineProjectIDs
     @Environment(\.guidedTutorialEventHandler) private var guidedTutorialEventHandler
     @Query private var prefsList: [Preferences]
-    let selectedTask: FocusTask?
 
-    @State private var outerAngle: Double = -30
-    @State private var innerAngle: Double = 30
-    @State private var driftX: CGFloat = 0
-    @State private var driftY: CGFloat = 0
-    @Namespace private var focusAnim
-    @State private var rippleOpacity: Double = 0
-    @State private var rippleScale: CGFloat = 1
-    @State private var pressDown: Bool = false
-    @State private var outerLoopTask: Task<Void, Never>? = nil
-    @State private var innerLoopTask: Task<Void, Never>? = nil
     @State private var showStopDetails: Bool = false
     @State private var stoppedSession: FocusSession? = nil
-    @State private var showingProjectPicker: Bool = false
-
-    private var tutorialLimitedProjectID: UUID? {
-        guard activeGuidedTutorialStep == .startFocusChoice, selectedTask == nil else { return nil }
-        return guidedTutorialCreatedProjectID
-    }
 
     var body: some View {
         VStack(spacing: 14) {
-            if focus.currentSession == nil {
-                Button(action: {
-                    Haptics.heavy()
-                    handlePrimaryTap()
-                }) {
-                    ZStack {
-                        Capsule()
-                            .fill(Theme.buttonGradient)
-                            .opacity(rippleOpacity)
-                            .scaleEffect(rippleScale)
-                            .blur(radius: 14)
-                            .animation(.easeOut(duration: 0.6), value: rippleOpacity)
-                            .animation(.easeOut(duration: 0.6), value: rippleScale)
-
-                        let cyanShadowRadius: CGFloat = 22
-                        let blueShadowRadius: CGFloat = 32
-
-                        Text("Time to focus?")
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 14)
-                            .background(
-                                Capsule().fill(Theme.buttonGradient)
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                                    .blendMode(.overlay)
-                            )
-                            .shadow(color: Color.cyan.opacity(0.5), radius: cyanShadowRadius, x: 0, y: 10)
-                            .shadow(color: Color.blue.opacity(0.35), radius: blueShadowRadius, x: 0, y: 0)
-                            .scaleEffect(pressDown ? 0.96 : 1.0)
-                            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: pressDown)
-                    }
-                }
-                .buttonStyle(.plain)
-                .contentShape(Capsule())
-                .padding(.horizontal, 2)
-                .padding(.vertical, 2)
-                .accessibilityLabel("Start focusing")
-                .guidedTutorialAnchor(.homeTimeToFocusButton)
-                .background(
-                    ZStack {
-                        Ellipse()
-                            .fill(AngularGradient(colors: [
-                                Color.cyan.opacity(0.8),
-                                Color.blue.opacity(0.7),
-                                Color.purple.opacity(0.75),
-                                Color.cyan.opacity(0.8)
-                            ], center: .center))
-                            .frame(width: 140, height: 90)
-                            .blur(radius: 12)
-                            .rotationEffect(.degrees(outerAngle))
-                            .opacity(0.7)
-                            .offset(x: driftX, y: driftY)
-                            .blendMode(.plusLighter)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-
-                        Ellipse()
-                            .fill(AngularGradient(colors: [
-                                Color.purple.opacity(0.9),
-                                Color.blue.opacity(0.75),
-                                Color.cyan.opacity(0.85),
-                                Color.purple.opacity(0.9)
-                            ], center: .center))
-                            .frame(width: 115, height: 75)
-                            .blur(radius: 8)
-                            .rotationEffect(.degrees(innerAngle))
-                            .opacity(0.8)
-                            .offset(x: -driftX * 0.83, y: -driftY * 0.75)
-                            .blendMode(.plusLighter)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-                )
-                .padding(.top, 0)
-                .transition(.focusElegant)
-            } else {
+            if focus.currentSession != nil {
                 VStack(spacing: 12) {
                     Text(elapsedString())
                         .font(.system(size: 44, weight: .semibold, design: .rounded))
@@ -619,59 +598,9 @@ private struct TimerCard: View {
                 }
             }
         }
-        .sheet(isPresented: $showingProjectPicker) {
-            ProjectSelectionSheet(
-                allowedProjectID: tutorialLimitedProjectID,
-                hiddenProjectIDs: activeGuidedTutorialStep == nil ? [] : guidedTutorialBaselineProjectIDs
-            ) { selection in
-                startSession(with: selection, task: selectedTask)
-            }
-        }
-        .task {
-            if focus.currentSession == nil { restartIdleAnimation() }
-        }
-        .onChange(of: focus.currentSession == nil) { _, isIdle in
-            if isIdle {
-                restartIdleAnimation()
-            } else {
-                outerLoopTask?.cancel(); outerLoopTask = nil
-                innerLoopTask?.cancel(); innerLoopTask = nil
-            }
-        }
-        .onChange(of: showingProjectPicker) { _, isPresented in
-            guidedTutorialEventHandler(.modalChanged(kind: .projectPicker, isPresented: isPresented))
-        }
         .onChange(of: showStopDetails) { _, isPresented in
             guidedTutorialEventHandler(.modalChanged(kind: .completedSession, isPresented: isPresented))
         }
-    }
-
-    private func startSession(with project: Project?, task: FocusTask?) {
-        let sessionID = UUID().uuidString
-        let resolvedProject = project ?? task?.project
-        focus.start(project: resolvedProject, task: task)
-        let startedProjectID = focus.currentSession?.project?.id ?? resolvedProject?.id
-        let startedTaskID = focus.currentSession?.task?.id ?? task?.id
-        guidedTutorialEventHandler(.focusStarted(projectID: startedProjectID, taskID: startedTaskID))
-        if let current = focus.currentSession {
-            Analytics.track("focus_started", [
-                "session_id": current.id.uuidString,
-                "project_id": current.project?.id.uuidString ?? "none",
-                "task_id": current.task?.id.uuidString ?? task?.id.uuidString ?? "none",
-                "ts": Date().timeIntervalSince1970
-            ])
-        } else {
-            Analytics.track("focus_started", [
-                "session_id": sessionID,
-                "project_id": resolvedProject?.id.uuidString ?? "none",
-                "task_id": task?.id.uuidString ?? "none",
-                "ts": Date().timeIntervalSince1970
-            ])
-        }
-    }
-
-    private func handlePrimaryTap() {
-        animateStartAndBeginSession()
     }
 
     private func stopSession() {
@@ -699,28 +628,6 @@ private struct TimerCard: View {
         }
     }
 
-    private func animateStartAndBeginSession() {
-        guard focus.currentSession == nil else { return }
-        pressDown = true
-        rippleOpacity = 0.55
-        rippleScale = 1.0
-        withAnimation(.easeOut(duration: 0.6)) {
-            rippleOpacity = 0.0
-            rippleScale = 2.2
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
-            if let task = selectedTask, let project = task.project {
-                startSession(with: project, task: task)
-            } else {
-                showingProjectPicker = true
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            pressDown = false
-            rippleScale = 1.0
-        }
-    }
-
     private func elapsedString() -> String {
         guard let start = focus.currentSession?.startedAt else { return "00:00:00" }
         let elapsed = Date().timeIntervalSince(start)
@@ -728,43 +635,6 @@ private struct TimerCard: View {
         let m = (Int(elapsed) % 3600) / 60
         let s = Int(elapsed) % 60
         return String(format: "%02d:%02d:%02d", h, m, s)
-    }
-
-    private func restartIdleAnimation() {
-        outerLoopTask?.cancel(); outerLoopTask = nil
-        innerLoopTask?.cancel(); innerLoopTask = nil
-        withAnimation(.none) {
-            outerAngle = -30
-            innerAngle = 30
-        }
-        startOuterLoop()
-        startInnerLoop()
-    }
-
-    private func startOuterLoop() {
-        outerLoopTask?.cancel()
-        outerLoopTask = Task { @MainActor in
-            let seg: UInt64 = 1_200_000_000
-            while !Task.isCancelled {
-                withAnimation(.linear(duration: 1.2)) { outerAngle = 30 }
-                try? await Task.sleep(nanoseconds: seg)
-                withAnimation(.linear(duration: 1.2)) { outerAngle = -30 }
-                try? await Task.sleep(nanoseconds: seg)
-            }
-        }
-    }
-
-    private func startInnerLoop() {
-        innerLoopTask?.cancel()
-        innerLoopTask = Task { @MainActor in
-            let seg: UInt64 = 1_200_000_000
-            while !Task.isCancelled {
-                withAnimation(.linear(duration: 1.2)) { innerAngle = -30 }
-                try? await Task.sleep(nanoseconds: seg)
-                withAnimation(.linear(duration: 1.2)) { innerAngle = 30 }
-                try? await Task.sleep(nanoseconds: seg)
-            }
-        }
     }
 }
 
@@ -863,7 +733,8 @@ private struct ProjectSelectionSheet: View {
                                                 detailText: projectDetail(for: project),
                                                 gradient: gradient,
                                                 progressFraction: info.fraction,
-                                                isArchived: project.isArchived
+                                                isArchived: project.isArchived,
+                                                onAccessoryTap: nil
                                             ) {
                                                 onSelect(project)
                                                 dismiss()
@@ -878,10 +749,12 @@ private struct ProjectSelectionSheet: View {
                                                            ratioText: info.ratio,
                                                            detailText: projectDetail(for: project),
                                                            progressFraction: info.fraction,
-                                                           isArchived: project.isArchived) {
-                                                onSelect(project)
-                                                dismiss()
-                                            }
+                                                           isArchived: project.isArchived,
+                                                           onTap: {
+                                                               onSelect(project)
+                                                               dismiss()
+                                                           },
+                                                           onAccessoryTap: nil)
                                         }
                                     }
                                 }
@@ -936,6 +809,152 @@ private struct ProjectSelectionSheet: View {
 
     private func toggleSortMode() {
         sortModeRaw = (sortMode == .recent ? ProjectSortMode.name : .recent).rawValue
+    }
+}
+
+private struct TaskToolsSetupSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let task: FocusTask
+    let onComplete: (FamilyActivitySelection?) -> Void
+
+    @State private var selection: FamilyActivitySelection
+    @State private var showingPicker = false
+    @State private var authorizationDenied = false
+
+    init(task: FocusTask, onComplete: @escaping (FamilyActivitySelection?) -> Void) {
+        self.task = task
+        self.onComplete = onComplete
+        _selection = State(initialValue: HardBlockManager.shared.decodeSelection(from: task.focusToolsSelectionData) ?? FamilyActivitySelection())
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.05, green: 0.08, blue: 0.18),
+                        Color(red: 0.03, green: 0.04, blue: 0.10)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Tools for \(task.title)")
+                                .font(.title.bold())
+                                .foregroundStyle(.white)
+                            Text("Pick the apps and sites you need. Monk will keep those available and block the rest during this focus session.")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.72))
+                        }
+
+                        Button {
+                            Task { @MainActor in
+                                let approved = await HardBlockManager.shared.ensureAuthorization()
+                                authorizationDenied = !approved
+                                if approved {
+                                    showingPicker = true
+                                }
+                            }
+                        } label: {
+                            Label(selection.isEmpty ? "Choose tools" : "Edit tools", systemImage: "slider.horizontal.3")
+                                .font(.footnote.weight(.semibold))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 11)
+                                .background(Color.white.opacity(0.16), in: Capsule())
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Selected")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.68))
+                            Text(selectionSummary)
+                                .font(.subheadline)
+                                .foregroundStyle(.white)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        )
+
+                        if authorizationDenied {
+                            Text("Screen Time permission is required to block distractions for this task.")
+                                .font(.footnote)
+                                .foregroundStyle(.red.opacity(0.9))
+                        }
+
+                        VStack(spacing: 12) {
+                            Button {
+                                Haptics.heavy()
+                                onComplete(selection.isEmpty ? nil : selection)
+                                dismiss()
+                            } label: {
+                                Text(selection.isEmpty ? "Start without blocking" : "Start focus")
+                                    .font(.headline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button("Skip for now") {
+                                Haptics.soft()
+                                onComplete(nil)
+                                dismiss()
+                            }
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.74))
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 32)
+                }
+            }
+            .navigationTitle("Task Tools")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        Haptics.soft()
+                        dismiss()
+                    }
+                    .foregroundStyle(.white.opacity(0.85))
+                }
+            }
+        }
+        .familyActivityPicker(isPresented: $showingPicker, selection: $selection)
+    }
+
+    private var selectionSummary: String {
+        if selection.isEmpty {
+            return "No tools selected yet."
+        }
+
+        var parts: [String] = []
+        if !selection.applicationTokens.isEmpty {
+            parts.append("\(selection.applicationTokens.count) app\(selection.applicationTokens.count == 1 ? "" : "s")")
+        }
+        if !selection.webDomainTokens.isEmpty {
+            parts.append("\(selection.webDomainTokens.count) site\(selection.webDomainTokens.count == 1 ? "" : "s")")
+        }
+        if !selection.categoryTokens.isEmpty {
+            parts.append("\(selection.categoryTokens.count) categor\(selection.categoryTokens.count == 1 ? "y" : "ies")")
+        }
+        if selection.includeEntireCategory {
+            parts.append("all categories")
+        }
+        return parts.joined(separator: " • ")
     }
 }
 
@@ -1952,6 +1971,7 @@ struct ProjectSelectionTile: View {
     let gradient: (start: Color, end: Color)
     let progressFraction: Double?
     let isArchived: Bool
+    let onAccessoryTap: (() -> Void)?
     let action: () -> Void
 
     var body: some View {
@@ -1995,26 +2015,40 @@ struct ProjectSelectionTile: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.75))
             }
-            .padding(18)
-            .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
-            .background(
-                LinearGradient(colors: [gradient.start, gradient.end], startPoint: .topLeading, endPoint: .bottomTrailing)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 10)
         }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)
+        .background(
+            LinearGradient(colors: [gradient.start, gradient.end], startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 10)
         .buttonStyle(.projectSelection)
         .opacity(isArchived ? 0.72 : 1)
         .overlay(alignment: .topTrailing) {
-            if isArchived {
-                ArchivedBadge()
-                    .padding(10)
+            HStack(spacing: 8) {
+                if isArchived {
+                    ArchivedBadge()
+                }
+                if let onAccessoryTap {
+                    Button {
+                        Haptics.soft()
+                        onAccessoryTap()
+                    } label: {
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .padding(2)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(10)
         }
     }
 }

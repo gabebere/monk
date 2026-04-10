@@ -259,11 +259,18 @@ final class MirrorSyncService {
             return
         }
 
-        if let project = session.project {
-            let activated = HardBlockManager.shared.activateHardBlock(for: project)
-            if !activated {
-                await scheduleShieldFailureNotification(reason: "Open Monk to enforce shields for your mirrored session.")
+        let activated: Bool = {
+            if let task = session.task,
+               HardBlockManager.shared.activateFocusTools(for: task) {
+                return true
             }
+            if let project = session.project {
+                return HardBlockManager.shared.activateHardBlock(for: project)
+            }
+            return false
+        }()
+        if (session.task != nil || session.project != nil) && !activated {
+            await scheduleShieldFailureNotification(reason: "Open Monk to enforce shields for your mirrored session.")
         }
         SnapshotWriter.refresh(modelContext: context, currentSession: session)
 #if canImport(ActivityKit)

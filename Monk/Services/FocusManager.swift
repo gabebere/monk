@@ -30,9 +30,7 @@ final class FocusManager: ObservableObject {
         // Optionally purge short sessions on launch if the preference is enabled
         purgeShortSessionsIfNeeded()
 
-        if let activeProject = currentSession?.project {
-            _ = HardBlockManager.shared.activateHardBlock(for: activeProject)
-        }
+        applyShieldsForCurrentSession()
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: currentSession)
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -101,9 +99,7 @@ final class FocusManager: ObservableObject {
 #endif
         focusScoreTickCounter = 0
 
-        if let resolvedProject {
-            _ = HardBlockManager.shared.activateHardBlock(for: resolvedProject)
-        }
+        applyShieldsForCurrentSession()
         SnapshotWriter.refresh(modelContext: modelContext, currentSession: session)
         Task { @MainActor in
             await FocusNudgeScheduler.shared.refresh(
@@ -116,7 +112,6 @@ final class FocusManager: ObservableObject {
 
     func stop() {
         guard let session = currentSession else { return }
-        let activeProject = session.project
         session.endedAt = Date()
         let discardSession = shouldDiscard(session: session)
         Task {
@@ -148,9 +143,7 @@ final class FocusManager: ObservableObject {
             )
         }
 
-        if activeProject != nil {
-            HardBlockManager.shared.deactivateHardBlock()
-        }
+        HardBlockManager.shared.deactivateHardBlock()
 #if canImport(ActivityKit)
         if #available(iOS 16.2, *) {
             LiveActivityManager.shared.endActivity(for: session)
@@ -222,9 +215,26 @@ final class FocusManager: ObservableObject {
     }
 
     private func enforceShieldsIfNeeded() {
-        if let project = currentSession?.project {
-            _ = HardBlockManager.shared.activateHardBlock(for: project)
+        applyShieldsForCurrentSession()
+    }
+
+    private func applyShieldsForCurrentSession() {
+        guard let session = currentSession else {
+            HardBlockManager.shared.deactivateHardBlock()
+            return
         }
+
+        if let task = session.task,
+           HardBlockManager.shared.activateFocusTools(for: task) {
+            return
+        }
+
+        if let project = session.project,
+           HardBlockManager.shared.activateHardBlock(for: project) {
+            return
+        }
+
+        HardBlockManager.shared.deactivateHardBlock()
     }
 
     private func weekBounds(containing date: Date) -> (start: Date, end: Date) {
