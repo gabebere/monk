@@ -7,25 +7,24 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		36B9113F98084EA99379D668 /* WeeklyGoalWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */; };
-		5CF2B7B40F2848B19C4A9D11 /* FocusedTodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A6D42A0E84F4B66BA9EE2E8 /* FocusedTodayWidget.swift */; };
-		740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 740996632EE058A9009DF533 /* GoogleSignIn */; };
-		740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 740996652EE058A9009DF533 /* GoogleSignInSwift */; };
-		740996692EE05BFF009DF533 /* UserJot in Frameworks */ = {isa = PBXBuildFile; productRef = 740996682EE05BFF009DF533 /* UserJot */; };
-		744FF3D82EF3F02A00BF7784 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 744FF3D72EF3F02A00BF7784 /* PostHog */; };
 		74F1E0602FFF5FE500784214 /* HardBlockShieldDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F1E0002FFF5FE100784214 /* HardBlockShieldDataSource.swift */; };
 		74F1E0612FFF5FE500784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
 		74F1E0622FFF5FE500784214 /* ManagedSettingsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */; };
 		74F1E0632FFF5FE500784214 /* HardBlockShieldUIExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 74F1E0022FFF5FE100784214 /* HardBlockShieldUIExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		74F5A1363000C00000784214 /* FamilyControls.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0403000C00000784214 /* FamilyControls.framework */; };
-		74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F5A0413000C00000784214 /* DeviceActivity.framework */; };
 		74F5A1383000C00000784214 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
-		74F7A0803000D00000784214 /* MonkLiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F7A0003000D00000784214 /* MonkLiveActivities.swift */; };
-		74F7A0903000D00000784214 /* MonkLiveActivitiesExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		74F7A0A03000D00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F6B0003000C00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift */; };
-		74F7A0B23000D00000784214 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 74F7A0B03000D00000784214 /* Assets.xcassets */; };
-		BC0D20487F5D4E71B1B2CF91 /* Monk/Shared/Snapshot/LiveSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D6F0AFF72F54E099A746397 /* Monk/Shared/Snapshot/LiveSnapshot.swift */; };
-		E48ACE0DDF3C4893A088CDD5 /* Monk/Shared/Snapshot/SnapshotReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D461856453C4D339642C15F /* Monk/Shared/Snapshot/SnapshotReader.swift */; };
+		C10000000000000000000001 /* MonkDeviceActivityMonitor.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C10000000000000000000013 /* MonkDeviceActivityMonitor.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C10000000000000000000002 /* CrossDeviceFocusMonitorExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* CrossDeviceFocusMonitorExtension.swift */; };
+		C10000000000000000000003 /* Monk/Shared/CrossDeviceFocusState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000015 /* Monk/Shared/CrossDeviceFocusState.swift */; };
+		C10000000000000000000004 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C10000000000000000000014 /* DeviceActivity.framework */; };
+		C10000000000000000000005 /* ManagedSettings.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74F1E0032FFF5FE100784214 /* ManagedSettings.framework */; };
+		C10000000000000000000006 /* DeviceActivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C10000000000000000000014 /* DeviceActivity.framework */; };
+		D10000000000000000000001 /* Shared/MobileFocusInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000003 /* Shared/MobileFocusInput.swift */; };
+		D10000000000000000000002 /* Shared/MobileFocusInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000003 /* Shared/MobileFocusInput.swift */; };
+		E10000000000000000000001 /* Shared/CrossDeviceApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */; };
+		E10000000000000000000002 /* Shared/CrossDeviceApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */; };
+		E10000000000000000000004 /* Shared/CrossDeviceApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */; };
+		F10000000000000000000001 /* Monk/AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* Monk/AppIcon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,12 +35,19 @@
 			remoteGlobalIDString = 74F1E0102FFF5FE100784214;
 			remoteInfo = HardBlockShieldUIExtension;
 		};
-		74F7A0603000D00000784214 /* PBXContainerItemProxy */ = {
+		B10000000000000000000002 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 7420C23E2E5CE57200784214 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 74F7A0303000D00000784214;
-			remoteInfo = MonkLiveActivitiesExtension;
+			remoteGlobalIDString = A10000000000000000000007;
+			remoteInfo = MonkMac;
+		};
+		C10000000000000000000028 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7420C23E2E5CE57200784214 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C10000000000000000000024;
+			remoteInfo = MonkDeviceActivityMonitor;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -53,7 +59,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				74F1E0632FFF5FE500784214 /* HardBlockShieldUIExtension.appex in Embed Foundation Extensions */,
-				74F7A0903000D00000784214 /* MonkLiveActivitiesExtension.appex in Embed Foundation Extensions */,
+				C10000000000000000000001 /* MonkDeviceActivityMonitor.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -61,11 +67,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		041AEA59AD634B4BBC888C46 /* Monk/Utilities/DateUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Utilities/DateUtils.swift; sourceTree = SOURCE_ROOT; };
-		23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyGoalWidget.swift; sourceTree = "<group>"; };
-		39DFBEB3FDC443799326FBEF /* Monk/Models/FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/FocusSession.swift; sourceTree = SOURCE_ROOT; };
-		4D461856453C4D339642C15F /* Monk/Shared/Snapshot/SnapshotReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/Snapshot/SnapshotReader.swift; sourceTree = SOURCE_ROOT; };
-		5363E89AAFA742E6B0B0CB6E /* Monk/Models/Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/Preferences.swift; sourceTree = SOURCE_ROOT; };
 		7420C2462E5CE57200784214 /* Monk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		74F1E0002FFF5FE100784214 /* HardBlockShieldDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HardBlockShieldDataSource.swift; sourceTree = "<group>"; };
 		74F1E0012FFF5FE100784214 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -74,18 +75,17 @@
 		74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ManagedSettingsUI.framework; path = System/Library/Frameworks/ManagedSettingsUI.framework; sourceTree = SDKROOT; };
 		74F58FA03000B6DC00784214 /* HardBlockShieldExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HardBlockShieldExtension.entitlements; sourceTree = "<group>"; };
 		74F5A0403000C00000784214 /* FamilyControls.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FamilyControls.framework; path = System/Library/Frameworks/FamilyControls.framework; sourceTree = SDKROOT; };
-		74F5A0413000C00000784214 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
-		74F6B0003000C00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/FocusSessionLiveActivity.swift; sourceTree = SOURCE_ROOT; };
-		74F6B0013000C00000784214 /* Monk/Services/LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Services/LiveActivityManager.swift; sourceTree = SOURCE_ROOT; };
-		74F7A0003000D00000784214 /* MonkLiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonkLiveActivities.swift; sourceTree = "<group>"; };
-		74F7A0013000D00000784214 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonkLiveActivitiesExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		74F7A0B03000D00000784214 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		74FAA5013001060000784214 /* Monk/Services/InsightsAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Services/InsightsAnalyzer.swift; sourceTree = SOURCE_ROOT; };
-		7D6F0AFF72F54E099A746397 /* Monk/Shared/Snapshot/LiveSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/Snapshot/LiveSnapshot.swift; sourceTree = SOURCE_ROOT; };
-		8CAA36B6431243A0B9E653FD /* Monk/Models/Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Models/Project.swift; sourceTree = SOURCE_ROOT; };
-		8CFF0616EDB5442C90064883 /* MonkLiveActivities/MonkLiveActivities.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonkLiveActivities/MonkLiveActivities.entitlements; sourceTree = SOURCE_ROOT; };
-		9A6D42A0E84F4B66BA9EE2E8 /* FocusedTodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusedTodayWidget.swift; sourceTree = "<group>"; };
+		A10000000000000000000001 /* MonkMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MonkMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000001 /* MonkMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MonkMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C10000000000000000000010 /* CrossDeviceFocusMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossDeviceFocusMonitorExtension.swift; sourceTree = "<group>"; };
+		C10000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C10000000000000000000012 /* MonkDeviceActivityMonitor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonkDeviceActivityMonitor.entitlements; sourceTree = "<group>"; };
+		C10000000000000000000013 /* MonkDeviceActivityMonitor.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonkDeviceActivityMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C10000000000000000000014 /* DeviceActivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = DeviceActivity.framework; path = System/Library/Frameworks/DeviceActivity.framework; sourceTree = SDKROOT; };
+		C10000000000000000000015 /* Monk/Shared/CrossDeviceFocusState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/CrossDeviceFocusState.swift; sourceTree = SOURCE_ROOT; };
+		D10000000000000000000003 /* Shared/MobileFocusInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/MobileFocusInput.swift; sourceTree = SOURCE_ROOT; };
+		E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/CrossDeviceApplication.swift; sourceTree = SOURCE_ROOT; };
+		F10000000000000000000003 /* Monk/AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Monk/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -95,6 +95,13 @@
 				Info.plist,
 			);
 			target = 7420C2452E5CE57200784214 /* Monk */;
+		};
+		A10000000000000000000002 /* Exceptions for "MonkMac" folder in "MonkMac" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A10000000000000000000007 /* MonkMac */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -107,6 +114,19 @@
 			path = Monk;
 			sourceTree = "<group>";
 		};
+		A10000000000000000000003 /* MonkMac */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A10000000000000000000002 /* Exceptions for "MonkMac" folder in "MonkMac" target */,
+			);
+			path = MonkMac;
+			sourceTree = "<group>";
+		};
+		B1000000000000000000000B /* MonkMacTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MonkMacTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,13 +134,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				740996642EE058A9009DF533 /* GoogleSignIn in Frameworks */,
+				C10000000000000000000006 /* DeviceActivity.framework in Frameworks */,
 				74F5A1383000C00000784214 /* ManagedSettings.framework in Frameworks */,
 				74F5A1363000C00000784214 /* FamilyControls.framework in Frameworks */,
-				740996692EE05BFF009DF533 /* UserJot in Frameworks */,
-				744FF3D82EF3F02A00BF7784 /* PostHog in Frameworks */,
-				740996662EE058A9009DF533 /* GoogleSignInSwift in Frameworks */,
-				74F5A1373000C00000784214 /* DeviceActivity.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,10 +149,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		74F7A0213000D00000784214 /* Frameworks */ = {
+		A10000000000000000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000000000000000000021 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C10000000000000000000004 /* DeviceActivity.framework in Frameworks */,
+				C10000000000000000000005 /* ManagedSettings.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -147,11 +179,13 @@
 			isa = PBXGroup;
 			children = (
 				7420C2482E5CE57200784214 /* Monk */,
+				A10000000000000000000003 /* MonkMac */,
+				B1000000000000000000000B /* MonkMacTests */,
 				7420C2472E5CE57200784214 /* Products */,
 				74F1E0202FFF5FE200784214 /* HardBlockShieldExtension */,
-				74F7A0103000D00000784214 /* MonkLiveActivities */,
+				C10000000000000000000020 /* MonkDeviceActivityMonitor */,
 				74F1E0212FFF5FE200784214 /* Frameworks */,
-				7428D41A2E9D5475007EEB9B /* Recovered References */,
+				74E9F74C3019363700B345E5 /* Shared Sources */,
 			);
 			sourceTree = "<group>";
 		};
@@ -159,26 +193,23 @@
 			isa = PBXGroup;
 			children = (
 				7420C2462E5CE57200784214 /* Monk.app */,
+				A10000000000000000000001 /* MonkMac.app */,
+				B10000000000000000000001 /* MonkMacTests.xctest */,
 				74F1E0022FFF5FE100784214 /* HardBlockShieldUIExtension.appex */,
-				74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */,
+				C10000000000000000000013 /* MonkDeviceActivityMonitor.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		7428D41A2E9D5475007EEB9B /* Recovered References */ = {
+		74E9F74C3019363700B345E5 /* Shared Sources */ = {
 			isa = PBXGroup;
 			children = (
-				74F6B0003000C00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift */,
-				74F6B0013000C00000784214 /* Monk/Services/LiveActivityManager.swift */,
-				74FAA5013001060000784214 /* Monk/Services/InsightsAnalyzer.swift */,
-				041AEA59AD634B4BBC888C46 /* Monk/Utilities/DateUtils.swift */,
-				39DFBEB3FDC443799326FBEF /* Monk/Models/FocusSession.swift */,
-				5363E89AAFA742E6B0B0CB6E /* Monk/Models/Preferences.swift */,
-				8CAA36B6431243A0B9E653FD /* Monk/Models/Project.swift */,
-				7D6F0AFF72F54E099A746397 /* Monk/Shared/Snapshot/LiveSnapshot.swift */,
-				4D461856453C4D339642C15F /* Monk/Shared/Snapshot/SnapshotReader.swift */,
+				F10000000000000000000003 /* Monk/AppIcon.icon */,
+				C10000000000000000000015 /* Monk/Shared/CrossDeviceFocusState.swift */,
+				E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */,
+				D10000000000000000000003 /* Shared/MobileFocusInput.swift */,
 			);
-			name = "Recovered References";
+			name = "Shared Sources";
 			sourceTree = "<group>";
 		};
 		74F1E0202FFF5FE200784214 /* HardBlockShieldExtension */ = {
@@ -197,22 +228,19 @@
 				74F1E0032FFF5FE100784214 /* ManagedSettings.framework */,
 				74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */,
 				74F5A0403000C00000784214 /* FamilyControls.framework */,
-				74F5A0413000C00000784214 /* DeviceActivity.framework */,
+				C10000000000000000000014 /* DeviceActivity.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		74F7A0103000D00000784214 /* MonkLiveActivities */ = {
+		C10000000000000000000020 /* MonkDeviceActivityMonitor */ = {
 			isa = PBXGroup;
 			children = (
-				74F7A0B03000D00000784214 /* Assets.xcassets */,
-				74F7A0003000D00000784214 /* MonkLiveActivities.swift */,
-				9A6D42A0E84F4B66BA9EE2E8 /* FocusedTodayWidget.swift */,
-				23A00A898DE745F09BAB36A5 /* WeeklyGoalWidget.swift */,
-				74F7A0013000D00000784214 /* Info.plist */,
-				8CFF0616EDB5442C90064883 /* MonkLiveActivities/MonkLiveActivities.entitlements */,
+				C10000000000000000000010 /* CrossDeviceFocusMonitorExtension.swift */,
+				C10000000000000000000011 /* Info.plist */,
+				C10000000000000000000012 /* MonkDeviceActivityMonitor.entitlements */,
 			);
-			path = MonkLiveActivities;
+			path = MonkDeviceActivityMonitor;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -231,20 +259,12 @@
 			);
 			dependencies = (
 				74F1E0512FFF5FE300784214 /* PBXTargetDependency */,
-				74F5A3023000C00000784214 /* PBXTargetDependency */,
-				74F5A3033000C00000784214 /* PBXTargetDependency */,
-				74F7A0613000D00000784214 /* PBXTargetDependency */,
+				C10000000000000000000029 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				7420C2482E5CE57200784214 /* Monk */,
 			);
 			name = Monk;
-			packageProductDependencies = (
-				740996632EE058A9009DF533 /* GoogleSignIn */,
-				740996652EE058A9009DF533 /* GoogleSignInSwift */,
-				740996682EE05BFF009DF533 /* UserJot */,
-				744FF3D72EF3F02A00BF7784 /* PostHog */,
-			);
 			productName = Monk;
 			productReference = 7420C2462E5CE57200784214 /* Monk.app */;
 			productType = "com.apple.product-type.application";
@@ -265,32 +285,66 @@
 				74F1E0202FFF5FE200784214 /* HardBlockShieldExtension */,
 			);
 			name = HardBlockShieldUIExtension;
-			packageProductDependencies = (
-			);
 			productName = HardBlockShieldUIExtension;
 			productReference = 74F1E0022FFF5FE100784214 /* HardBlockShieldUIExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		74F7A0303000D00000784214 /* MonkLiveActivitiesExtension */ = {
+		A10000000000000000000007 /* MonkMac */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 74F7A0433000D00000784214 /* Build configuration list for PBXNativeTarget "MonkLiveActivitiesExtension" */;
+			buildConfigurationList = A1000000000000000000000A /* Build configuration list for PBXNativeTarget "MonkMac" */;
 			buildPhases = (
-				74F7A0203000D00000784214 /* Sources */,
-				74F7A0213000D00000784214 /* Frameworks */,
-				74F7A0223000D00000784214 /* Resources */,
+				A10000000000000000000004 /* Sources */,
+				A10000000000000000000005 /* Frameworks */,
+				A10000000000000000000006 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				74F7A0103000D00000784214 /* MonkLiveActivities */,
+				A10000000000000000000003 /* MonkMac */,
 			);
-			name = MonkLiveActivitiesExtension;
-			packageProductDependencies = (
+			name = MonkMac;
+			productName = MonkMac;
+			productReference = A10000000000000000000001 /* MonkMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B10000000000000000000006 /* MonkMacTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1000000000000000000000A /* Build configuration list for PBXNativeTarget "MonkMacTests" */;
+			buildPhases = (
+				B10000000000000000000003 /* Sources */,
+				B10000000000000000000004 /* Frameworks */,
+				B10000000000000000000005 /* Resources */,
 			);
-			productName = MonkLiveActivities;
-			productReference = 74F7A0503000D00000784214 /* MonkLiveActivitiesExtension.appex */;
+			buildRules = (
+			);
+			dependencies = (
+				B10000000000000000000007 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B1000000000000000000000B /* MonkMacTests */,
+			);
+			name = MonkMacTests;
+			productName = MonkMacTests;
+			productReference = B10000000000000000000001 /* MonkMacTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C10000000000000000000024 /* MonkDeviceActivityMonitor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C10000000000000000000027 /* Build configuration list for PBXNativeTarget "MonkDeviceActivityMonitor" */;
+			buildPhases = (
+				C10000000000000000000022 /* Sources */,
+				C10000000000000000000021 /* Frameworks */,
+				C10000000000000000000023 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MonkDeviceActivityMonitor;
+			productName = MonkDeviceActivityMonitor;
+			productReference = C10000000000000000000013 /* MonkDeviceActivityMonitor.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -317,8 +371,15 @@
 					74F1E0102FFF5FE100784214 = {
 						CreatedOnToolsVersion = 16.4;
 					};
-					74F7A0303000D00000784214 = {
-						CreatedOnToolsVersion = 16.4;
+					A10000000000000000000007 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					B10000000000000000000006 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = A10000000000000000000007;
+					};
+					C10000000000000000000024 = {
+						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
@@ -331,19 +392,16 @@
 			);
 			mainGroup = 7420C23D2E5CE57200784214;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
-				740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */,
-				744FF3D62EF3F02A00BF7784 /* XCRemoteSwiftPackageReference "posthog-ios" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7420C2472E5CE57200784214 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				7420C2452E5CE57200784214 /* Monk */,
+				A10000000000000000000007 /* MonkMac */,
+				B10000000000000000000006 /* MonkMacTests */,
 				74F1E0102FFF5FE100784214 /* HardBlockShieldUIExtension */,
-				74F7A0303000D00000784214 /* MonkLiveActivitiesExtension */,
+				C10000000000000000000024 /* MonkDeviceActivityMonitor */,
 			);
 		};
 /* End PBXProject section */
@@ -363,11 +421,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		74F7A0223000D00000784214 /* Resources */ = {
+		A10000000000000000000006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				74F7A0B23000D00000784214 /* Assets.xcassets in Resources */,
+				F10000000000000000000001 /* Monk/AppIcon.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000000000000000000023 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -378,6 +450,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E10000000000000000000001 /* Shared/CrossDeviceApplication.swift in Sources */,
+				D10000000000000000000001 /* Shared/MobileFocusInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -389,16 +463,29 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		74F7A0203000D00000784214 /* Sources */ = {
+		A10000000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5CF2B7B40F2848B19C4A9D11 /* FocusedTodayWidget.swift in Sources */,
-				36B9113F98084EA99379D668 /* WeeklyGoalWidget.swift in Sources */,
-				74F7A0A03000D00000784214 /* Monk/Shared/FocusSessionLiveActivity.swift in Sources */,
-				74F7A0803000D00000784214 /* MonkLiveActivities.swift in Sources */,
-				BC0D20487F5D4E71B1B2CF91 /* Monk/Shared/Snapshot/LiveSnapshot.swift in Sources */,
-				E48ACE0DDF3C4893A088CDD5 /* Monk/Shared/Snapshot/SnapshotReader.swift in Sources */,
+				E10000000000000000000002 /* Shared/CrossDeviceApplication.swift in Sources */,
+				D10000000000000000000002 /* Shared/MobileFocusInput.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000000000000000000022 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C10000000000000000000002 /* CrossDeviceFocusMonitorExtension.swift in Sources */,
+				C10000000000000000000003 /* Monk/Shared/CrossDeviceFocusState.swift in Sources */,
+				E10000000000000000000004 /* Shared/CrossDeviceApplication.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -410,16 +497,15 @@
 			target = 74F1E0102FFF5FE100784214 /* HardBlockShieldUIExtension */;
 			targetProxy = 74F1E0502FFF5FE300784214 /* PBXContainerItemProxy */;
 		};
-		74F5A3023000C00000784214 /* PBXTargetDependency */ = {
+		B10000000000000000000007 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			target = A10000000000000000000007 /* MonkMac */;
+			targetProxy = B10000000000000000000002 /* PBXContainerItemProxy */;
 		};
-		74F5A3033000C00000784214 /* PBXTargetDependency */ = {
+		C10000000000000000000029 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-		};
-		74F7A0613000D00000784214 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 74F7A0303000D00000784214 /* MonkLiveActivitiesExtension */;
-			targetProxy = 74F7A0603000D00000784214 /* PBXContainerItemProxy */;
+			target = C10000000000000000000024 /* MonkDeviceActivityMonitor */;
+			targetProxy = C10000000000000000000028 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -555,20 +641,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Monk/Monk.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Monk/Info.plist;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Monk uses your location at session end to tag calendar events with where you were.";
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "live-activity remote-notification";
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -593,20 +674,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Monk/Monk.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Monk/Info.plist;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Monk uses your calendar to let you have a cleaner history on your time focused through your calendar.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Monk uses your location at session end to tag calendar events with where you were.";
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_NSSupportsLiveActivitiesOnDynamicIsland = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "live-activity remote-notification";
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -629,7 +705,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = HardBlockShieldExtension/HardBlockShieldExtension.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
@@ -655,7 +730,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = HardBlockShieldExtension/HardBlockShieldExtension.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
@@ -677,26 +751,118 @@
 			};
 			name = Release;
 		};
-		74F7A0413000D00000784214 /* Debug */ = {
+		A10000000000000000000008 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = MonkLiveActivities/MonkLiveActivities.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MonkMac/MonkMacDebug.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MonkMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A10000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MonkMac/MonkMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MonkMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		B10000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonkMac.app/Contents/MacOS/MonkMac";
+				TEST_TARGET_NAME = MonkMac;
+			};
+			name = Debug;
+		};
+		B10000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonkMac.app/Contents/MacOS/MonkMac";
+				TEST_TARGET_NAME = MonkMac;
+			};
+			name = Release;
+		};
+		C10000000000000000000025 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MonkDeviceActivityMonitor/MonkDeviceActivityMonitor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = MonkLiveActivities/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_FILE = MonkDeviceActivityMonitor/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.MonkLiveActivitiesExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.DeviceActivityMonitor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -704,26 +870,24 @@
 			};
 			name = Debug;
 		};
-		74F7A0423000D00000784214 /* Release */ = {
+		C10000000000000000000026 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = MonkLiveActivities/MonkLiveActivities.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_ENTITLEMENTS = MonkDeviceActivityMonitor/MonkDeviceActivityMonitor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = MonkLiveActivities/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_FILE = MonkDeviceActivityMonitor/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.MonkLiveActivitiesExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.DeviceActivityMonitor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -761,66 +925,34 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		74F7A0433000D00000784214 /* Build configuration list for PBXNativeTarget "MonkLiveActivitiesExtension" */ = {
+		A1000000000000000000000A /* Build configuration list for PBXNativeTarget "MonkMac" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				74F7A0413000D00000784214 /* Debug */,
-				74F7A0423000D00000784214 /* Release */,
+				A10000000000000000000008 /* Debug */,
+				A10000000000000000000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1000000000000000000000A /* Build configuration list for PBXNativeTarget "MonkMacTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000008 /* Debug */,
+				B10000000000000000000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C10000000000000000000027 /* Build configuration list for PBXNativeTarget "MonkDeviceActivityMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000025 /* Debug */,
+				C10000000000000000000026 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 9.0.0;
-			};
-		};
-		740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/UserJot/userjot-ios";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.1.0;
-			};
-		};
-		744FF3D62EF3F02A00BF7784 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/PostHog/posthog-ios.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.36.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		740996632EE058A9009DF533 /* GoogleSignIn */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
-			productName = GoogleSignIn;
-		};
-		740996652EE058A9009DF533 /* GoogleSignInSwift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 740996622EE053B8009DF533 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
-			productName = GoogleSignInSwift;
-		};
-		740996682EE05BFF009DF533 /* UserJot */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 740996672EE05BFF009DF533 /* XCRemoteSwiftPackageReference "userjot-ios" */;
-			productName = UserJot;
-		};
-		744FF3D72EF3F02A00BF7784 /* PostHog */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 744FF3D62EF3F02A00BF7784 /* XCRemoteSwiftPackageReference "posthog-ios" */;
-			productName = PostHog;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7420C23E2E5CE57200784214 /* Project object */;
 }

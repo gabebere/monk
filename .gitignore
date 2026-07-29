@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Swift and Xcode build output
+.build/
+.swift-module-cache/
+DerivedData/
+.derived-data/
+build/
+*.xcresult
+
+# Per-user Xcode state
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.swiftpm/
+
+# Local Codex workspace state
+.codex/

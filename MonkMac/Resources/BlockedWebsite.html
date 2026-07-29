@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+    <title>Blocked by Monk</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+            --text: rgba(20, 22, 30, 0.94);
+            --secondary: rgba(35, 39, 51, 0.58);
+            --base: #f4f6fa;
+            --panel: rgba(255, 255, 255, 0.62);
+            --border: rgba(30, 35, 50, 0.10);
+            --shadow: rgba(45, 49, 64, 0.14);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --text: rgba(255, 255, 255, 0.94);
+                --secondary: rgba(255, 255, 255, 0.52);
+                --base: #0d0e12;
+                --panel: rgba(255, 255, 255, 0.055);
+                --border: rgba(255, 255, 255, 0.10);
+                --shadow: rgba(0, 0, 0, 0.34);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 23% 18%, rgba(76, 150, 235, 0.18), transparent 31rem),
+                radial-gradient(circle at 80% 76%, rgba(10, 181, 151, 0.15), transparent 28rem),
+                radial-gradient(circle at 72% 14%, rgba(119, 86, 222, 0.13), transparent 25rem),
+                var(--base);
+        }
+
+        main {
+            width: min(31rem, calc(100vw - 2.5rem));
+            padding: 2.5rem 2.6rem 2.7rem;
+            text-align: center;
+            border: 1px solid var(--border);
+            border-radius: 1.6rem;
+            background: var(--panel);
+            box-shadow: 0 1.6rem 5rem var(--shadow);
+            backdrop-filter: blur(30px) saturate(130%);
+            -webkit-backdrop-filter: blur(30px) saturate(130%);
+        }
+
+        .brand {
+            margin: 0;
+            color: var(--secondary);
+            font-size: 0.78rem;
+            font-weight: 680;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .accent {
+            width: 4.5rem;
+            height: 0.24rem;
+            margin: 1rem auto 1.7rem;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #3399eb, #7857df, #08aa94);
+        }
+
+        h1 {
+            max-width: 25rem;
+            margin: 0 auto;
+            font-size: clamp(1.85rem, 4.5vw, 2.65rem);
+            font-weight: 620;
+            letter-spacing: -0.045em;
+            line-height: 1.08;
+        }
+
+        .domain {
+            margin: 1.25rem 0 0;
+            color: var(--secondary);
+            font-size: 0.94rem;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <p class="brand">Monk</p>
+        <div class="accent"></div>
+        <h1>You chose what matters right now.</h1>
+        <p class="domain"><span id="domain">This website</span> isn’t in this session. Everything else can wait.</p>
+    </main>
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const blockedDomain = params.get("site");
+
+        if (blockedDomain) {
+            document.getElementById("domain").textContent = blockedDomain;
+        }
+    </script>
+</body>
+</html>
