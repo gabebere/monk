@@ -9,18 +9,11 @@ struct MobileFocusRootView: View {
             MobileFocusBackground()
 
             if let state = service.activeState {
-                if service.hasRefreshedApplicationCatalog,
-                   let application = service.unresolvedApplications(for: state).first {
-                    MobileCrossDeviceApplicationSetupView(
-                        service: service,
-                        application: application
-                    )
-                    .transition(.opacity)
-                } else if !state.allowedDomains.isEmpty && !service.hasConfiguredBrowserApps {
+                if !state.allowedDomains.isEmpty && !service.hasConfiguredBrowserApps {
                     MobileBrowserSetupView(service: service, state: state)
                         .transition(.opacity)
                 } else {
-                    MobileActiveFocusView(state: state)
+                    MobileActiveFocusView(service: service, state: state)
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             } else if !service.isScreenTimeAuthorized || !service.hasConfiguredAllowedApps {

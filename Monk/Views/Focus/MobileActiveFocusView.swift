@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MobileActiveFocusView: View {
+    @ObservedObject var service: CrossDeviceFocusService
     let state: CrossDeviceFocusState
 
     var body: some View {
@@ -45,9 +46,13 @@ struct MobileActiveFocusView: View {
 
                     Spacer(minLength: 64)
 
-                    Label("This focus cannot be ended early.", systemImage: "lock.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if state.endsAt <= context.date {
+                        expiryDecision
+                    } else {
+                        Label("This focus cannot be ended early.", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: 680)
                 .frame(minHeight: 600)
@@ -56,6 +61,44 @@ struct MobileActiveFocusView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+    }
+
+    private var expiryDecision: some View {
+        VStack(spacing: 14) {
+            Text("Session complete")
+                .font(.headline)
+            Text("Keep going, or return to your default access?")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                extensionButton("15m", minutes: 15)
+                extensionButton("30m", minutes: 30)
+                extensionButton("1h", minutes: 60)
+            }
+
+            Button("End session") {
+                service.endExpiredFocus()
+            }
+            .font(.headline)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .buttonStyle(.plain)
+        }
+        .padding(18)
+        .frame(maxWidth: 420)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func extensionButton(_ title: String, minutes: Int) -> some View {
+        Button(title) {
+            service.extendExpiredFocus(by: TimeInterval(minutes * 60))
+        }
+        .font(.subheadline.weight(.semibold))
+        .frame(maxWidth: .infinity, minHeight: 42)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .buttonStyle(.plain)
     }
 
     private var accent: LinearGradient {

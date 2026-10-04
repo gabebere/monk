@@ -5,6 +5,10 @@ enum CrossDeviceCloudRecord {
     static let currentFocusName = "current-focus-commitment"
     static let applicationCatalogType = "MonkApplicationCatalog"
     static let macApplicationCatalogName = "application-catalog-macOS"
+    static let iPhoneApplicationCatalogName = "application-catalog-iPhone"
+    static let iPadApplicationCatalogName = "application-catalog-iPad"
+    static let defaultAccessType = "MonkDefaultAccess"
+    static let currentDefaultAccessName = "current-default-access"
 }
 
 struct CrossDeviceApplication: Codable, Hashable, Identifiable {
@@ -50,7 +54,8 @@ struct CrossDeviceApplication: Codable, Hashable, Identifiable {
             "com.goodnotesapp.x": "Goodnotes",
             "com.google.ios.youtube": "YouTube",
             "com.openai.chat": "ChatGPT",
-            "com.spotify.client": "Spotify"
+            "com.spotify.client": "Spotify",
+            "net.whatsapp.whatsapp": "WhatsApp"
         ]
         if let alias = aliases[bundleIdentifier.lowercased()] {
             return alias

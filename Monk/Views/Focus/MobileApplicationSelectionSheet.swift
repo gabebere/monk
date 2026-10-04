@@ -3,6 +3,7 @@ import SwiftUI
 
 enum MobileApplicationPickerKind: String, Identifiable {
     case allowedApps
+    case alwaysAllowedApps
     case browsers
 
     var id: String { rawValue }
@@ -10,6 +11,7 @@ enum MobileApplicationPickerKind: String, Identifiable {
     var title: String {
         switch self {
         case .allowedApps: "Allowed apps"
+        case .alwaysAllowedApps: "Always allowed"
         case .browsers: "Browsers"
         }
     }
@@ -18,6 +20,8 @@ enum MobileApplicationPickerKind: String, Identifiable {
         switch self {
         case .allowedApps:
             "Choose the apps that should remain available during focus."
+        case .alwaysAllowedApps:
+            "Choose the few apps that should remain available between focus sessions."
         case .browsers:
             "Choose Safari, Chrome, or any other browser you use."
         }
@@ -27,6 +31,8 @@ enum MobileApplicationPickerKind: String, Identifiable {
         switch self {
         case .allowedApps:
             "Monk will block everything else until the timer ends."
+        case .alwaysAllowedApps:
+            "When default blocking is on, every other app requires a timed focus session."
         case .browsers:
             "Monk remembers these and allows them automatically whenever your focus includes websites."
         }

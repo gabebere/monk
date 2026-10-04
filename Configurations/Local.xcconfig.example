@@ -1,0 +1,8 @@
+// Copy this file to Local.xcconfig and replace every value for your Apple Developer account.
+// Local.xcconfig is ignored by Git.
+
+MONK_DEVELOPMENT_TEAM = YOUR_TEAM_ID
+MONK_BUNDLE_IDENTIFIER = com.example.Monk
+MONK_MAC_BUNDLE_IDENTIFIER = com.example.Monk.mac
+MONK_CLOUDKIT_CONTAINER = iCloud.com.example.Monk
+MONK_APP_GROUP = group.com.example.Monk

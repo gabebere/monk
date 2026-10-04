@@ -1,0 +1,10 @@
+// Default identifiers for the upstream Monk project.
+// Forks should copy Local.xcconfig.example to Local.xcconfig and override these values.
+
+MONK_DEVELOPMENT_TEAM = 9Y2V2S3YLM
+MONK_BUNDLE_IDENTIFIER = com.gbr.Monk
+MONK_MAC_BUNDLE_IDENTIFIER = com.gbr.Monk.mac
+MONK_CLOUDKIT_CONTAINER = iCloud.com.gbr.Monk
+MONK_APP_GROUP = group.com.gbr.Monk
+
+#include? "Local.xcconfig"

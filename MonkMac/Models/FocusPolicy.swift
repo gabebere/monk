@@ -5,12 +5,50 @@ struct ApplicationDescriptor: Identifiable, Hashable, Codable {
     let displayName: String
     let bundleIdentifier: String?
     let bundleURL: URL
+    let sourcePlatform: String?
 
-    init(displayName: String, bundleIdentifier: String?, bundleURL: URL) {
+    init(
+        displayName: String,
+        bundleIdentifier: String?,
+        bundleURL: URL,
+        sourcePlatform: String? = nil
+    ) {
         self.displayName = displayName
         self.bundleIdentifier = bundleIdentifier
         self.bundleURL = bundleURL
+        self.sourcePlatform = sourcePlatform
         self.id = bundleIdentifier ?? bundleURL.standardizedFileURL.path
+    }
+
+    init(mobileApplication: CrossDeviceApplication) {
+        displayName = mobileApplication.displayName
+        bundleIdentifier = mobileApplication.sourceBundleIdentifier
+        bundleURL = URL(
+            fileURLWithPath: "/Monk/RemoteApplications/\(mobileApplication.id).app"
+        )
+        sourcePlatform = "iOS"
+        id = mobileApplication.sourceBundleIdentifier ?? mobileApplication.id
+    }
+
+    var isRemoteMobileApplication: Bool {
+        sourcePlatform == "iOS"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case displayName
+        case bundleIdentifier
+        case bundleURL
+        case sourcePlatform
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        bundleIdentifier = try container.decodeIfPresent(String.self, forKey: .bundleIdentifier)
+        bundleURL = try container.decode(URL.self, forKey: .bundleURL)
+        sourcePlatform = try container.decodeIfPresent(String.self, forKey: .sourcePlatform)
     }
 }
 

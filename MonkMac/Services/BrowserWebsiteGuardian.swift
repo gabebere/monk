@@ -15,12 +15,12 @@ final class BrowserWebsiteGuardian: WebsiteGuarding {
 
     private let workspace = NSWorkspace.shared
     private let logger = Logger(subsystem: "com.gbr.Monk.mac", category: "WebsiteGuardian")
-    private var allowlist = WebsiteAllowlist(domains: [])
+    private var navigationAllowance = WebsiteNavigationAllowance(domains: [])
     private var timer: Timer?
 
     func beginEnforcing(_ policy: FocusPolicy) {
         stopEnforcing()
-        allowlist = WebsiteAllowlist(domains: policy.allowedDomains)
+        navigationAllowance = WebsiteNavigationAllowance(domains: policy.allowedDomains)
 
         inspectFrontmostBrowser()
         let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
@@ -49,7 +49,11 @@ final class BrowserWebsiteGuardian: WebsiteGuarding {
         case let .success(rawURL):
             guard !rawURL.isEmpty else { return }
 
-            if allowlist.allows(rawURL) {
+            if navigationAllowance.allows(
+                rawURL,
+                in: bundleIdentifier,
+                at: .now
+            ) {
                 return
             }
 

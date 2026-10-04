@@ -1,9 +1,14 @@
 import SwiftUI
 import UIKit
+import AppIntents
 
 @main
 struct MonkApp: App {
     @UIApplicationDelegateAdaptor(MonkAppDelegate.self) private var appDelegate
+
+    init() {
+        MonkAppShortcuts.updateAppShortcutParameters()
+    }
 
     var body: some Scene {
         WindowGroup {

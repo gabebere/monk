@@ -3,8 +3,6 @@ import SwiftUI
 
 private enum MobileFocusField: Hashable {
     case intention
-    case hours
-    case minutes
     case website
 }
 
@@ -12,8 +10,8 @@ struct MobileFocusComposerView: View {
     @ObservedObject var service: CrossDeviceFocusService
 
     @State private var intention = ""
-    @State private var hours = ""
-    @State private var minutes = ""
+    @State private var hours = 0
+    @State private var minutes = 0
     @State private var allowedSelection = FamilyActivitySelection()
     @State private var allowedMacApplications: [CrossDeviceApplication] = []
     @State private var allowedBrowsers = FamilyActivitySelection()
@@ -36,8 +34,8 @@ struct MobileFocusComposerView: View {
                     .font(.system(.largeTitle, design: .rounded, weight: .semibold))
                     .textFieldStyle(.plain)
                     .focused($focusedField, equals: .intention)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .hours }
+                    .submitLabel(.done)
+                    .onSubmit { focusedField = nil }
 
                 durationSection
                 allowedAppsSection
@@ -78,14 +76,16 @@ struct MobileFocusComposerView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .onAppear {
-            allowedSelection = service.allowedSelection()
+            allowedSelection = service.defaultBlockingEnabled
+                ? FamilyActivitySelection()
+                : service.allowedSelection()
             allowedBrowsers = service.browserSelection()
         }
         .sheet(item: $picker) { kind in
             MobileApplicationSelectionSheet(
                 service: service,
                 kind: kind,
-                selection: kind == .allowedApps ? $allowedSelection : $allowedBrowsers
+                selection: kind == .browsers ? $allowedBrowsers : $allowedSelection
             )
         }
         .confirmationDialog(
@@ -98,7 +98,9 @@ struct MobileFocusComposerView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Only the apps and websites shown here will remain available until the timer reaches zero.")
+            Text(service.defaultBlockingEnabled
+                ? "Your always-allowed apps and the apps shown here will remain available until the timer reaches zero."
+                : "Only the apps and websites shown here will remain available until the timer reaches zero.")
         }
         .alert("Monk could not begin focus", isPresented: errorIsPresented) {
             Button("OK", role: .cancel) {}
@@ -111,12 +113,18 @@ struct MobileFocusComposerView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("For")
             HStack(spacing: 10) {
-                durationField(text: hoursBinding, suffix: "h", field: .hours) {
-                    focusedField = .minutes
-                }
-                durationField(text: minutesBinding, suffix: "m", field: .minutes) {
-                    focusedField = nil
-                }
+                durationWheel(
+                    title: "Hours",
+                    suffix: "h",
+                    values: 0...99,
+                    selection: $hours
+                )
+                durationWheel(
+                    title: "Minutes",
+                    suffix: "m",
+                    values: 0...59,
+                    selection: $minutes
+                )
             }
         }
     }
@@ -132,6 +140,12 @@ struct MobileFocusComposerView: View {
             ) {
                 focusedField = nil
                 picker = .allowedApps
+            }
+
+            if service.defaultBlockingEnabled {
+                Text("Your always-allowed apps are included automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -192,16 +206,8 @@ struct MobileFocusComposerView: View {
         }
     }
 
-    private var hoursBinding: Binding<String> {
-        Binding(get: { hours }, set: { hours = MobileFocusInput.sanitizedHours($0) })
-    }
-
-    private var minutesBinding: Binding<String> {
-        Binding(get: { minutes }, set: { minutes = MobileFocusInput.sanitizedMinutes($0) })
-    }
-
     private var durationMinutes: Int {
-        MobileFocusInput.totalMinutes(hours: hours, minutes: minutes)
+        hours * 60 + minutes
     }
 
     private var canBegin: Bool {
@@ -244,38 +250,29 @@ struct MobileFocusComposerView: View {
             .foregroundStyle(.secondary)
     }
 
-    private func durationField(
-        text: Binding<String>,
+    private func durationWheel(
+        title: String,
         suffix: String,
-        field: MobileFocusField,
-        onSubmit: @escaping () -> Void
+        values: ClosedRange<Int>,
+        selection: Binding<Int>
     ) -> some View {
-        HStack(spacing: 2) {
-            TextField("0", text: text)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.plain)
-                .font(.body.weight(.semibold).monospacedDigit())
-                .multilineTextAlignment(.trailing)
-                .frame(width: digitWidth(for: text.wrappedValue))
-                .focused($focusedField, equals: field)
-                .submitLabel(.next)
-                .onSubmit(onSubmit)
-            Text(suffix)
-                .font(.body.weight(.semibold).monospacedDigit())
-                .foregroundStyle(.secondary)
+        Picker(title, selection: selection) {
+            ForEach(Array(values), id: \.self) { value in
+                Text("\(value) \(suffix)")
+                    .font(.body.weight(.semibold).monospacedDigit())
+                    .tag(value)
+            }
         }
-        .padding(.horizontal, 13)
-        .frame(height: 44)
-        .fixedSize(horizontal: true, vertical: false)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .pickerStyle(.wheel)
+        .labelsHidden()
+        .frame(width: 116, height: 112)
+        .clipped()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(focusedField == field ? Color.primary.opacity(0.40) : .clear, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         }
-    }
-
-    private func digitWidth(for value: String) -> CGFloat {
-        CGFloat(max(value.count, 1) * 11 + 3)
+        .accessibilityLabel(title)
     }
 
     private func addWebsite() {

@@ -4,6 +4,8 @@ import XCTest
 @testable import MonkMac
 
 final class FocusPolicyTests: XCTestCase {
+    // MARK: - Cross-device app identity
+
     func testCrossDeviceApplicationMatchesNamesAcrossPlatformBundleIdentifiers() {
         let application = CrossDeviceApplication(
             displayName: "ChatGPT",
@@ -32,6 +34,10 @@ final class FocusPolicyTests: XCTestCase {
         XCTAssertEqual(
             CrossDeviceApplication.fallbackDisplayName(for: "com.savageinteractive.Procreate"),
             "Procreate"
+        )
+        XCTAssertEqual(
+            CrossDeviceApplication.fallbackDisplayName(for: "net.whatsapp.WhatsApp"),
+            "WhatsApp"
         )
     }
 
@@ -105,6 +111,8 @@ final class FocusPolicyTests: XCTestCase {
         XCTAssertEqual(policy.allowedApplicationIDs, ["com.apple.dt.Xcode"])
         XCTAssertEqual(policy.allowedDomains, ["developer.apple.com"])
     }
+
+    // MARK: - Input and policy rules
 
     func testPolicyEndDateUsesRequestedDuration() {
         let start = Date(timeIntervalSince1970: 10_000)
@@ -198,6 +206,69 @@ final class FocusPolicyTests: XCTestCase {
         XCTAssertEqual(
             WebsiteAllowlist.normalizedDomain(" HTTPS://WWW.Netflix.com/watch/123 "),
             "netflix.com"
+        )
+    }
+
+    func testAuthenticationCompanionsAreAvailableWhenAWebsiteIsAllowed() {
+        XCTAssertTrue(
+            WebsiteAccessCompanions.expandedDomains(["moodle.example.edu"])
+                .contains("login.microsoftonline.com")
+        )
+        XCTAssertTrue(WebsiteAccessCompanions.expandedDomains([]).isEmpty)
+    }
+
+    func testWebsiteNavigationAllowsOneDirectRedirectWithoutCreatingAnUnlimitedChain() {
+        var navigation = WebsiteNavigationAllowance(
+            domains: ["moodle.example.edu"],
+            redirectWindow: 3,
+            temporaryLifetime: 600
+        )
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        XCTAssertFalse(navigation.allows("https://unrelated.example", in: "Safari", at: now))
+        XCTAssertTrue(navigation.allows("https://moodle.example.edu/login", in: "Safari", at: now))
+        XCTAssertTrue(
+            navigation.allows(
+                "https://identity.university.example/sign-in",
+                in: "Safari",
+                at: now.addingTimeInterval(1)
+            )
+        )
+        XCTAssertTrue(
+            navigation.allows(
+                "https://identity.university.example/continue",
+                in: "Safari",
+                at: now.addingTimeInterval(20)
+            )
+        )
+        XCTAssertFalse(
+            navigation.allows(
+                "https://another-unrelated.example",
+                in: "Safari",
+                at: now.addingTimeInterval(21)
+            )
+        )
+    }
+
+    // MARK: - Session persistence and sync
+
+    func testMicrosoftSignInCompanionCanContinueAnAuthenticationRedirect() {
+        var navigation = WebsiteNavigationAllowance(domains: ["moodle.example.edu"])
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        XCTAssertTrue(
+            navigation.allows(
+                "https://login.microsoftonline.com/common/oauth2/authorize",
+                in: "Chrome",
+                at: now
+            )
+        )
+        XCTAssertTrue(
+            navigation.allows(
+                "https://moodle.example.edu/auth/oidc/",
+                in: "Chrome",
+                at: now.addingTimeInterval(1)
+            )
         )
     }
 
@@ -400,7 +471,7 @@ final class FocusPolicyTests: XCTestCase {
     }
 
     @MainActor
-    func testExpiredPersistedSessionIsNotRestored() throws {
+    func testExpiredPersistedSessionRemainsLockedUntilUserDecides() throws {
         let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -427,11 +498,239 @@ final class FocusPolicyTests: XCTestCase {
         )
         store.restorePersistedSessionIfNeeded()
 
+        XCTAssertEqual(store.activePolicy, expiredPolicy)
+        XCTAssertTrue(store.isAwaitingSessionDecision)
+        XCTAssertTrue(store.preventsTermination)
+        XCTAssertNotNil(defaults.data(forKey: FocusSessionStore.persistedPolicyKey))
+        XCTAssertEqual(applicationGuardian.enforcedPolicy, expiredPolicy)
+        XCTAssertEqual(websiteGuardian.enforcedPolicy, expiredPolicy)
+    }
+
+    @MainActor
+    func testCompletedSessionCanBeExtendedOrEnded() throws {
+        let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let now = Date(timeIntervalSince1970: 20_000)
+        let expiredPolicy = FocusPolicy(
+            intention: "Deep work",
+            startedAt: Date(timeIntervalSince1970: 10_000),
+            duration: 60,
+            allowedApplications: [],
+            allowedDomains: []
+        )
+        defaults.set(
+            try JSONEncoder().encode(expiredPolicy),
+            forKey: FocusSessionStore.persistedPolicyKey
+        )
+        let syncService = FocusPolicySyncSpy()
+        let store = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(),
+            websiteGuardian: WebsiteGuardianSpy(),
+            syncService: syncService,
+            defaults: defaults,
+            nowProvider: { now }
+        )
+        store.restorePersistedSessionIfNeeded()
+
+        store.extendExpiredFocus(by: 15 * 60)
+
+        XCTAssertFalse(store.isAwaitingSessionDecision)
+        XCTAssertEqual(store.activePolicy?.endsAt, now.addingTimeInterval(15 * 60))
+        XCTAssertEqual(syncService.publishedPolicies.last, store.activePolicy)
+
+        let endedCommitment = SyncedFocusCommitment(
+            sessionID: expiredPolicy.id,
+            intention: expiredPolicy.intention,
+            startedAt: expiredPolicy.startedAt,
+            endsAt: now,
+            allowedDomains: [],
+            isEnded: true
+        )
+        store.startSyncedFocus(endedCommitment)
+
         XCTAssertNil(store.activePolicy)
-        XCTAssertFalse(store.preventsTermination)
-        XCTAssertNil(defaults.data(forKey: FocusSessionStore.persistedPolicyKey))
-        XCTAssertNil(applicationGuardian.enforcedPolicy)
-        XCTAssertNil(websiteGuardian.enforcedPolicy)
+    }
+
+    @MainActor
+    func testCloudRoundTripDoesNotReplaceLocalSessionApplications() {
+        let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let now = Date(timeIntervalSince1970: 20_000)
+        let xcode = ApplicationDescriptor(
+            displayName: "Xcode",
+            bundleIdentifier: "com.apple.dt.Xcode",
+            bundleURL: URL(fileURLWithPath: "/Applications/Xcode.app")
+        )
+        let store = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(),
+            websiteGuardian: WebsiteGuardianSpy(),
+            defaults: defaults,
+            nowProvider: { now }
+        )
+        store.start(
+            intention: "Build Monk",
+            duration: 30 * 60,
+            allowedApplications: [xcode],
+            allowedDomains: []
+        )
+        let localPolicy = store.activePolicy!
+        let cloudRoundTrip = SyncedFocusCommitment(
+            sessionID: localPolicy.id,
+            intention: localPolicy.intention,
+            startedAt: localPolicy.startedAt,
+            endsAt: localPolicy.endsAt.addingTimeInterval(0.25),
+            allowedDomains: [],
+            allowedApplications: [
+                CrossDeviceApplication(
+                    displayName: "Xcode",
+                    bundleIdentifier: "com.apple.dt.Xcode"
+                )
+            ]
+        )
+
+        store.startSyncedFocus(cloudRoundTrip, resolvedApplications: [])
+
+        XCTAssertEqual(store.activePolicy, localPolicy)
+        XCTAssertEqual(store.activePolicy?.allowedApplications, [xcode])
+    }
+
+    @MainActor
+    func testDefaultBlockingPersistsAndEnforcesAlwaysAllowedApplications() {
+        let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let notes = ApplicationDescriptor(
+            displayName: "Notes",
+            bundleIdentifier: "com.apple.Notes",
+            bundleURL: URL(fileURLWithPath: "/System/Applications/Notes.app")
+        )
+        let guardian = ApplicationGuardianSpy()
+        let store = FocusSessionStore(
+            guardian: guardian,
+            websiteGuardian: WebsiteGuardianSpy(),
+            defaults: defaults
+        )
+
+        store.configureDefaultBlocking(enabled: true, alwaysAllowedApplications: [notes])
+
+        XCTAssertTrue(store.defaultBlockingEnabled)
+        XCTAssertEqual(store.alwaysAllowedApplications, [notes])
+        XCTAssertEqual(guardian.defaultAllowedApplications, [notes])
+        XCTAssertTrue(defaults.bool(forKey: FocusSessionStore.defaultBlockingEnabledKey))
+        XCTAssertTrue(store.preventsTermination)
+    }
+
+    // MARK: - Catalogs and optional integrations
+
+    @MainActor
+    func testDefaultBlockingPublishesPortableAlwaysAllowedApplications() {
+        let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let whatsapp = ApplicationDescriptor(
+            mobileApplication: CrossDeviceApplication(
+                displayName: "WhatsApp",
+                bundleIdentifier: "net.whatsapp.WhatsApp"
+            )
+        )
+        let syncService = FocusPolicySyncSpy()
+        let store = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(),
+            websiteGuardian: WebsiteGuardianSpy(),
+            syncService: syncService,
+            defaults: defaults
+        )
+
+        store.configureDefaultBlocking(
+            enabled: true,
+            alwaysAllowedApplications: [whatsapp]
+        )
+
+        XCTAssertEqual(syncService.defaultAccessUpdates.count, 1)
+        XCTAssertTrue(syncService.defaultAccessUpdates[0].enabled)
+        XCTAssertEqual(syncService.defaultAccessUpdates[0].applications, [whatsapp])
+    }
+
+    @MainActor
+    func testMacCatalogFindsMobileOnlyWhatsApp() {
+        let catalog = ApplicationCatalog()
+        catalog.setMobileApplications([
+            CrossDeviceApplication(
+                displayName: "WhatsApp",
+                bundleIdentifier: "net.whatsapp.WhatsApp"
+            )
+        ])
+
+        let matches = catalog.matches(for: "whats", excluding: [])
+
+        XCTAssertEqual(matches.map(\.displayName), ["WhatsApp"])
+        XCTAssertTrue(matches[0].isRemoteMobileApplication)
+    }
+
+    @MainActor
+    func testWebsiteHistorySuggestionsMatchPageTitlesAndPreferDefaultBrowser() {
+        let service = WebsiteHistorySuggestionService(suggestions: [
+            WebsiteHistorySuggestion(
+                domain: "learn.example.edu",
+                title: "University Moodle",
+                browserName: "Chrome",
+                score: 20
+            ),
+            WebsiteHistorySuggestion(
+                domain: "moodle.backup.edu",
+                title: "Moodle Backup",
+                browserName: "Safari",
+                score: 1_000_000
+            )
+        ])
+
+        XCTAssertEqual(
+            service.matches(for: "moodle", excluding: []).map(\.domain),
+            ["moodle.backup.edu", "learn.example.edu"]
+        )
+        XCTAssertEqual(
+            service.matches(for: "moodle", excluding: ["moodle.backup.edu"]).map(\.domain),
+            ["learn.example.edu"]
+        )
+    }
+
+    @MainActor
+    func testTimedFocusAddsSessionAppsWithoutPublishingPermanentAllowlist() {
+        let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let notes = ApplicationDescriptor(
+            displayName: "Notes",
+            bundleIdentifier: "com.apple.Notes",
+            bundleURL: URL(fileURLWithPath: "/System/Applications/Notes.app")
+        )
+        let xcode = ApplicationDescriptor(
+            displayName: "Xcode",
+            bundleIdentifier: "com.apple.dt.Xcode",
+            bundleURL: URL(fileURLWithPath: "/Applications/Xcode.app")
+        )
+        let guardian = ApplicationGuardianSpy()
+        let syncService = FocusPolicySyncSpy()
+        let store = FocusSessionStore(
+            guardian: guardian,
+            websiteGuardian: WebsiteGuardianSpy(),
+            syncService: syncService,
+            defaults: defaults
+        )
+        store.configureDefaultBlocking(enabled: true, alwaysAllowedApplications: [notes])
+
+        store.start(
+            intention: "Build Monk",
+            duration: 30 * 60,
+            allowedApplications: [xcode],
+            allowedDomains: []
+        )
+
+        XCTAssertEqual(store.activePolicy?.allowedApplications, [xcode])
+        XCTAssertEqual(guardian.focusAlwaysAllowedApplications, [notes])
+        XCTAssertEqual(syncService.publishedPolicies.first?.allowedApplications, [xcode])
     }
 
     @MainActor
@@ -445,19 +744,62 @@ final class FocusPolicyTests: XCTestCase {
 
         XCTAssertTrue(catalog.applications.contains { $0.bundleIdentifier == "com.apple.Safari" })
     }
+
+    @MainActor
+    func testCompletedFocusIsRecordedOnceByCalendarRecorder() {
+        let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let calendarRecorder = FocusCalendarRecorderSpy()
+        let store = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(),
+            websiteGuardian: WebsiteGuardianSpy(),
+            calendarRecorder: calendarRecorder,
+            defaults: defaults,
+            nowProvider: { Date(timeIntervalSince1970: 10_000) }
+        )
+
+        store.start(
+            intention: "Build Monk",
+            duration: 0,
+            allowedApplications: [],
+            allowedDomains: []
+        )
+        store.endExpiredFocus()
+        store.endExpiredFocus()
+
+        XCTAssertEqual(calendarRecorder.recordedPolicies.map(\.intention), ["Build Monk"])
+    }
 }
+
+// MARK: - Test doubles
 
 @MainActor
 private final class ApplicationGuardianSpy: ApplicationGuarding {
     var onBlockedApplication: ((String) -> Void)?
     private(set) var enforcedPolicy: FocusPolicy?
+    private(set) var defaultAllowedApplications: [ApplicationDescriptor] = []
+    private(set) var focusAlwaysAllowedApplications: [ApplicationDescriptor] = []
 
-    func beginEnforcing(_ policy: FocusPolicy) {
+    func beginEnforcing(
+        _ policy: FocusPolicy,
+        alwaysAllowing applications: [ApplicationDescriptor]
+    ) {
         enforcedPolicy = policy
+        focusAlwaysAllowedApplications = applications
+        defaultAllowedApplications = []
+    }
+
+    func beginDefaultBlocking(allowing applications: [ApplicationDescriptor]) {
+        enforcedPolicy = nil
+        defaultAllowedApplications = applications
+        focusAlwaysAllowedApplications = []
     }
 
     func stopEnforcing() {
         enforcedPolicy = nil
+        defaultAllowedApplications = []
+        focusAlwaysAllowedApplications = []
     }
 }
 
@@ -478,8 +820,33 @@ private final class WebsiteGuardianSpy: WebsiteGuarding {
 @MainActor
 private final class FocusPolicySyncSpy: FocusPolicySyncing {
     private(set) var publishedPolicies: [FocusPolicy] = []
+    private(set) var endedPolicies: [FocusPolicy] = []
+    private(set) var defaultAccessUpdates: [(
+        enabled: Bool,
+        applications: [ApplicationDescriptor]
+    )] = []
 
     func publish(_ policy: FocusPolicy) {
         publishedPolicies.append(policy)
+    }
+
+    func end(_ policy: FocusPolicy) {
+        endedPolicies.append(policy)
+    }
+
+    func publishDefaultAccess(
+        enabled: Bool,
+        alwaysAllowedApplications: [ApplicationDescriptor]
+    ) {
+        defaultAccessUpdates.append((enabled, alwaysAllowedApplications))
+    }
+}
+
+@MainActor
+private final class FocusCalendarRecorderSpy: FocusCalendarRecording {
+    private(set) var recordedPolicies: [FocusPolicy] = []
+
+    func recordCompletedFocus(_ policy: FocusPolicy) {
+        recordedPolicies.append(policy)
     }
 }

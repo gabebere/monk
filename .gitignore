@@ -18,5 +18,14 @@ xcuserdata/
 # Swift Package Manager
 .swiftpm/
 
+# .NET and Windows packaging output
+Windows/artifacts/
+Windows/**/bin/
+Windows/**/obj/
+.vs/
+
 # Local Codex workspace state
 .codex/
+
+# Developer-specific Apple signing and container identifiers
+Configurations/Local.xcconfig

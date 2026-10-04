@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Monk Website Guardian",
+  "description": "Applies the website allowlist from the local Monk focus app.",
+  "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArX2SW5QFsI5y3T2gh0VOdZXAZqQs8NU2eIe2V2Rdpc5ABCpb3h6MJFgnXnVTU9OcErvtBLRr/fCTIFsoM14ASnhN4FAJByRM8bL8OIpTmoRm1v+0WbgzqSNPmKWAUJ9F+ZTBwZZSHwm7zpgtDg3/w4DR64V1bl5Uo8BxNcJWxKifL/IGwiC+xB7dkHXDMc5u2vDCdY4pW/K5T3UZfit3EcGxZSh05UZvsIGOyRRawCx1TiUqcJhlTCiTxH52MBJFLUuMyl/45clJqc8cWKfU1Oqs1vxcx9Dz058TGg8I+IItQulBzeyzB0xeHeZrQfz4qmdLsvvtrfvRKok1PvqyxwIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "tabs",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Monk Website Guardian"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

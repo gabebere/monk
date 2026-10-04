@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Connect Monk to your browser</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI Variable", "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: #f8f6ff; background: linear-gradient(135deg,#171029,#25194b 55%,#095965); }
+    main { width: min(760px,calc(100vw - 40px)); margin: auto; padding: 64px 0; }
+    .eyebrow { color: #aaa3bc; letter-spacing: .18em; font-size: 12px; font-weight: 700; }
+    h1 { font-size: clamp(38px,7vw,62px); line-height: 1; letter-spacing: -.04em; margin: 12px 0 18px; }
+    .lead { color: #cbc6d7; font-size: 18px; line-height: 1.55; max-width: 620px; }
+    ol { margin: 38px 0; padding: 0; list-style: none; counter-reset: steps; display: grid; gap: 12px; }
+    li { counter-increment: steps; padding: 18px 20px; border: 1px solid #ffffff20; background: #ffffff0d; border-radius: 16px; }
+    li::before { content: counter(steps); display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: 12px;
+      border-radius: 50%; background: #7467ee; font-weight: 700; }
+    code { color: #d7d2ff; }
+    .note { color: #918ba0; font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">MONK FOR WINDOWS</p>
+  <h1>Connect your browser.</h1>
+  <p class="lead">Application blocking works immediately. Complete this one-time step for website allowlists in Chrome, Edge, Brave, or Chromium.</p>
+  <ol>
+    <li>Open your browser's extensions page and turn on <strong>Developer mode</strong>.</li>
+    <li>Choose <strong>Load unpacked</strong>.</li>
+    <li>Select the <code>browser-extension</code> folder inside your Monk installation.</li>
+  </ol>
+  <p class="note">The extension reads only the active domain allowlist through a local Windows bridge. It does not receive your intention or application list, and it never sends data over the internet.</p>
+</main>
+</body>
+</html>

@@ -7,13 +7,13 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Monk</string>
+	<string>MonkOS</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Monk</string>
+	<string>MonkOS</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -28,10 +28,16 @@
 	<false/>
 	<key>LSUIElement</key>
 	<true/>
+	<key>MonkAppGroupIdentifier</key>
+	<string>$(MONK_APP_GROUP)</string>
+	<key>MonkCloudKitContainerIdentifier</key>
+	<string>$(MONK_CLOUDKIT_CONTAINER)</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Monk checks the active browser tab during a focus session so it can block websites outside your allowlist.</string>
+	<string>MonkOS checks the active browser tab during a focus session so it can block websites outside your allowlist.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MonkOS adds completed focus sessions to your default calendar when you enable calendar recording.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

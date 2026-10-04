@@ -66,7 +66,7 @@ struct FocusCommandView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack {
-                Label("Monk", systemImage: "circle.hexagongrid.fill")
+                Label("MonkOS", systemImage: "circle.hexagongrid.fill")
                     .font(.headline)
                     .foregroundStyle(.primary.opacity(0.82))
                 Spacer()

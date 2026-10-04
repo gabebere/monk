@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>Monk</AssemblyName>
+    <RootNamespace>Monk.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\monk.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Monk.Core\Monk.Core.csproj" />
+    <Resource Include="..\..\..\Monk\AppIcon.icon\Assets\monklogotransparent.png" Link="Assets\monk.png" />
+    <Resource Include="Assets\monk.ico" />
+  </ItemGroup>
+</Project>

@@ -7,6 +7,7 @@ struct MobileDeviceSetupView: View {
 
     @State private var selection = FamilyActivitySelection()
     @State private var browsers = FamilyActivitySelection()
+    @State private var defaultBlockingEnabled = false
     @State private var picker: MobileApplicationPickerKind?
     @State private var isRequestingAccess = false
     @State private var errorMessage: String?
@@ -44,15 +45,29 @@ struct MobileDeviceSetupView: View {
                     }
                 }
 
+                Toggle(isOn: $defaultBlockingEnabled) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Block by default")
+                            .font(.headline)
+                        Text("Only always-allowed apps work outside a timed focus")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(.cyan)
+                .padding(.horizontal, 16)
+                .frame(minHeight: 64)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Apps allowed on this device")
+                    Text("Always allowed apps")
                         .font(.headline)
 
                     MobileApplicationSearchPicker(
                         service: service,
                         selection: $selection
                     ) {
-                        picker = .allowedApps
+                        picker = .alwaysAllowedApps
                     }
                 }
 
@@ -82,7 +97,9 @@ struct MobileDeviceSetupView: View {
                 .disabled(!service.isScreenTimeAuthorized || isRequestingAccess)
                 .opacity(service.isScreenTimeAuthorized && !isRequestingAccess ? 1 : 0.42)
 
-                Text("Selecting no apps is valid: it means every app except Monk will be blocked during focus.")
+                Text(defaultBlockingEnabled
+                    ? "With no exceptions, every app except Monk is blocked until you begin a timed focus."
+                    : "When default blocking is off, these apps are reused as your starting focus selection.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -95,12 +112,13 @@ struct MobileDeviceSetupView: View {
         .onAppear {
             selection = service.allowedSelection()
             browsers = service.browserSelection()
+            defaultBlockingEnabled = service.defaultBlockingEnabled
         }
         .sheet(item: $picker) { kind in
             MobileApplicationSelectionSheet(
                 service: service,
                 kind: kind,
-                selection: kind == .allowedApps ? $selection : $browsers
+                selection: kind == .browsers ? $browsers : $selection
             )
         }
         .alert("Setup could not finish", isPresented: errorIsPresented) {
@@ -166,7 +184,11 @@ struct MobileDeviceSetupView: View {
 
     private func finishSetup() {
         do {
-            try service.completeSetup(with: selection, browsers: browsers)
+            try service.completeSetup(
+                with: selection,
+                browsers: browsers,
+                defaultBlockingEnabled: defaultBlockingEnabled
+            )
             isPresented?.wrappedValue = false
         } catch {
             errorMessage = error.localizedDescription

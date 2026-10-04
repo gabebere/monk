@@ -4,6 +4,10 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>MonkAppGroupIdentifier</key>
+	<string>$(MONK_APP_GROUP)</string>
+	<key>MonkCloudKitContainerIdentifier</key>
+	<string>$(MONK_CLOUDKIT_CONTAINER)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

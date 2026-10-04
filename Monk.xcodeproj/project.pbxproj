@@ -25,6 +25,15 @@
 		E10000000000000000000002 /* Shared/CrossDeviceApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */; };
 		E10000000000000000000004 /* Shared/CrossDeviceApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */; };
 		F10000000000000000000001 /* Monk/AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* Monk/AppIcon.icon */; };
+		G10000000000000000000001 /* Shared/WebsiteAccessCompanions.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10000000000000000000003 /* Shared/WebsiteAccessCompanions.swift */; };
+		G10000000000000000000002 /* Shared/WebsiteAccessCompanions.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10000000000000000000003 /* Shared/WebsiteAccessCompanions.swift */; };
+		H10000000000000000000001 /* Monk/Shared/TemporaryApplicationGrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = H10000000000000000000002 /* Monk/Shared/TemporaryApplicationGrant.swift */; };
+		J10000000000000000000001 /* Shared/TemporaryUnlockRequestParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = J10000000000000000000003 /* Shared/TemporaryUnlockRequestParser.swift */; };
+		J10000000000000000000002 /* Shared/TemporaryUnlockRequestParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = J10000000000000000000003 /* Shared/TemporaryUnlockRequestParser.swift */; };
+		K10000000000000000000001 /* Shared/MonkConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10000000000000000000005 /* Shared/MonkConfiguration.swift */; };
+		K10000000000000000000002 /* Shared/MonkConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10000000000000000000005 /* Shared/MonkConfiguration.swift */; };
+		K10000000000000000000003 /* Shared/MonkConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10000000000000000000005 /* Shared/MonkConfiguration.swift */; };
+		K10000000000000000000004 /* Shared/MonkConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10000000000000000000005 /* Shared/MonkConfiguration.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,7 +84,7 @@
 		74F1E0042FFF5FE100784214 /* ManagedSettingsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ManagedSettingsUI.framework; path = System/Library/Frameworks/ManagedSettingsUI.framework; sourceTree = SDKROOT; };
 		74F58FA03000B6DC00784214 /* HardBlockShieldExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HardBlockShieldExtension.entitlements; sourceTree = "<group>"; };
 		74F5A0403000C00000784214 /* FamilyControls.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FamilyControls.framework; path = System/Library/Frameworks/FamilyControls.framework; sourceTree = SDKROOT; };
-		A10000000000000000000001 /* MonkMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MonkMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000001 /* MonkOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MonkOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000001 /* MonkMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MonkMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000010 /* CrossDeviceFocusMonitorExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrossDeviceFocusMonitorExtension.swift; sourceTree = "<group>"; };
 		C10000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -86,6 +95,12 @@
 		D10000000000000000000003 /* Shared/MobileFocusInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/MobileFocusInput.swift; sourceTree = SOURCE_ROOT; };
 		E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/CrossDeviceApplication.swift; sourceTree = SOURCE_ROOT; };
 		F10000000000000000000003 /* Monk/AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Monk/AppIcon.icon; sourceTree = SOURCE_ROOT; };
+		G10000000000000000000003 /* Shared/WebsiteAccessCompanions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/WebsiteAccessCompanions.swift; sourceTree = SOURCE_ROOT; };
+		H10000000000000000000002 /* Monk/Shared/TemporaryApplicationGrant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Monk/Shared/TemporaryApplicationGrant.swift; sourceTree = SOURCE_ROOT; };
+		J10000000000000000000003 /* Shared/TemporaryUnlockRequestParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/TemporaryUnlockRequestParser.swift; sourceTree = SOURCE_ROOT; };
+		K10000000000000000000005 /* Shared/MonkConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/MonkConfiguration.swift; sourceTree = SOURCE_ROOT; };
+		K10000000000000000000006 /* Monk.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Monk.xcconfig; sourceTree = "<group>"; };
+		K10000000000000000000007 /* Local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -178,6 +193,7 @@
 		7420C23D2E5CE57200784214 = {
 			isa = PBXGroup;
 			children = (
+				K10000000000000000000008 /* Configurations */,
 				7420C2482E5CE57200784214 /* Monk */,
 				A10000000000000000000003 /* MonkMac */,
 				B1000000000000000000000B /* MonkMacTests */,
@@ -193,7 +209,7 @@
 			isa = PBXGroup;
 			children = (
 				7420C2462E5CE57200784214 /* Monk.app */,
-				A10000000000000000000001 /* MonkMac.app */,
+				A10000000000000000000001 /* MonkOS.app */,
 				B10000000000000000000001 /* MonkMacTests.xctest */,
 				74F1E0022FFF5FE100784214 /* HardBlockShieldUIExtension.appex */,
 				C10000000000000000000013 /* MonkDeviceActivityMonitor.appex */,
@@ -208,8 +224,21 @@
 				C10000000000000000000015 /* Monk/Shared/CrossDeviceFocusState.swift */,
 				E10000000000000000000003 /* Shared/CrossDeviceApplication.swift */,
 				D10000000000000000000003 /* Shared/MobileFocusInput.swift */,
+				G10000000000000000000003 /* Shared/WebsiteAccessCompanions.swift */,
+				H10000000000000000000002 /* Monk/Shared/TemporaryApplicationGrant.swift */,
+				J10000000000000000000003 /* Shared/TemporaryUnlockRequestParser.swift */,
+				K10000000000000000000005 /* Shared/MonkConfiguration.swift */,
 			);
 			name = "Shared Sources";
+			sourceTree = "<group>";
+		};
+		K10000000000000000000008 /* Configurations */ = {
+			isa = PBXGroup;
+			children = (
+				K10000000000000000000006 /* Monk.xcconfig */,
+				K10000000000000000000007 /* Local.xcconfig.example */,
+			);
+			path = Configurations;
 			sourceTree = "<group>";
 		};
 		74F1E0202FFF5FE200784214 /* HardBlockShieldExtension */ = {
@@ -305,8 +334,8 @@
 				A10000000000000000000003 /* MonkMac */,
 			);
 			name = MonkMac;
-			productName = MonkMac;
-			productReference = A10000000000000000000001 /* MonkMac.app */;
+			productName = MonkOS;
+			productReference = A10000000000000000000001 /* MonkOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 		B10000000000000000000006 /* MonkMacTests */ = {
@@ -452,6 +481,9 @@
 			files = (
 				E10000000000000000000001 /* Shared/CrossDeviceApplication.swift in Sources */,
 				D10000000000000000000001 /* Shared/MobileFocusInput.swift in Sources */,
+				G10000000000000000000001 /* Shared/WebsiteAccessCompanions.swift in Sources */,
+				J10000000000000000000001 /* Shared/TemporaryUnlockRequestParser.swift in Sources */,
+				K10000000000000000000001 /* Shared/MonkConfiguration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -460,6 +492,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				74F1E0602FFF5FE500784214 /* HardBlockShieldDataSource.swift in Sources */,
+				K10000000000000000000003 /* Shared/MonkConfiguration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -469,6 +502,9 @@
 			files = (
 				E10000000000000000000002 /* Shared/CrossDeviceApplication.swift in Sources */,
 				D10000000000000000000002 /* Shared/MobileFocusInput.swift in Sources */,
+				G10000000000000000000002 /* Shared/WebsiteAccessCompanions.swift in Sources */,
+				J10000000000000000000002 /* Shared/TemporaryUnlockRequestParser.swift in Sources */,
+				K10000000000000000000002 /* Shared/MonkConfiguration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -486,6 +522,8 @@
 				C10000000000000000000002 /* CrossDeviceFocusMonitorExtension.swift in Sources */,
 				C10000000000000000000003 /* Monk/Shared/CrossDeviceFocusState.swift in Sources */,
 				E10000000000000000000004 /* Shared/CrossDeviceApplication.swift in Sources */,
+				H10000000000000000000001 /* Monk/Shared/TemporaryApplicationGrant.swift in Sources */,
+				K10000000000000000000004 /* Shared/MonkConfiguration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -512,6 +550,7 @@
 /* Begin XCBuildConfiguration section */
 		7420C2652E5CE57400784214 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = K10000000000000000000006 /* Monk.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -546,7 +585,7 @@
 				CODE_SIGN_ENTITLEMENTS = Monk/Monk.entitlements;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -578,6 +617,7 @@
 		};
 		7420C2662E5CE57400784214 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = K10000000000000000000006 /* Monk.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -612,7 +652,7 @@
 				CODE_SIGN_ENTITLEMENTS = Monk/Monk.entitlements;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -643,7 +683,7 @@
 				CODE_SIGN_ENTITLEMENTS = Monk/Monk.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Monk/Info.plist;
@@ -659,7 +699,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -676,7 +716,7 @@
 				CODE_SIGN_ENTITLEMENTS = Monk/Monk.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Monk/Info.plist;
@@ -692,7 +732,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -707,7 +747,7 @@
 				CODE_SIGN_ENTITLEMENTS = HardBlockShieldExtension/HardBlockShieldExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HardBlockShieldExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -717,7 +757,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.HardBlockShieldUIExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_BUNDLE_IDENTIFIER).HardBlockShieldUIExtension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -732,7 +772,7 @@
 				CODE_SIGN_ENTITLEMENTS = HardBlockShieldExtension/HardBlockShieldExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = HardBlockShieldExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -742,7 +782,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.HardBlockShieldUIExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_BUNDLE_IDENTIFIER).HardBlockShieldUIExtension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -758,7 +798,7 @@
 				CODE_SIGN_ENTITLEMENTS = MonkMac/MonkMacDebug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -769,8 +809,9 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_MAC_BUNDLE_IDENTIFIER)";
+				PRODUCT_MODULE_NAME = MonkMac;
+				PRODUCT_NAME = MonkOS;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -784,7 +825,7 @@
 				CODE_SIGN_ENTITLEMENTS = MonkMac/MonkMac.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MonkMac/Info.plist;
@@ -794,8 +835,9 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_MAC_BUNDLE_IDENTIFIER)";
+				PRODUCT_MODULE_NAME = MonkMac;
+				PRODUCT_NAME = MonkOS;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -810,16 +852,16 @@
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_MAC_BUNDLE_IDENTIFIER).tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonkMac.app/Contents/MacOS/MonkMac";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonkOS.app/Contents/MacOS/MonkOS";
 				TEST_TARGET_NAME = MonkMac;
 			};
 			name = Debug;
@@ -831,16 +873,16 @@
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.mac.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_MAC_BUNDLE_IDENTIFIER).tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonkMac.app/Contents/MacOS/MonkMac";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonkOS.app/Contents/MacOS/MonkOS";
 				TEST_TARGET_NAME = MonkMac;
 			};
 			name = Release;
@@ -851,7 +893,7 @@
 				CODE_SIGN_ENTITLEMENTS = MonkDeviceActivityMonitor/MonkDeviceActivityMonitor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MonkDeviceActivityMonitor/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
@@ -861,7 +903,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.DeviceActivityMonitor;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_BUNDLE_IDENTIFIER).DeviceActivityMonitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -876,7 +918,7 @@
 				CODE_SIGN_ENTITLEMENTS = MonkDeviceActivityMonitor/MonkDeviceActivityMonitor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9Y2V2S3YLM;
+				DEVELOPMENT_TEAM = "$(MONK_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = MonkDeviceActivityMonitor/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
@@ -886,7 +928,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gbr.Monk.DeviceActivityMonitor;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MONK_BUNDLE_IDENTIFIER).DeviceActivityMonitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;

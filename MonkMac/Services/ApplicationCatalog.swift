@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class ApplicationCatalog: ObservableObject {
     @Published private(set) var applications: [ApplicationDescriptor] = []
+    @Published private(set) var mobileApplications: [ApplicationDescriptor] = []
 
     var supportedBrowsers: [ApplicationDescriptor] {
         applications.filter {
@@ -40,14 +41,38 @@ final class ApplicationCatalog: ObservableObject {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        return applications
+        var seen = Set<String>()
+        return (applications + mobileApplications)
             .filter { !selected.contains($0.id) }
             .filter {
                 $0.displayName.localizedCaseInsensitiveContains(trimmed) ||
                     ($0.bundleIdentifier?.localizedCaseInsensitiveContains(trimmed) ?? false)
             }
+            .filter {
+                seen.insert(
+                    CrossDeviceApplication.stableID(
+                        displayName: $0.displayName,
+                        bundleIdentifier: nil
+                    )
+                ).inserted
+            }
             .prefix(6)
             .map { $0 }
+    }
+
+    func setMobileApplications(_ applications: [CrossDeviceApplication]) {
+        let localNames = Set(self.applications.map {
+            CrossDeviceApplication.stableID(
+                displayName: $0.displayName,
+                bundleIdentifier: nil
+            )
+        })
+        mobileApplications = applications
+            .filter { !localNames.contains($0.id) }
+            .map(ApplicationDescriptor.init(mobileApplication:))
+            .sorted {
+                $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+            }
     }
 
     private var applicationDirectories: [URL] {

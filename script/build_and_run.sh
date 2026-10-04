@@ -2,36 +2,54 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="MonkMac"
-BUNDLE_ID="com.gbr.Monk.mac"
+SCHEME="MonkMac"
+APP_NAME="MonkOS"
+LEGACY_PROCESS_NAME="MonkMac"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUNDLE_ID="$(xcodebuild -project "$ROOT_DIR/Monk.xcodeproj" -scheme "$SCHEME" -configuration Debug -showBuildSettings 2>/dev/null | awk '/PRODUCT_BUNDLE_IDENTIFIER/ { print $3; exit }')"
 TEMP_ROOT="${TMPDIR:-/tmp}"
-DERIVED_DATA_DIR="${TEMP_ROOT%/}/MonkDerivedData/MonkMac"
+DERIVED_DATA_DIR="${TEMP_ROOT%/}/MonkDerivedData/MonkOS"
 APP_BUNDLE="$DERIVED_DATA_DIR/Build/Products/Debug/$APP_NAME.app"
-APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+USER_APPLICATIONS_DIR="${HOME}/Applications"
+INSTALLED_APP="$USER_APPLICATIONS_DIR/MonkOS.app"
+LEGACY_INSTALLED_APP="$USER_APPLICATIONS_DIR/Monk.app"
+INSTALLED_BINARY="$INSTALLED_APP/Contents/MacOS/$APP_NAME"
 
-if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+if pgrep -x "$APP_NAME" >/dev/null 2>&1 || pgrep -x "$LEGACY_PROCESS_NAME" >/dev/null 2>&1; then
   osascript -e "tell application id \"$BUNDLE_ID\" to quit" >/dev/null 2>&1 || true
   for _ in {1..30}; do
-    pgrep -x "$APP_NAME" >/dev/null 2>&1 || break
+    if ! pgrep -x "$APP_NAME" >/dev/null 2>&1 && ! pgrep -x "$LEGACY_PROCESS_NAME" >/dev/null 2>&1; then
+      break
+    fi
     sleep 0.1
   done
-  if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
-    echo "Monk is enforcing an active focus and refused to quit. Relaunch after the timer ends." >&2
+  if pgrep -x "$APP_NAME" >/dev/null 2>&1 || pgrep -x "$LEGACY_PROCESS_NAME" >/dev/null 2>&1; then
+    echo "MonkOS is enforcing an active focus or default block and refused to quit. End the focus or temporarily disable default blocking before relaunching." >&2
     exit 3
   fi
 fi
 
 xcodebuild \
   -project "$ROOT_DIR/Monk.xcodeproj" \
-  -scheme "$APP_NAME" \
+  -scheme "$SCHEME" \
   -configuration Debug \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED_DATA_DIR" \
   build
 
+mkdir -p "$USER_APPLICATIONS_DIR"
+if [[ -d "$LEGACY_INSTALLED_APP" && ! -e "$INSTALLED_APP" ]]; then
+  /bin/mv "$LEGACY_INSTALLED_APP" "$INSTALLED_APP"
+fi
+/usr/bin/ditto "$APP_BUNDLE" "$INSTALLED_APP"
+if ! /usr/bin/codesign --verify --deep --strict "$INSTALLED_APP"; then
+  /bin/rm -rf "$INSTALLED_APP"
+  /usr/bin/ditto "$APP_BUNDLE" "$INSTALLED_APP"
+  /usr/bin/codesign --verify --deep --strict "$INSTALLED_APP"
+fi
+
 open_app() {
-  /usr/bin/open -n "$APP_BUNDLE"
+  /usr/bin/open -n "$INSTALLED_APP"
 }
 
 case "$MODE" in
@@ -39,7 +57,7 @@ case "$MODE" in
     open_app
     ;;
   --debug|debug)
-    lldb -- "$APP_BINARY"
+    lldb -- "$INSTALLED_BINARY"
     ;;
   --logs|logs)
     open_app

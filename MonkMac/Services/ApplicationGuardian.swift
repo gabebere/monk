@@ -5,7 +5,11 @@ import OSLog
 @MainActor
 protocol ApplicationGuarding: AnyObject {
     var onBlockedApplication: ((String) -> Void)? { get set }
-    func beginEnforcing(_ policy: FocusPolicy)
+    func beginEnforcing(
+        _ policy: FocusPolicy,
+        alwaysAllowing applications: [ApplicationDescriptor]
+    )
+    func beginDefaultBlocking(allowing applications: [ApplicationDescriptor])
     func stopEnforcing()
 }
 
@@ -15,7 +19,8 @@ final class WorkspaceApplicationGuardian: ApplicationGuarding {
 
     private let workspace = NSWorkspace.shared
     private let logger = Logger(subsystem: "com.gbr.Monk.mac", category: "ApplicationGuardian")
-    private var policy: FocusPolicy?
+    private var allowedApplicationIDs: Set<String>?
+    private var allowsSupportedBrowsers = false
     private var observers: [NSObjectProtocol] = []
 
     private var permanentlyAllowedApplicationIDs: Set<String> {
@@ -30,8 +35,22 @@ final class WorkspaceApplicationGuardian: ApplicationGuarding {
         return identifiers
     }
 
-    func beginEnforcing(_ policy: FocusPolicy) {
-        self.policy = policy
+    func beginEnforcing(
+        _ policy: FocusPolicy,
+        alwaysAllowing applications: [ApplicationDescriptor]
+    ) {
+        allowedApplicationIDs = policy.allowedApplicationIDs.union(applications.map(\.id))
+        allowsSupportedBrowsers = !policy.allowedDomains.isEmpty
+        beginEnforcingRunningApplications()
+    }
+
+    func beginDefaultBlocking(allowing applications: [ApplicationDescriptor]) {
+        allowedApplicationIDs = Set(applications.map(\.id))
+        allowsSupportedBrowsers = false
+        beginEnforcingRunningApplications()
+    }
+
+    private func beginEnforcingRunningApplications() {
         installObserversIfNeeded()
 
         for application in workspace.runningApplications {
@@ -40,7 +59,8 @@ final class WorkspaceApplicationGuardian: ApplicationGuarding {
     }
 
     func stopEnforcing() {
-        policy = nil
+        allowedApplicationIDs = nil
+        allowsSupportedBrowsers = false
         observers.forEach(workspace.notificationCenter.removeObserver)
         observers.removeAll()
     }
@@ -78,10 +98,10 @@ final class WorkspaceApplicationGuardian: ApplicationGuarding {
     }
 
     private func enforce(_ application: NSRunningApplication, wasRunningAtSessionStart: Bool) {
-        guard let policy,
+        guard allowedApplicationIDs != nil,
               application.processIdentifier != ProcessInfo.processInfo.processIdentifier,
               application.activationPolicy == .regular,
-              shouldBlock(application, under: policy) else {
+              shouldBlock(application) else {
             return
         }
 
@@ -105,14 +125,14 @@ final class WorkspaceApplicationGuardian: ApplicationGuarding {
         }
     }
 
-    private func shouldBlock(_ application: NSRunningApplication, under policy: FocusPolicy) -> Bool {
+    private func shouldBlock(_ application: NSRunningApplication) -> Bool {
         let applicationID = application.bundleIdentifier ?? application.bundleURL?.standardizedFileURL.path
         guard let applicationID else { return true }
         guard !permanentlyAllowedApplicationIDs.contains(applicationID) else { return false }
-        if !policy.allowedDomains.isEmpty,
+        if allowsSupportedBrowsers,
            SupportedBrowser.canEnforceWebsites(in: application.bundleIdentifier) {
             return false
         }
-        return !policy.allowedApplicationIDs.contains(applicationID)
+        return !(allowedApplicationIDs?.contains(applicationID) ?? false)
     }
 }

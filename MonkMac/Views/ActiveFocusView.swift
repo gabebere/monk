@@ -33,26 +33,66 @@ struct ActiveFocusView: View {
 
             Spacer(minLength: 24)
 
-            VStack(spacing: 10) {
-                Text("This focus ends when the timer reaches zero.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if store.isAwaitingSessionDecision {
+                expiryDecision
+            } else {
+                VStack(spacing: 10) {
+                    Text("At zero, choose whether to extend or end.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                Button("Hide Monk", action: onDismiss)
-                    .buttonStyle(.plain)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary.opacity(0.76))
-                    .padding(.horizontal, 18)
-                    .frame(height: 40)
-                    .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(.primary.opacity(0.07), lineWidth: 1)
-                    }
+                    Button("Hide MonkOS", action: onDismiss)
+                        .buttonStyle(.plain)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary.opacity(0.76))
+                        .padding(.horizontal, 18)
+                        .frame(height: 40)
+                        .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(.primary.opacity(0.07), lineWidth: 1)
+                        }
+                }
             }
         }
         .padding(.horizontal, 30)
         .padding(.vertical, 26)
+    }
+
+    private var expiryDecision: some View {
+        VStack(spacing: 10) {
+            Text("Session complete")
+                .font(.headline)
+            Text("Keep going, or return to your default access?")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                extensionButton("15m", minutes: 15)
+                extensionButton("30m", minutes: 30)
+                extensionButton("1h", minutes: 60)
+                Button("End session") {
+                    store.endExpiredFocus()
+                }
+                .buttonStyle(.plain)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 38)
+                .background(MonkMacTheme.action, in: RoundedRectangle(cornerRadius: 11))
+            }
+        }
+    }
+
+    private func extensionButton(_ title: String, minutes: Int) -> some View {
+        Button(title) {
+            store.extendExpiredFocus(by: TimeInterval(minutes * 60))
+        }
+        .buttonStyle(.plain)
+        .font(.subheadline.weight(.semibold))
+        .padding(.horizontal, 12)
+        .frame(height: 38)
+        .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 11))
     }
 
     private func applicationChips(

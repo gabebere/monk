@@ -1,0 +1,9 @@
+{
+  "name": "com.gbr.monk",
+  "description": "Monk local website policy host",
+  "path": "{HOST_PATH}",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://gnojnlbmnlklcolioococcllgipfpnhi/"
+  ]
+}

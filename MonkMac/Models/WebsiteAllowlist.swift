@@ -68,3 +68,68 @@ struct WebsiteAllowlist: Equatable {
         "safari-extension"
     ]
 }
+
+struct WebsiteNavigationAllowance {
+    private let allowlist: WebsiteAllowlist
+    private let redirectWindow: TimeInterval
+    private let temporaryLifetime: TimeInterval
+    private var redirectOpportunityByBrowser: [String: Date] = [:]
+    private var temporaryHostsByBrowser: [String: [String: Date]] = [:]
+
+    init(
+        domains: [String],
+        redirectWindow: TimeInterval = 3,
+        temporaryLifetime: TimeInterval = 10 * 60
+    ) {
+        allowlist = WebsiteAllowlist(domains: domains)
+        self.redirectWindow = redirectWindow
+        self.temporaryLifetime = temporaryLifetime
+    }
+
+    mutating func allows(_ rawURL: String, in browserIdentifier: String, at now: Date) -> Bool {
+        removeExpiredAllowances(at: now)
+
+        if allowlist.allows(rawURL) {
+            if Self.httpHost(for: rawURL) != nil {
+                redirectOpportunityByBrowser[browserIdentifier] = now.addingTimeInterval(redirectWindow)
+            }
+            return true
+        }
+
+        if !allowlist.domains.isEmpty,
+           WebsiteAccessCompanions.isAuthenticationURL(rawURL) {
+            redirectOpportunityByBrowser[browserIdentifier] = now.addingTimeInterval(redirectWindow)
+            return true
+        }
+
+        guard let host = Self.httpHost(for: rawURL) else { return false }
+        if let expiry = temporaryHostsByBrowser[browserIdentifier]?[host], expiry >= now {
+            return true
+        }
+
+        guard let opportunity = redirectOpportunityByBrowser[browserIdentifier], opportunity >= now else {
+            return false
+        }
+
+        redirectOpportunityByBrowser[browserIdentifier] = nil
+        temporaryHostsByBrowser[browserIdentifier, default: [:]][host] = now.addingTimeInterval(temporaryLifetime)
+        return true
+    }
+
+    private mutating func removeExpiredAllowances(at now: Date) {
+        redirectOpportunityByBrowser = redirectOpportunityByBrowser.filter { $0.value >= now }
+        temporaryHostsByBrowser = temporaryHostsByBrowser.compactMapValues { hosts in
+            let activeHosts = hosts.filter { $0.value >= now }
+            return activeHosts.isEmpty ? nil : activeHosts
+        }
+    }
+
+    private static func httpHost(for rawURL: String) -> String? {
+        guard let url = URL(string: rawURL),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            return nil
+        }
+        return url.host?.lowercased()
+    }
+}

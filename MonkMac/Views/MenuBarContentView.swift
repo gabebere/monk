@@ -19,13 +19,20 @@ struct MenuBarContentView: View {
             Divider()
             SettingsLink()
         } else {
+            if store.defaultBlockingEnabled {
+                Label("Default blocking on", systemImage: "lock.fill")
+                    .foregroundStyle(.secondary)
+                Divider()
+            }
             Button("Begin Focus", action: showCommandPanel)
                 .keyboardShortcut(" ", modifiers: .option)
 
             Divider()
             SettingsLink()
-            Button("Quit Monk") {
-                NSApplication.shared.terminate(nil)
+            if !store.defaultBlockingEnabled {
+                Button("Quit MonkOS") {
+                    NSApplication.shared.terminate(nil)
+                }
             }
         }
     }

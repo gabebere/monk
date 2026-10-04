@@ -67,10 +67,12 @@ struct CrossDeviceFocusState: Codable, Equatable {
 }
 
 enum CrossDeviceFocusShared {
-    static let appGroupIdentifier = "group.com.gbr.Monk"
+    static let appGroupIdentifier = MonkConfiguration.appGroupIdentifier
     static let stateFileName = "crossDeviceFocusState.json"
     static let managedSettingsStoreName = "CrossDeviceFocus"
     static let deviceActivityName = "CrossDeviceFocusExpiry"
+    static let alwaysAllowedSelectionKey = "crossDeviceFocus.allowedSelection"
+    static let defaultBlockingEnabledKey = "crossDeviceFocus.defaultBlockingEnabled"
 
     static func stateURL(fileManager: FileManager = .default) -> URL? {
         fileManager

@@ -8,6 +8,8 @@ struct ApplicationPickerView: View {
     let onAdvance: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
+    var title = "Allowed apps"
+    var placeholder = "Type an application"
     @State private var query = ""
     @State private var highlightedIndex = 0
 
@@ -21,7 +23,7 @@ struct ApplicationPickerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Allowed apps")
+            Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -29,7 +31,7 @@ struct ApplicationPickerView: View {
                 Image(systemName: "app.badge.checkmark")
                     .foregroundStyle(.secondary)
 
-                TextField("Type an application", text: $query)
+                TextField(placeholder, text: $query)
                     .textFieldStyle(.plain)
                     .focused($focusedField, equals: .applications)
                     .onSubmit(handleSubmit)
@@ -80,11 +82,16 @@ struct ApplicationPickerView: View {
                             add(application)
                         } label: {
                             HStack(spacing: 10) {
-                                Image(nsImage: NSWorkspace.shared.icon(forFile: application.bundleURL.path))
-                                    .resizable()
-                                    .frame(width: 24, height: 24)
-                                Text(application.displayName)
-                                    .foregroundStyle(.primary)
+                                applicationIcon(application, size: 24)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(application.displayName)
+                                        .foregroundStyle(.primary)
+                                    if application.isRemoteMobileApplication {
+                                        Text("On iPhone or iPad")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
                                 Spacer()
                                 Image(systemName: "return")
                                     .font(.caption)
@@ -143,6 +150,20 @@ struct ApplicationPickerView: View {
         guard !matches.isEmpty else { return }
         highlightedIndex = (highlightedIndex + offset + matches.count) % matches.count
     }
+
+    @ViewBuilder
+    private func applicationIcon(_ application: ApplicationDescriptor, size: CGFloat) -> some View {
+        if application.isRemoteMobileApplication {
+            Image(systemName: "iphone")
+                .font(.system(size: size * 0.68, weight: .medium))
+                .frame(width: size, height: size)
+                .foregroundStyle(.secondary)
+        } else {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: application.bundleURL.path))
+                .resizable()
+                .frame(width: size, height: size)
+        }
+    }
 }
 
 struct SelectionChip: View {
@@ -186,10 +207,16 @@ struct SelectionChip: View {
     @ViewBuilder
     private var leadingIcon: some View {
         if let applicationURL {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: applicationURL.path))
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 17, height: 17)
+            if applicationURL.path.hasPrefix("/Monk/RemoteApplications/") {
+                Image(systemName: "iphone")
+                    .font(.caption)
+                    .frame(width: 17, height: 17)
+            } else {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: applicationURL.path))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 17, height: 17)
+            }
         } else if let systemImage {
             Image(systemName: systemImage)
                 .font(.caption)
