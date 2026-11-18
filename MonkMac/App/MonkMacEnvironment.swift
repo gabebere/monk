@@ -64,12 +64,11 @@ final class MonkMacEnvironment {
         crossDeviceSync.onReceivedCommitment = { [weak store, weak catalog] commitment in
             let resolvedApplications = commitment.allowedApplications.compactMap {
                 requestedApplication in
-                catalog?.applications.first {
-                    requestedApplication.matches(
-                        displayName: $0.displayName,
-                        bundleIdentifier: $0.bundleIdentifier
-                    )
-                }
+                requestedApplication.uniqueMatch(
+                    in: catalog?.applications ?? [],
+                    displayName: { $0.displayName },
+                    bundleIdentifier: { $0.bundleIdentifier }
+                )
             }
             store?.startSyncedFocus(
                 commitment,
@@ -77,15 +76,16 @@ final class MonkMacEnvironment {
             )
         }
         crossDeviceSync.onReceivedDefaultAccess = { [weak store, weak catalog] configuration in
-            let resolvedApplications = configuration.applications.map {
+            let resolvedApplications = configuration.applicationsAreAuthoritative
+                ? configuration.applications.map {
                 requestedApplication in
-                catalog?.applications.first {
-                    requestedApplication.matches(
-                        displayName: $0.displayName,
-                        bundleIdentifier: $0.bundleIdentifier
-                    )
-                } ?? ApplicationDescriptor(mobileApplication: requestedApplication)
-            }
+                    requestedApplication.uniqueMatch(
+                        in: catalog?.applications ?? [],
+                        displayName: { $0.displayName },
+                        bundleIdentifier: { $0.bundleIdentifier }
+                    ) ?? ApplicationDescriptor(mobileApplication: requestedApplication)
+                }
+                : store?.alwaysAllowedApplications ?? []
             store?.applySyncedDefaultBlocking(
                 enabled: configuration.enabled,
                 alwaysAllowedApplications: resolvedApplications

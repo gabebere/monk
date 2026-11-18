@@ -8,14 +8,14 @@ final class FocusPolicyTests: XCTestCase {
 
     func testCrossDeviceApplicationMatchesNamesAcrossPlatformBundleIdentifiers() {
         let application = CrossDeviceApplication(
-            displayName: "ChatGPT",
-            bundleIdentifier: "com.openai.codex"
+            displayName: "Safari",
+            bundleIdentifier: "com.apple.Safari"
         )
 
         XCTAssertTrue(
             application.matches(
-                displayName: "ChatGPT",
-                bundleIdentifier: "com.openai.chat"
+                displayName: "Safari",
+                bundleIdentifier: "com.apple.mobilesafari"
             )
         )
         XCTAssertFalse(
@@ -511,7 +511,7 @@ final class FocusPolicyTests: XCTestCase {
         let suiteName = "FocusSessionStoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let now = Date(timeIntervalSince1970: 20_000)
+        var now = Date(timeIntervalSince1970: 20_000)
         let expiredPolicy = FocusPolicy(
             intention: "Deep work",
             startedAt: Date(timeIntervalSince1970: 10_000),
@@ -549,6 +549,13 @@ final class FocusPolicyTests: XCTestCase {
         )
         store.startSyncedFocus(endedCommitment)
 
+        XCTAssertNotNil(store.activePolicy)
+        let extended = try XCTUnwrap(store.activePolicy)
+        now = extended.endsAt
+        store.startSyncedFocus(SyncedFocusCommitment(
+            sessionID: extended.id, intention: extended.intention, startedAt: extended.startedAt,
+            endsAt: extended.endsAt, allowedDomains: extended.allowedDomains, isEnded: true
+        ))
         XCTAssertNil(store.activePolicy)
     }
 
@@ -592,7 +599,7 @@ final class FocusPolicyTests: XCTestCase {
 
         store.startSyncedFocus(cloudRoundTrip, resolvedApplications: [])
 
-        XCTAssertEqual(store.activePolicy, localPolicy)
+        XCTAssertEqual(store.activePolicy?.endsAt, cloudRoundTrip.endsAt)
         XCTAssertEqual(store.activePolicy?.allowedApplications, [xcode])
     }
 
@@ -848,5 +855,88 @@ private final class FocusCalendarRecorderSpy: FocusCalendarRecording {
 
     func recordCompletedFocus(_ policy: FocusPolicy) {
         recordedPolicies.append(policy)
+    }
+}
+
+
+extension FocusPolicyTests {
+    @MainActor
+    func testSyncedMobileOnlyAppsSurviveMacRestoreAndExtension() throws {
+        let suite = "FocusPortableIntentTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let date = Date(timeIntervalSince1970: 20_000)
+        let mobileOnly = CrossDeviceApplication(displayName: "Mobile Editor", bundleIdentifier: "com.example.mobile-editor")
+        let commitment = SyncedFocusCommitment(
+            sessionID: UUID(), intention: "Write", startedAt: date.addingTimeInterval(-1_000),
+            endsAt: date.addingTimeInterval(-10), allowedDomains: [], allowedApplications: [mobileOnly]
+        )
+        let first = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(), websiteGuardian: WebsiteGuardianSpy(),
+            defaults: defaults, nowProvider: { date }
+        )
+        first.startSyncedFocus(commitment, resolvedApplications: [])
+        let sync = FocusPolicySyncSpy()
+        let restored = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(), websiteGuardian: WebsiteGuardianSpy(),
+            syncService: sync, defaults: defaults, nowProvider: { date }
+        )
+        restored.restorePersistedSessionIfNeeded()
+        restored.extendExpiredFocus(by: 600)
+        XCTAssertEqual(restored.activePolicy?.portableAllowedApplications, [mobileOnly])
+        XCTAssertEqual(sync.publishedPolicies.last?.portableAllowedApplications, [mobileOnly])
+        XCTAssertEqual(restored.activePolicy?.allowedApplications, [])
+    }
+
+    @MainActor
+    func testStaleRemoteEndDoesNotUnlockExtendedMacSession() throws {
+        let suite = "FocusStaleEndTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let date = Date(timeIntervalSince1970: 20_000)
+        let id = UUID()
+        let sync = FocusPolicySyncSpy()
+        let store = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(), websiteGuardian: WebsiteGuardianSpy(),
+            syncService: sync, defaults: defaults, nowProvider: { date }
+        )
+        store.startSyncedFocus(SyncedFocusCommitment(
+            sessionID: id, intention: "Write", startedAt: date.addingTimeInterval(-1_000),
+            endsAt: date.addingTimeInterval(-10), allowedDomains: []
+        ))
+        store.extendExpiredFocus(by: 600)
+        store.startSyncedFocus(SyncedFocusCommitment(
+            sessionID: id, intention: "Write", startedAt: date.addingTimeInterval(-1_000),
+            endsAt: date.addingTimeInterval(-10), allowedDomains: [], isEnded: true
+        ))
+        XCTAssertEqual(store.activePolicy?.id, id)
+        XCTAssertEqual(store.activePolicy?.endsAt, date.addingTimeInterval(600))
+        XCTAssertTrue(store.preventsTermination)
+    }
+}
+
+
+extension FocusPolicyTests {
+    @MainActor
+    func testExpiredOfflineMacCompletesWhenLongerWinningRemoteSessionAlreadyEnded() {
+        let suite = "FocusOfflineCompletionTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let date = Date(timeIntervalSince1970: 20_000)
+        let store = FocusSessionStore(
+            guardian: ApplicationGuardianSpy(), websiteGuardian: WebsiteGuardianSpy(),
+            defaults: defaults, nowProvider: { date }
+        )
+        store.startSyncedFocus(SyncedFocusCommitment(
+            sessionID: UUID(), intention: "Offline", startedAt: date.addingTimeInterval(-2_000),
+            endsAt: date.addingTimeInterval(-500), allowedDomains: []
+        ))
+        XCTAssertTrue(store.isAwaitingSessionDecision)
+        store.startSyncedFocus(SyncedFocusCommitment(
+            sessionID: UUID(), intention: "Winning remote", startedAt: date.addingTimeInterval(-1_500),
+            endsAt: date.addingTimeInterval(-100), allowedDomains: [], isEnded: true
+        ))
+        XCTAssertNil(store.activePolicy)
+        XCTAssertFalse(store.preventsTermination)
     }
 }

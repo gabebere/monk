@@ -7,4 +7,6 @@ MONK_MAC_BUNDLE_IDENTIFIER = com.gbr.Monk.mac
 MONK_CLOUDKIT_CONTAINER = iCloud.com.gbr.Monk
 MONK_APP_GROUP = group.com.gbr.Monk
 
+#include "Version.xcconfig"
+
 #include? "Local.xcconfig"

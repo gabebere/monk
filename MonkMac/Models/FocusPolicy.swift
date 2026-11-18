@@ -59,6 +59,9 @@ struct FocusPolicy: Identifiable, Hashable, Codable {
     let endsAt: Date
     let allowedApplications: [ApplicationDescriptor]
     let allowedDomains: [String]
+    /// Full shared intent, including apps that exist only on another platform.
+    /// Nil preserves backward compatibility with locally created or older persisted policies.
+    let portableAllowedApplications: [CrossDeviceApplication]?
 
     init(
         id: UUID = UUID(),
@@ -66,7 +69,8 @@ struct FocusPolicy: Identifiable, Hashable, Codable {
         startedAt: Date = .now,
         duration: TimeInterval,
         allowedApplications: [ApplicationDescriptor],
-        allowedDomains: [String]
+        allowedDomains: [String],
+        portableAllowedApplications: [CrossDeviceApplication]? = nil
     ) {
         self.id = id
         self.intention = intention
@@ -74,6 +78,7 @@ struct FocusPolicy: Identifiable, Hashable, Codable {
         self.endsAt = startedAt.addingTimeInterval(duration)
         self.allowedApplications = allowedApplications
         self.allowedDomains = allowedDomains
+        self.portableAllowedApplications = portableAllowedApplications
     }
 
     init(
@@ -82,7 +87,8 @@ struct FocusPolicy: Identifiable, Hashable, Codable {
         startedAt: Date,
         endsAt: Date,
         allowedApplications: [ApplicationDescriptor],
-        allowedDomains: [String]
+        allowedDomains: [String],
+        portableAllowedApplications: [CrossDeviceApplication]? = nil
     ) {
         self.id = id
         self.intention = intention
@@ -90,6 +96,7 @@ struct FocusPolicy: Identifiable, Hashable, Codable {
         self.endsAt = endsAt
         self.allowedApplications = allowedApplications
         self.allowedDomains = allowedDomains
+        self.portableAllowedApplications = portableAllowedApplications
     }
 
     var allowedApplicationIDs: Set<String> {

@@ -10,7 +10,6 @@ struct MobileApplicationSearchPicker: View {
     private let includesMacApplications: Bool
 
     @State private var query = ""
-    @State private var isRequestingCatalogAccess = false
     @FocusState private var searchIsFocused: Bool
 
     init(
@@ -28,9 +27,15 @@ struct MobileApplicationSearchPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !canSearchCatalog {
-                systemPickerFallback
-            } else {
+            localApplicationPicker
+
+            if canSearchCatalog {
+                if includesMacApplications && service.searchableApplications.isEmpty {
+                    Text("Choose apps for this device above. Add Mac apps below to allow them on your Mac too.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 searchField
 
                 if !trimmedQuery.isEmpty {
@@ -49,7 +54,7 @@ struct MobileApplicationSearchPicker: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
 
-            TextField("Type an app name", text: $query)
+            TextField("Search available app names", text: $query)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.done)
@@ -221,75 +226,29 @@ struct MobileApplicationSearchPicker: View {
         }
     }
 
-    private var systemPickerFallback: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if service.applicationCatalogCanBeRequested && !service.isApplicationCatalogAuthorized {
-                Button {
-                    isRequestingCatalogAccess = true
-                    Task {
-                        _ = await service.requestApplicationCatalogAuthorization()
-                        isRequestingCatalogAccess = false
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        if isRequestingCatalogAccess {
-                            ProgressView()
-                                .frame(width: 22)
-                        } else {
-                            Image(systemName: "magnifyingglass")
-                                .frame(width: 22)
-                        }
+    private var localApplicationPicker: some View {
+        Button(action: openSystemPicker) {
+            HStack(spacing: 12) {
+                Image(systemName: "app.badge.checkmark")
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Enable app search")
-                            Text("Allow Monk to show installed app names on this device")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 56)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(applicationCountLabel)
+                    Text("Choose apps on this device with Apple’s private list")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .disabled(isRequestingCatalogAccess)
 
-                Button("Use Apple’s private list instead", action: openSystemPicker)
-                    .font(.caption.weight(.medium))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
-                    .buttonStyle(.plain)
-                    .padding(.leading, 4)
-            } else {
-                Button(action: openSystemPicker) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "app.badge.checkmark")
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(applicationCountLabel)
-                            Text("Use Apple’s private app list on this device")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 56)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .buttonStyle(.plain)
             }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 56)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+        .buttonStyle(.plain)
     }
 
     private var trimmedQuery: String {

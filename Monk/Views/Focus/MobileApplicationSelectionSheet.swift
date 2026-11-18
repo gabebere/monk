@@ -47,32 +47,11 @@ struct MobileApplicationSelectionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if service.searchableApplications.isEmpty {
-                    FamilyActivityPicker(
-                        headerText: kind.header,
-                        footerText: kind.footer,
-                        selection: $selection
-                    )
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            Text(kind.header)
-                                .foregroundStyle(.secondary)
-
-                            MobileApplicationSearchPicker(
-                                service: service,
-                                selection: $selection,
-                                openSystemPicker: {}
-                            )
-                        }
-                        .padding(20)
-                        .frame(maxWidth: 680)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .scrollDismissesKeyboard(.interactively)
-                }
-            }
+            FamilyActivityPicker(
+                headerText: kind.header,
+                footerText: kind.footer,
+                selection: $selection
+            )
             .navigationTitle(kind.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

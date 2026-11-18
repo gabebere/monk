@@ -29,11 +29,15 @@ struct MonkMacApp: App {
 @MainActor
 final class MonkMacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hosted unit tests construct their own stores and enforcement spies.
+        // Starting the real guardians here could enforce the developer's saved policy.
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              ProcessInfo.processInfo.environment["MONK_TESTING"] != "1" else {
+            return
+        }
         NSApplication.shared.setActivationPolicy(.accessory)
         MonkMacEnvironment.shared.catalog.reload()
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            MonkMacEnvironment.shared.launchAtLoginController.registerIfNeeded()
-        }
+        MonkMacEnvironment.shared.launchAtLoginController.registerIfNeeded()
         MonkMacEnvironment.shared.hotKeyController.register()
         MonkMacEnvironment.shared.store.restorePersistedSessionIfNeeded()
         MonkMacEnvironment.shared.crossDeviceSync.start()

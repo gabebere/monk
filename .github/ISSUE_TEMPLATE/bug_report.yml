@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a reproducible Monk behavior or delivery problem.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: "For security or enforcement-bypass reports, follow SECURITY.md. Never include Screen Time tokens, private cloud records, or signing material."
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - iPhone
+        - iPad
+        - Mac
+        - Cross-device sync
+        - Windows (experimental)
+        - Build or release tooling
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version, build, and OS
+      placeholder: "Monk 1.0.0 build 1, iOS 26.4; or source commit and Xcode version"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction and expected behavior
+      description: Include actual behavior and the smallest reproducible sequence.
+    validations:
+      required: true
+  - type: textarea
+    id: sync
+    attributes:
+      label: Sync context
+      description: If relevant, describe involved platforms, online/offline state, Development/Production environment, and authorization state. Do not include Apple Account identifiers.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics and verification
+      description: Include relevant errors, commands, and whether the problem reproduces after an ordinary relaunch.

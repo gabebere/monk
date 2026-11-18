@@ -1,0 +1,7 @@
+// Release train version. iPhone and iPad ship as one universal binary.
+// Increment platform build numbers independently for every uploaded/exported build.
+MONK_VERSION = 1.0.0
+MONK_MOBILE_BUILD = 1
+MONK_MAC_BUILD = 1
+
+MARKETING_VERSION = $(MONK_VERSION)
