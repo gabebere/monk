@@ -1,21 +1,5 @@
 import SwiftUI
 
-enum FocusCommandField: Hashable {
-    case intention
-    case hours
-    case minutes
-    case applications
-    case websites
-
-    static let navigationOrder: [FocusCommandField] = [
-        .intention,
-        .hours,
-        .minutes,
-        .applications,
-        .websites
-    ]
-}
-
 struct FocusCommandView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var store: FocusSessionStore

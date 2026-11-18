@@ -30,6 +30,15 @@ struct MobileActiveFocusView: View {
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 360)
 
+                    Label(service.syncStatus, systemImage: service.iCloudAvailable ? "icloud" : "icloud.slash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    MobileApplicationMappingSection(
+                        service: service,
+                        applications: applicationsToMatch
+                    )
+
                     if !state.allowedDomains.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -89,6 +98,17 @@ struct MobileActiveFocusView: View {
         .padding(18)
         .frame(maxWidth: 420)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var applicationsToMatch: [CrossDeviceApplication] {
+        let sessionApplications = service.unresolvedApplications(for: state)
+        let defaultApplications = service.defaultBlockingEnabled
+            ? service.unresolvedDefaultApplications
+            : []
+        var seen = Set<String>()
+        return (sessionApplications + defaultApplications).filter {
+            seen.insert($0.id).inserted
+        }
     }
 
     private func extensionButton(_ title: String, minutes: Int) -> some View {

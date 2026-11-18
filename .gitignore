@@ -29,3 +29,11 @@ Windows/**/obj/
 
 # Developer-specific Apple signing and container identifiers
 Configurations/Local.xcconfig
+
+# Verification caches and local distribution products
+__pycache__/
+*.py[cod]
+release/artifacts/
+*.xcarchive/
+*.ipa
+*.dmg

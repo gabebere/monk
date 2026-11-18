@@ -4,58 +4,39 @@
 
 ### Decide what matters. Make everything else wait.
 
-An allowlist-first focus system for iPhone, iPad, Mac, and Windows.
+An allowlist focus system for iPhone, iPad, and Mac.
 
-[![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](https://www.swift.org/)
-[![Platforms](https://img.shields.io/badge/Apple-iOS%20%7C%20iPadOS%20%7C%20macOS-111111?logo=apple)](#platforms)
-[![Windows](https://img.shields.io/badge/Windows-experimental-0078D4?logo=windows)](Windows/README.md)
+[![Apple platforms](https://img.shields.io/badge/Apple-iPhone%20%7C%20iPad%20%7C%20Mac-111111?logo=apple)](docs/PRODUCT_1.0.md)
+[![Version](https://img.shields.io/badge/1.0.0-unreleased-c87b26)](release/1.0.0.json)
 [![License](https://img.shields.io/badge/License-MIT-2ea44f)](LICENSE)
 
 </div>
 
-Monk reverses the usual relationship with technology. You do not start with every app and website available, then try to resist them. You name the task, choose its duration, and explicitly allow only the tools it needs. Monk blocks everything else until the commitment ends.
+Choose an intention, a duration, and the apps/websites it needs. Monk blocks everything else until the commitment expires and you choose to finish or extend. Optional default blocking keeps only explicitly allowed apps available between sessions.
+
+**Monk 1.0 is an unreleased candidate.** The source, release tooling, and readiness manifest are versioned together; Apple approvals, Production sync, signed artifacts, and fresh-device acceptance remain explicit release gates.
 
 <p align="center">
-  <img src="docs/images/monk-iphone.png" alt="Monk setup on iPhone" width="280">
+  <img src="docs/images/monk-iphone.png" alt="Monk on iPhone" width="280">
   &nbsp;&nbsp;&nbsp;
-  <img src="docs/images/monk-ipad.png" alt="Monk setup on iPad" width="520">
+  <img src="docs/images/monk-ipad.png" alt="Monk on iPad" width="520">
 </p>
 
-## The interaction
+## Apple product structure
 
-Every focus starts with four choices:
-
-1. **What are you doing?** — a plain-language intention.
-2. **For how long?** — a commitment measured in hours and minutes.
-3. **Which apps are allowed?** — every other app is unavailable.
-4. **Which websites are allowed?** — browser access follows the same allowlist.
-
-An active commitment cannot be ended early. When its timer reaches zero, Monk asks whether to extend it or finish. You can also enable **Block by default**, which keeps apps unavailable between sessions except for a small always-allowed list.
-
-## Highlights
-
-- **One commitment across Apple devices.** Active sessions sync through the user's private CloudKit database.
-- **Private app matching.** Human-readable app identities sync; opaque Screen Time tokens remain on the device that created them.
-- **Real platform enforcement.** iPhone and iPad use Apple's Family Controls stack. Mac uses local application and browser guardians.
-- **Fast desktop command panel.** Press `Option` + `Space` on Mac (`Alt` + `Space` on Windows).
-- **Siri temporary access.** Ask Monk to allow one or more apps for a short period on supported iPhone and iPad versions.
-- **No service to trust.** There is no Monk account, analytics SDK, advertising, subscription system, or developer-operated backend.
-
-## Platforms
-
-| Platform | Status | Enforcement | Sync |
+| Product surface | Target | Installation route | Documentation |
 | --- | --- | --- | --- |
-| iPhone / iPad | Active | Family Controls, Managed Settings, Device Activity | Private CloudKit |
-| macOS | Active | App guardian, browser guardian, Apple Events | Private CloudKit |
-| Windows 10 / 11 | Experimental | Process guardian, Chromium extension, native messaging | Local only |
+| Monk for iPhone 1.0 | `Monk` | Universal TestFlight/App Store app | [iPhone contract](docs/platforms/IPHONE.md) |
+| Monk for iPad 1.0 | `Monk` | Same universal app, version, and mobile build | [iPad contract](docs/platforms/IPAD.md) |
+| Monk for Mac 1.0 (MonkOS) | `MonkMac` | Developer ID signed, notarized direct download | [Mac contract](docs/platforms/MAC.md) |
 
-The full Mac build is designed for direct distribution rather than the Mac App Store because its enforcement needs automation access and control of other applications. The mobile build is structured for App Store distribution, subject to Apple granting the Family Controls distribution capability.
+Phone/tablet use Family Controls, Managed Settings, and Device Activity. Mac uses native application/browser guardians and Apple Events. Both coordinate portable focus intent through the same user's private CloudKit database. Screen Time tokens and local app paths stay on their originating device. There is no Monk account, analytics SDK, subscription system, or developer-operated backend.
 
-## Run it locally
+Installed-app name discovery on mobile is optional and subject to Apple's OS, authorization, and EU customer restrictions. Apple's native local app picker remains available; unresolved cross-device app requests can be mapped to local equivalents. Cross-device updates depend on network and OS execution opportunities and are not an instant remote-control guarantee.
 
-### Apple platforms
+## Build and run
 
-You need a Mac with Xcode and an Apple Developer account.
+Use a Mac with Xcode 26.4+ SDKs. Supported runtimes start at iOS/iPadOS 18.5 and macOS 14. Follow [setup](docs/SETUP.md) to provision identifiers, capabilities, the App Group, and iCloud container.
 
 ```sh
 git clone https://github.com/gabebere/monk.git
@@ -64,74 +45,38 @@ cp Configurations/Local.xcconfig.example Configurations/Local.xcconfig
 open Monk.xcodeproj
 ```
 
-Replace the values in `Configurations/Local.xcconfig` with identifiers owned by your developer account, create the matching App Group and iCloud container, then select your team in Xcode. The complete walkthrough is in **[docs/SETUP.md](docs/SETUP.md)**.
-
-Useful commands:
+After editing the local configuration and signing the targets:
 
 ```sh
-# Build iPhone and iPad
-xcodebuild -project Monk.xcodeproj -scheme Monk \
-  -configuration Debug -destination 'generic/platform=iOS Simulator' build
-
-# Build and launch MonkOS on Mac
-./script/build_and_run.sh
-
-# Run macOS policy tests
-xcodebuild test -project Monk.xcodeproj -scheme MonkMac \
-  -destination 'platform=macOS'
+./script/ci.sh validate  # Repository/configuration checks
+./script/ci.sh mobile    # Universal mobile simulator build
+./script/ci.sh mac       # Mac build and tests
+./script/test_core.sh    # Core XCTest suites without launching the app or building UI assets
+./script/build_and_run.sh # Local Mac development install and launch
 ```
 
-### Windows
+The development launcher respects active enforcement and cannot finish a focus early. Signed release archives/exports and Mac packages use the separate [release commands](docs/RELEASES.md).
 
-On Windows 10/11 with the .NET 8 SDK:
+## Repository responsibilities
 
-```powershell
-./Windows/scripts/build.ps1
-```
+| Path | Responsibility |
+| --- | --- |
+| `Monk/` | Shared iPhone/iPad application and local mobile state |
+| `MonkMac/` | Native Mac application and enforcement |
+| `HardBlockShieldExtension/`, `MonkDeviceActivityMonitor/` | Mobile Screen Time extensions |
+| `Shared/` | Portable identity/catalog/sync policy, configuration, parsers |
+| `MonkMacTests/` | Policy, persistence, parsing, and shared-model regression tests |
+| `Configurations/`, `script/` | Version/configuration and build/release operations |
+| `.github/`, `release/` | CI, ownership, review conventions, release readiness |
+| `docs/` | Product/platform contracts, architecture, issues, runbooks |
+| `Windows/` | Experimental local-only Windows implementation |
 
-See **[Windows/README.md](Windows/README.md)** for browser-extension setup and the current hardening boundary.
+Keep one source repository and two Apple application targets. [ADR 0001](docs/decisions/0001-apple-monorepo.md) records this decision. Windows has a separate [README](Windows/README.md) and is outside the supported Apple 1.0 sync/release scope.
 
-## How it fits together
+## Engineering documentation
 
-```mermaid
-flowchart LR
-    UI[Focus composer] --> Policy[Allowlist policy]
-    Policy --> Cloud[(Private CloudKit)]
-    Cloud --> IOS[iPhone / iPad enforcement]
-    Cloud --> MAC[macOS enforcement]
-    IOS --> ScreenTime[Family Controls + Managed Settings]
-    MAC --> Apps[Application guardian]
-    MAC --> Browsers[Browser website guardian]
-    Policy -. local-only .-> WIN[Windows guardian]
-```
+Start with the [engineering handbook](docs/README.md), then the [product contract](docs/PRODUCT_1.0.md), [architecture](docs/ARCHITECTURE.md), [data contract](docs/DATA_CONTRACT.md), and [audit issue register](docs/issues/README.md). Delivery is described in [release engineering](docs/RELEASES.md) and the [release checklist](docs/runbooks/RELEASE_CHECKLIST.md). GitHub collaboration and live settings are described in the [operating model](docs/GITHUB.md).
 
-The system keeps shared intent separate from platform-private enforcement data. A synced session contains its intention, dates, allowed domains, and portable app identities. Each device resolves those identities to its own installed apps and applies its local policy. Read the deeper design in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
-
-## Repository map
-
-```text
-Monk/                       iPhone and iPad SwiftUI app
-MonkMac/                    macOS menu-bar app (MonkOS)
-HardBlockShieldExtension/   iOS/iPadOS shield appearance
-MonkDeviceActivityMonitor/  mobile session-expiry extension
-Shared/                     code compiled by Apple app targets
-MonkMacTests/               policy, parser, and service tests
-Configurations/             fork-friendly Apple build settings
-Windows/                    experimental Windows implementation
-docs/                       setup and architecture guides
-script/                     local build and launch tools
-```
-
-## Privacy and security
-
-Monk's focus data stays on the user's devices and in their private iCloud database. It does not send usage data to the repository owner. App selections created through Screen Time are opaque Apple tokens and stay local to each Apple platform.
-
-Desktop blocking is a strong behavioral boundary, not a substitute for operating-system administration. A device owner with administrator access can ultimately stop or remove desktop software. Please report security issues privately as described in **[SECURITY.md](SECURITY.md)**.
-
-## Contributing
-
-Monk is intentionally small and opinionated. Contributions that strengthen the allowlist model, reliability, accessibility, or platform parity are welcome. Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** before opening a pull request.
-
-## License
+See [CHANGELOG.md](CHANGELOG.md) for the unreleased changes, [CONTRIBUTING.md](CONTRIBUTING.md) for contribution rules, and [SECURITY.md](SECURITY.md) for private reporting. Desktop enforcement is a behavioral boundary; a device administrator can ultimately stop/remove software.
 
 Released under the [MIT License](LICENSE).

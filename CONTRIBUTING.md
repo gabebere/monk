@@ -1,46 +1,34 @@
 # Contributing
 
-Thank you for helping make Monk calmer, smaller, and more reliable.
+Monk is maintained as one monorepo with a universal iPhone/iPad app, a native Mac app, shared portable contract, and experimental Windows code. Start with the [engineering handbook](docs/README.md) and [GitHub operating model](docs/GITHUB.md).
 
 ## Product boundaries
 
-Monk is an allowlist-first focus tool. Changes should preserve these constraints:
+Preserve allowlist-only behavior and binding active commitments. Cross-device intent belongs in the user's private CloudKit database. Screen Time tokens, local mappings, and filesystem paths stay on their device. Accounts, analytics, advertising, subscriptions, broad integrations, or a new onboarding system require an explicit product decision.
 
-- an active focus cannot be ended early;
-- users explicitly choose the apps and websites a task needs;
-- cross-device state uses the user's private CloudKit database;
-- opaque local app-selection tokens stay on their original platform;
-- accounts, analytics, advertising, subscriptions, and broad productivity integrations are out of scope unless the product direction changes explicitly.
+## Change workflow
 
-## Before opening a pull request
-
-1. Create a branch from the current default branch.
-2. Keep platform-specific enforcement inside its platform directory.
-3. Add or update tests for parsing, policy, persistence, or enforcement behavior.
-4. Build every target your change touches.
-5. Describe the user-visible behavior and any new capability or entitlement requirements.
-
-Apple verification commands:
+1. Branch from current `main`; keep a PR focused on a coherent behavior or contract.
+2. Keep platform UI/enforcement inside its platform directory. Review target membership when adding shared source.
+3. Add/update meaningful tests for parsing, policy, persistence, enforcement, identity, or sync behavior.
+4. Run the relevant commands below and report pass/fail/blocked accurately.
+5. Update product/data/runbook documentation when behavior, schema, operational commands, or release gates change.
+6. Complete the PR template with compatibility, migration, entitlement, and validation implications.
 
 ```sh
-xcodebuild -project Monk.xcodeproj -scheme Monk \
-  -configuration Debug -destination 'generic/platform=iOS Simulator' build
-
-xcodebuild -project Monk.xcodeproj -scheme MonkMac \
-  -configuration Debug -destination 'platform=macOS' build
-
-xcodebuild test -project Monk.xcodeproj -scheme MonkMac \
-  -destination 'platform=macOS'
+./script/ci.sh validate
+./script/ci.sh mobile
+./script/ci.sh mac
 ```
 
-Windows verification runs from PowerShell:
+A shared-model/configuration change requires both Apple builds. Mobile/native enforcement and distribution changes also need signed-device acceptance; simulator or model tests alone are insufficient. Windows verification remains `./Windows/scripts/build.ps1` from PowerShell.
 
-```powershell
-./Windows/scripts/build.ps1
-```
+## Style and scope
 
-## Style
+Follow Swift API Design Guidelines, four-space indentation, same-line braces, and one primary type per file. Prefer small SwiftUI views with clear state ownership and system frameworks over new dependencies. Do not move the source tree or split repositories just for appearance; dependency clarity and repeatable builds are the goal.
 
-Follow Swift API Design Guidelines, use four-space indentation, and keep one primary type per file. Prefer small SwiftUI views with clear state ownership and system frameworks over new dependencies.
+## Privacy and release hygiene
 
-Do not commit `Configurations/Local.xcconfig`, signing material, CloudKit exports containing user data, build output, or credentials.
+Never commit `Configurations/Local.xcconfig`, signing credentials/profiles, private CloudKit exports, raw tokens, local journals, build output, or notarization credentials. Keep production secrets out of pull-request workflows. Use [SECURITY.md](SECURITY.md) for vulnerability reports.
+
+Production schema changes must be additive and reviewed with compatibility tests. Keep mobile app/extension build versions aligned. A version bump does not authorize a public release: [release gates](docs/runbooks/RELEASE_CHECKLIST.md) and concrete artifact approval still apply.

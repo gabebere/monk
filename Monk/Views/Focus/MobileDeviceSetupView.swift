@@ -71,6 +71,14 @@ struct MobileDeviceSetupView: View {
                     }
                 }
 
+                MobileApplicationMappingSection(
+                    service: service,
+                    applications: service.unresolvedDefaultApplications,
+                    onSaved: { mappedSelection in
+                        selection.applicationTokens.formUnion(mappedSelection.applicationTokens)
+                    }
+                )
+
                 setupRow(
                     title: "Browsers for allowed websites",
                     detail: browserCountLabel,

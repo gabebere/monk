@@ -23,6 +23,9 @@ final class CrossDeviceFocusService: ObservableObject {
 
     private let container = CKContainer(identifier: MonkConfiguration.cloudKitContainerIdentifier)
     private lazy var database = container.privateCloudDatabase
+    private lazy var outbox = CloudKitSyncOutbox(container: container)
+    private var accountObserver: NSObjectProtocol?
+    private var remoteDefaultAccess: RemoteDefaultAccessConfiguration?
     private let settingsStore = ManagedSettingsStore(named: .crossDeviceFocus)
     private let activityCenter = DeviceActivityCenter()
     private let logger = Logger(
@@ -37,6 +40,7 @@ final class CrossDeviceFocusService: ObservableObject {
     private var didStart = false
     private var lastDefaultAccessFingerprint: String?
 
+    @Published private(set) var unresolvedDefaultApplications: [CrossDeviceApplication] = []
     @Published private(set) var currentState: CrossDeviceFocusState?
     @Published private(set) var isScreenTimeAuthorized: Bool
     @Published private(set) var hasConfiguredAllowedApps: Bool
@@ -66,6 +70,7 @@ final class CrossDeviceFocusService: ObservableObject {
         if let foregroundObserver {
             NotificationCenter.default.removeObserver(foregroundObserver)
         }
+        if let accountObserver { NotificationCenter.default.removeObserver(accountObserver) }
     }
 
     var isParticipating: Bool {
@@ -95,6 +100,7 @@ final class CrossDeviceFocusService: ObservableObject {
         guard !didStart else { return }
         didStart = true
         currentState = loadState()
+        if let currentState { outbox.quarantineUnownedRestoredFocus(sessionID: currentState.sessionID) }
         temporaryApplicationGrants = TemporaryApplicationGrantStore.activeGrants(from: defaults)
         temporaryApplicationGrants.forEach(scheduleTemporaryGrantExpiry)
 
@@ -109,6 +115,21 @@ final class CrossDeviceFocusService: ObservableObject {
             }
         }
 
+        accountObserver = NotificationCenter.default.addObserver(
+            forName: .CKAccountChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.outbox.accountDidChange()
+                self.lastDefaultAccessFingerprint = nil
+                self.remoteDefaultAccess = nil
+                self.unresolvedDefaultApplications = []
+                self.macApplications = []
+                await self.refreshReadiness()
+                await self.ensureSubscription()
+                await self.reconcile()
+            }
+        }
         Task {
             await refreshReadiness()
             await ensureSubscription()
@@ -271,7 +292,7 @@ final class CrossDeviceFocusService: ObservableObject {
             allowedDomains: allowedDomains,
             allowedApplications: portableApplications,
             allowedSelectionData: selectionData,
-            sourcePlatform: "iOS"
+            sourcePlatform: mobileSourcePlatform
         )
 
         defaults.set(selectionData, forKey: Self.selectionKey)
@@ -487,6 +508,7 @@ final class CrossDeviceFocusService: ObservableObject {
     func endExpiredFocus() {
         guard let state = currentState, state.endsAt <= .now else { return }
         defaults.set(state.sessionID.uuidString, forKey: Self.lastEndedSessionKey)
+        defaults.set(state.endsAt, forKey: "focusSync.lastEndedDate")
         publishEndedSession(state)
         completeFocusAndRestoreDefault()
         logger.notice("Ended completed focus \(state.sessionID.uuidString, privacy: .public)")
@@ -539,8 +561,11 @@ final class CrossDeviceFocusService: ObservableObject {
         if let queryNotification = notification as? CKQueryNotification,
            let recordID = queryNotification.recordID {
             do {
+                let generation = try await outbox.verifyAccount()
                 let record = try await database.record(for: recordID)
+                guard generation == outbox.generation else { return false }
                 if let commitment = RemoteFocusCommitment(record: record) {
+                    outbox.rememberReceivedFocus(commitment, generation: generation)
                     await apply(commitment)
                     return true
                 }
@@ -567,8 +592,10 @@ final class CrossDeviceFocusService: ObservableObject {
             applyDefaultBlocking()
         }
 
+        await outbox.flush()
         await fetchDefaultAccessConfiguration()
         await fetchLatestCommitment()
+        if let error = outbox.lastError { syncStatus = error }
     }
 
     private func ensureSubscription() async {
@@ -606,12 +633,15 @@ final class CrossDeviceFocusService: ObservableObject {
         guard isParticipating, iCloudAvailable else { return }
 
         do {
+            let generation = try await outbox.verifyAccount()
             let recordID = CKRecord.ID(recordName: CrossDeviceCloudRecord.currentFocusName)
             let record = try await database.record(for: recordID)
+            guard generation == outbox.generation else { return }
             guard let latest = RemoteFocusCommitment(record: record) else {
                 syncStatus = "Syncing with iCloud"
                 return
             }
+            outbox.rememberReceivedFocus(latest, generation: generation)
             await apply(latest)
         } catch let error as CKError where error.code == .unknownItem {
             syncStatus = "Syncing with iCloud"
@@ -623,25 +653,37 @@ final class CrossDeviceFocusService: ObservableObject {
 
     private func apply(_ commitment: RemoteFocusCommitment) async {
         if commitment.isEnded {
-            defaults.set(commitment.sessionID.uuidString, forKey: Self.lastEndedSessionKey)
-            if currentState?.sessionID == commitment.sessionID {
+            if let currentState {
+                guard commitment.permitsEnding(portableState(currentState), now: .now) else {
+                    publish(currentState)
+                    return
+                }
+                defaults.set(currentState.sessionID.uuidString, forKey: Self.lastEndedSessionKey)
+                defaults.set(currentState.endsAt, forKey: "focusSync.lastEndedDate")
                 completeFocusAndRestoreDefault()
-                logger.notice("Applied remote end for focus \(commitment.sessionID.uuidString, privacy: .public)")
             }
             return
         }
 
-        guard defaults.string(forKey: Self.lastEndedSessionKey) != commitment.sessionID.uuidString,
-              currentState == nil || currentState?.sessionID == commitment.sessionID else {
-            return
-        }
-        if let currentState,
-           currentState.sessionID == commitment.sessionID,
-           commitment.endsAt <= currentState.endsAt.addingTimeInterval(1) {
-            return
+        if defaults.string(forKey: Self.lastEndedSessionKey) == commitment.sessionID.uuidString {
+            let endedAt = defaults.object(forKey: "focusSync.lastEndedDate") as? Date
+            // Older versions persisted only the ID; preserve that tombstone conservatively.
+            if endedAt.map({ commitment.endsAt <= $0 }) ?? true { return }
         }
 
+        if let currentState {
+            let local = portableState(currentState)
+            if FocusSyncState.resolve(local, commitment, now: .now) == local {
+                if currentState.sessionID != commitment.sessionID || currentState.endsAt > commitment.endsAt {
+                    publish(currentState)
+                }
+                return
+            }
+        }
+
+        let generation = outbox.generation
         await refreshInstalledApplications()
+        guard generation == outbox.generation else { return }
         let localSelectionData = currentState?.sessionID == commitment.sessionID
             ? currentState?.allowedSelectionData
             : nil
@@ -765,37 +807,17 @@ final class CrossDeviceFocusService: ObservableObject {
     }
 
     private func mappingKeys(for application: CrossDeviceApplication) -> [String] {
-        var keys = [
-            application.id,
-            CrossDeviceApplication.stableID(
-                displayName: application.displayName,
-                bundleIdentifier: nil
-            )
-        ]
-        if let bundleIdentifier = application.sourceBundleIdentifier {
-            keys.append("bundle:\(bundleIdentifier.lowercased())")
-        }
-        var seen = Set<String>()
-        return keys.filter { seen.insert($0).inserted }
+        application.localMappingKeys
     }
 
     private func automaticallyMatchedInstalledApplication(
         for application: CrossDeviceApplication
     ) -> ManagedSettings.Application? {
-        if let sourceBundleIdentifier = application.sourceBundleIdentifier,
-           let exactMatch = installedApplications.first(where: {
-               $0.bundleIdentifier?.caseInsensitiveCompare(sourceBundleIdentifier) == .orderedSame
-           }) {
-            return exactMatch
-        }
-
-        let nameMatches = installedApplications.filter {
-            application.matches(
-                displayName: installedApplicationDisplayName($0),
-                bundleIdentifier: $0.bundleIdentifier
-            )
-        }
-        return nameMatches.count == 1 ? nameMatches[0] : nil
+        application.uniqueMatch(
+            in: installedApplications,
+            displayName: { installedApplicationDisplayName($0) },
+            bundleIdentifier: { $0.bundleIdentifier }
+        )
     }
 
     private func installedApplicationDisplayName(
@@ -838,6 +860,47 @@ final class CrossDeviceFocusService: ObservableObject {
         defaults.set(data, forKey: Self.applicationMappingsKey)
     }
 
+    @discardableResult
+    func saveApplicationMapping(
+        for application: CrossDeviceApplication,
+        selection: FamilyActivitySelection
+    ) -> Bool {
+        let requested = (currentState?.allowedApplications ?? []) + unresolvedDefaultApplications
+        guard requested.contains(application), selection.applicationTokens.count == 1,
+              selection.categoryTokens.isEmpty, selection.webDomainTokens.isEmpty,
+              let data = try? JSONEncoder().encode(selection) else { return false }
+        var mappings = applicationMappings()
+        for key in mappingKeys(for: application) { mappings[key] = data }
+        guard let encoded = try? JSONEncoder().encode(mappings) else { return false }
+        defaults.set(encoded, forKey: Self.applicationMappingsKey)
+        objectWillChange.send()
+        if let remoteDefaultAccess { applyRemoteDefaultSelection(remoteDefaultAccess) }
+        if let currentState { applyState(currentState) }
+        else { applyDefaultBlocking() }
+        return true
+    }
+
+    private func applyRemoteDefaultSelection(_ configuration: RemoteDefaultAccessConfiguration) {
+        guard configuration.applicationsAreAuthoritative else {
+            unresolvedDefaultApplications = []
+            return
+        }
+        cacheAutomaticMappings(for: configuration.applications)
+        unresolvedDefaultApplications = configuration.applications.filter {
+            resolvedApplicationToken(for: $0) == nil
+        }
+        let matched = Set(configuration.applications.compactMap(resolvedApplicationToken))
+        var selection = unresolvedDefaultApplications.isEmpty ? FamilyActivitySelection() : allowedSelection()
+        selection.applicationTokens = configuration.resolvedSelection(
+            local: allowedSelection().applicationTokens, matched: matched,
+            allRequestedApplicationsResolved: unresolvedDefaultApplications.isEmpty
+        )
+        guard let data = try? JSONEncoder().encode(selection) else { return }
+        defaults.set(data, forKey: Self.selectionKey)
+        defaults.set(true, forKey: Self.selectionConfiguredKey)
+        hasConfiguredAllowedApps = true
+    }
+
     private func applicationMappings() -> [String: Data] {
         guard let data = defaults.data(forKey: Self.applicationMappingsKey),
               let mappings = try? JSONDecoder().decode([String: Data].self, from: data) else {
@@ -850,6 +913,8 @@ final class CrossDeviceFocusService: ObservableObject {
         guard #available(iOS 26.4, *),
               AuthorizationCenter.shared.authorizationStatus == .approvedWithDataAccess else {
             isApplicationCatalogAuthorized = false
+            installedApplications = []
+            searchableApplications = []
             hasRefreshedApplicationCatalog = true
             return
         }
@@ -896,7 +961,10 @@ final class CrossDeviceFocusService: ObservableObject {
 
         var seen = Set<String>()
         return (localApplications + remoteSelection).filter { application in
-            let key = application.sourceBundleIdentifier?.lowercased() ?? application.id
+            let key = CrossDeviceApplication.stableID(
+                displayName: application.displayName,
+                bundleIdentifier: application.sourceBundleIdentifier
+            )
             return seen.insert(key).inserted
         }
     }
@@ -904,31 +972,14 @@ final class CrossDeviceFocusService: ObservableObject {
     // MARK: - Cross-device catalogs and defaults
 
     private func fetchMacApplicationCatalog() async {
-        let recordID = CKRecord.ID(recordName: CrossDeviceCloudRecord.macApplicationCatalogName)
         do {
-            let record = try await database.record(for: recordID)
-            let ids = record["applicationIDs"] as? [String] ?? []
-            let names = record["applicationNames"] as? [String] ?? []
-            let bundleIdentifiers = record["applicationBundleIdentifiers"] as? [String] ?? []
-            macApplications = ids.indices.compactMap { index in
-                guard names.indices.contains(index) else { return nil }
-                let bundleIdentifier = bundleIdentifiers.indices.contains(index) && !bundleIdentifiers[index].isEmpty
-                    ? bundleIdentifiers[index]
-                    : nil
-                return CrossDeviceApplication(
-                    id: ids[index],
-                    displayName: names[index],
-                    sourceBundleIdentifier: bundleIdentifier
-                )
-            }
-            .sorted {
-                $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
-            }
-            if let state = activeState {
-                cacheAutomaticMappings(for: state.allowedApplications)
-            }
-        } catch let error as CKError where error.code == .unknownItem {
-            macApplications = []
+            let generation = try await outbox.verifyAccount()
+            let catalogs = try await CrossDeviceApplicationCatalog.fetch(from: database)
+            guard generation == outbox.generation else { return }
+            macApplications = CrossDeviceApplicationCatalog.mergedApplications(
+                from: catalogs.filter { $0.platform == .macOS }
+            )
+            if let state = activeState { cacheAutomaticMappings(for: state.allowedApplications) }
         } catch {
             logger.error("Unable to fetch Mac application catalog: \(error.localizedDescription, privacy: .public)")
         }
@@ -936,40 +987,24 @@ final class CrossDeviceFocusService: ObservableObject {
 
     private func publishMobileApplicationCatalog() async {
         guard iCloudAvailable, isApplicationCatalogAuthorized else { return }
-
-        let applications = searchableApplications.prefix(500).map { application in
-            CrossDeviceApplication(
-                displayName: displayName(for: application),
-                bundleIdentifier: application.bundleIdentifier
-            )
-        }
-        let recordName = UIDevice.current.userInterfaceIdiom == .pad
-            ? CrossDeviceCloudRecord.iPadApplicationCatalogName
-            : CrossDeviceCloudRecord.iPhoneApplicationCatalogName
-        let recordID = CKRecord.ID(recordName: recordName)
-        let record: CKRecord
         do {
-            record = try await database.record(for: recordID)
-        } catch let error as CKError where error.code == .unknownItem {
-            record = CKRecord(
-                recordType: CrossDeviceCloudRecord.applicationCatalogType,
-                recordID: recordID
+            let generation = try await outbox.verifyAccount()
+            let catalog = CrossDeviceApplicationCatalog(
+                deviceID: CrossDeviceCatalogDevice.identifier(in: defaults),
+                platform: UIDevice.current.userInterfaceIdiom == .pad ? .iPad : .iPhone,
+                applications: searchableApplications.map {
+                    CrossDeviceApplication(displayName: displayName(for: $0), bundleIdentifier: $0.bundleIdentifier)
+                }
             )
-        } catch {
-            logger.error("Unable to prepare mobile application catalog: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-
-        record["platform"] = (UIDevice.current.userInterfaceIdiom == .pad ? "iPadOS" : "iOS") as CKRecordValue
-        record["updatedAt"] = Date() as CKRecordValue
-        record["applicationIDs"] = applications.map(\.id) as NSArray
-        record["applicationNames"] = applications.map(\.displayName) as NSArray
-        record["applicationBundleIdentifiers"] = applications.map {
-            $0.sourceBundleIdentifier ?? ""
-        } as NSArray
-        do {
+            let id = CKRecord.ID(recordName: catalog.recordName)
+            let record: CKRecord
+            do { record = try await database.record(for: id) }
+            catch let error as CKError where error.code == .unknownItem {
+                record = CKRecord(recordType: CrossDeviceCloudRecord.applicationCatalogType, recordID: id)
+            }
+            guard generation == outbox.generation else { return }
+            catalog.write(to: record)
             _ = try await database.save(record)
-            logger.notice("Published \(applications.count, privacy: .public) mobile applications to the private catalog")
         } catch {
             logger.error("Mobile application catalog publish failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -979,101 +1014,48 @@ final class CrossDeviceFocusService: ObservableObject {
         selection: FamilyActivitySelection,
         enabled: Bool
     ) {
-        let applications = mergedPortableApplications(
-            localSelection: selection,
-            remoteSelection: []
+        let applications = mergedPortableApplications(localSelection: selection, remoteSelection: [])
+        let complete = selection.applicationTokens.isEmpty ||
+            (isApplicationCatalogAuthorized && applications.count == selection.applicationTokens.count)
+        let configuration = DefaultAccessSyncState(
+            enabled: enabled, applications: applications, updatedAt: Date(),
+            applicationsAreAuthoritative: complete, sourcePlatform: mobileSourcePlatform
         )
-        let updatedAt = Date()
-        lastDefaultAccessFingerprint = Self.defaultAccessFingerprint(
-            enabled: enabled,
-            applications: applications,
-            updatedAt: updatedAt
-        )
-
-        Task {
-            let recordID = CKRecord.ID(recordName: CrossDeviceCloudRecord.currentDefaultAccessName)
-            let record: CKRecord
-            do {
-                record = try await database.record(for: recordID)
-            } catch let error as CKError where error.code == .unknownItem {
-                record = CKRecord(
-                    recordType: CrossDeviceCloudRecord.defaultAccessType,
-                    recordID: recordID
-                )
-            } catch {
-                logger.error("Unable to prepare default access sync: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-
-            record["enabled"] = NSNumber(value: enabled)
-            record["updatedAt"] = updatedAt as CKRecordValue
-            record["applicationIDs"] = applications.map(\.id) as NSArray
-            record["applicationNames"] = applications.map(\.displayName) as NSArray
-            record["applicationBundleIdentifiers"] = applications.map {
-                $0.sourceBundleIdentifier ?? ""
-            } as NSArray
-            record["sourcePlatform"] = "iOS" as CKRecordValue
-            do {
-                _ = try await database.save(record)
-                logger.notice("Published default access with \(applications.count, privacy: .public) allowed apps")
-            } catch {
-                logger.error("Default access sync failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        outbox.enqueue(CloudKitSyncMutation(defaultAccess: configuration))
+        Task { await outbox.flush() }
     }
 
     private func fetchDefaultAccessConfiguration() async {
         guard iCloudAvailable else { return }
         do {
+            let generation = try await outbox.verifyAccount()
             let recordID = CKRecord.ID(recordName: CrossDeviceCloudRecord.currentDefaultAccessName)
             let record = try await database.record(for: recordID)
-            guard let configuration = RemoteDefaultAccessConfiguration(record: record) else { return }
-            let fingerprint = Self.defaultAccessFingerprint(
-                enabled: configuration.enabled,
-                applications: configuration.applications,
-                updatedAt: configuration.updatedAt
-            )
+            guard generation == outbox.generation,
+                  let configuration = RemoteDefaultAccessConfiguration(record: record) else { return }
+            if let pending = outbox.pendingDefaultAccess,
+               DefaultAccessSyncState.resolve(pending, configuration) == pending { return }
+            let fingerprint = configuration.fingerprint
             guard fingerprint != lastDefaultAccessFingerprint else { return }
-            lastDefaultAccessFingerprint = fingerprint
 
             await refreshInstalledApplications()
-            cacheAutomaticMappings(for: configuration.applications)
-            var selection = FamilyActivitySelection()
-            selection.applicationTokens = Set(
-                configuration.applications.compactMap(resolvedApplicationToken)
-            )
-            guard let selectionData = try? JSONEncoder().encode(selection) else { return }
-            defaults.set(selectionData, forKey: Self.selectionKey)
-            defaults.set(true, forKey: Self.selectionConfiguredKey)
-            defaults.set(
-                configuration.enabled,
-                forKey: CrossDeviceFocusShared.defaultBlockingEnabledKey
-            )
-            hasConfiguredAllowedApps = true
+            guard generation == outbox.generation else { return }
+            remoteDefaultAccess = configuration
+            applyRemoteDefaultSelection(configuration)
+            lastDefaultAccessFingerprint = fingerprint
+            defaults.set(configuration.enabled, forKey: CrossDeviceFocusShared.defaultBlockingEnabledKey)
             defaultBlockingEnabled = configuration.enabled
             if let currentState {
                 applyState(currentState)
             } else {
                 applyDefaultBlocking()
             }
-            let unmatchedCount = configuration.applications.count - selection.applicationTokens.count
-            logger.notice(
-                "Applied default access with \(selection.applicationTokens.count, privacy: .public) local matches and \(unmatchedCount, privacy: .public) apps absent from this device"
-            )
+            logger.notice("Applied default access; unresolved applications: \(self.unresolvedDefaultApplications.count, privacy: .public)")
         } catch let error as CKError where error.code == .unknownItem {
             return
         } catch {
             logger.error("Unable to fetch default access: \(error.localizedDescription, privacy: .public)")
         }
-    }
-
-    private static func defaultAccessFingerprint(
-        enabled: Bool,
-        applications: [CrossDeviceApplication],
-        updatedAt: Date
-    ) -> String {
-        let applicationIDs = applications.map(\.id).sorted().joined(separator: ",")
-        return "\(enabled)|\(Int(updatedAt.timeIntervalSince1970.rounded()))|\(applicationIDs)"
     }
 
     private static var screenTimeAuthorizationIsApproved: Bool {
@@ -1087,68 +1069,28 @@ final class CrossDeviceFocusService: ObservableObject {
 
     // MARK: - Cloud publishing
 
-    private func publish(_ state: CrossDeviceFocusState) {
-        Task {
-            let recordID = CKRecord.ID(recordName: CrossDeviceCloudRecord.currentFocusName)
-            let record: CKRecord
-            do {
-                record = try await database.record(for: recordID)
-            } catch let error as CKError where error.code == .unknownItem {
-                record = CKRecord(recordType: Self.recordType, recordID: recordID)
-            } catch {
-                syncStatus = "Focus is active here; iCloud sync failed"
-                logger.error("Unable to prepare mobile focus sync: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-            record["sessionID"] = state.sessionID.uuidString as CKRecordValue
-            record["intention"] = state.intention as CKRecordValue
-            record["startedAt"] = state.startedAt as CKRecordValue
-            record["endsAt"] = state.endsAt as CKRecordValue
-            record["allowedDomains"] = state.allowedDomains as NSArray
-            record["allowedApplicationIDs"] = state.allowedApplications.map(\.id) as NSArray
-            record["allowedApplicationNames"] = state.allowedApplications.map(\.displayName) as NSArray
-            record["allowedApplicationBundleIdentifiers"] = state.allowedApplications.map {
-                $0.sourceBundleIdentifier ?? ""
-            } as NSArray
-            record["sourcePlatform"] = "iOS" as CKRecordValue
-            record["sessionStatus"] = "active" as CKRecordValue
+    private var mobileSourcePlatform: String {
+        UIDevice.current.userInterfaceIdiom == .pad ? "iPadOS" : "iOS"
+    }
 
-            do {
-                _ = try await database.save(record)
-                syncStatus = "Focus synced"
-                logger.notice("Published mobile focus \(state.sessionID.uuidString, privacy: .public)")
-            } catch {
-                syncStatus = "Focus is active here; iCloud sync failed"
-                logger.error("Mobile focus publish failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+    private func portableState(_ state: CrossDeviceFocusState, isEnded: Bool = false) -> FocusSyncState {
+        FocusSyncState(
+            sessionID: state.sessionID, intention: state.intention,
+            startedAt: state.startedAt, endsAt: state.endsAt,
+            allowedDomains: state.allowedDomains, allowedApplications: state.allowedApplications,
+            sourcePlatform: state.sourcePlatform ?? mobileSourcePlatform, isEnded: isEnded
+        )
+    }
+
+    private func publish(_ state: CrossDeviceFocusState) {
+        outbox.enqueue(CloudKitSyncMutation(focus: portableState(state)))
+        Task { await outbox.flush() }
     }
 
     private func publishEndedSession(_ state: CrossDeviceFocusState) {
-        Task {
-            let recordID = CKRecord.ID(recordName: CrossDeviceCloudRecord.currentFocusName)
-            let record: CKRecord
-            do {
-                record = try await database.record(for: recordID)
-            } catch let error as CKError where error.code == .unknownItem {
-                record = CKRecord(recordType: Self.recordType, recordID: recordID)
-            } catch {
-                logger.error("Unable to prepare focus end sync: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-
-            record["sessionID"] = state.sessionID.uuidString as CKRecordValue
-            record["intention"] = state.intention as CKRecordValue
-            record["startedAt"] = state.startedAt as CKRecordValue
-            record["endsAt"] = state.endsAt as CKRecordValue
-            record["sessionStatus"] = "ended" as CKRecordValue
-            record["sourcePlatform"] = "iOS" as CKRecordValue
-            do {
-                _ = try await database.save(record)
-            } catch {
-                logger.error("Focus end sync failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        guard state.endsAt <= .now else { return }
+        outbox.enqueue(CloudKitSyncMutation(focus: portableState(state, isEnded: true)))
+        Task { await outbox.flush() }
     }
 
     private func scheduleExpiry(for state: CrossDeviceFocusState) {
@@ -1193,6 +1135,7 @@ final class CrossDeviceFocusService: ObservableObject {
                 if catalogPollCount >= 6 {
                     catalogPollCount = 0
                     await self.fetchMacApplicationCatalog()
+                    await self.publishMobileApplicationCatalog()
                 }
                 await self.reconcile()
             }

@@ -1,0 +1,51 @@
+{
+  "version": "1.0.0",
+  "status": "unreleased",
+  "releaseTrain": "monk-1.0",
+  "sourceVersionFile": "Configurations/Version.xcconfig",
+  "platforms": {
+    "iphone": {
+      "target": "Monk",
+      "scheme": "Monk",
+      "deviceFamily": "1",
+      "minimumOS": "18.5",
+      "artifact": "Monk.ipa",
+      "distribution": "app-store-connect",
+      "buildSetting": "MONK_MOBILE_BUILD",
+      "sharesBinaryWith": "ipad",
+      "readyForDistribution": false
+    },
+    "ipad": {
+      "target": "Monk",
+      "scheme": "Monk",
+      "deviceFamily": "2",
+      "minimumOS": "18.5",
+      "artifact": "Monk.ipa",
+      "distribution": "app-store-connect",
+      "buildSetting": "MONK_MOBILE_BUILD",
+      "sharesBinaryWith": "iphone",
+      "readyForDistribution": false
+    },
+    "mac": {
+      "target": "MonkMac",
+      "scheme": "MonkMac",
+      "minimumOS": "14.0",
+      "artifact": "MonkOS-1.0.0-<build>.dmg",
+      "distribution": "developer-id-notarized",
+      "buildSetting": "MONK_MAC_BUILD",
+      "readyForDistribution": false
+    }
+  },
+  "requiredEvidence": [
+    "green-apple-ci-at-release-commit",
+    "family-controls-distribution-app-and-extensions",
+    "cloudkit-production-schema-deployed",
+    "same-account-production-sync-on-iphone-ipad-mac",
+    "non-eu-distributed-mobile-selection-and-local-mapping",
+    "offline-restart-conflict-and-account-change-tests",
+    "fresh-device-installation-and-permissions",
+    "developer-id-export-and-notarization-accepted",
+    "release-owner-signoff"
+  ],
+  "evidence": {}
+}

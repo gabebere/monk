@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 final class FocusSessionStore: ObservableObject {
+    private static let lastEndedSessionKey = "focusSync.lastEndedSession"
+    private static let lastEndedDateKey = "focusSync.lastEndedDate"
     static let persistedPolicyKey = "com.gbr.Monk.activeFocusPolicy"
     static let defaultAllowedApplicationsKey = "com.gbr.Monk.defaultAllowedApplications"
     static let alwaysAllowedApplicationsKey = "com.gbr.Monk.alwaysAllowedApplications"
@@ -148,36 +150,53 @@ final class FocusSessionStore: ObservableObject {
         _ commitment: SyncedFocusCommitment,
         resolvedApplications: [ApplicationDescriptor] = []
     ) {
+        let currentDate = nowProvider()
         if commitment.isEnded {
-            guard activePolicy?.id == commitment.sessionID else { return }
+            guard let activePolicy else { return }
+            guard commitment.permitsEnding(portableState(for: activePolicy), now: currentDate) else {
+                // A delayed end for the original timer cannot end an extension.
+                syncService?.publish(activePolicy)
+                return
+            }
             completeSession()
             return
         }
 
-        guard activePolicy == nil || activePolicy?.id == commitment.sessionID else { return }
-        if let activePolicy,
-           activePolicy.id == commitment.sessionID,
-           commitment.endsAt <= activePolicy.endsAt.addingTimeInterval(1) {
-            return
+        if defaults.string(forKey: Self.lastEndedSessionKey) == commitment.sessionID.uuidString,
+           let endedAt = defaults.object(forKey: Self.lastEndedDateKey) as? Date,
+           commitment.endsAt <= endedAt { return }
+
+        if let activePolicy {
+            let local = portableState(for: activePolicy)
+            let resolved = FocusSyncState.resolve(local, commitment, now: currentDate)
+            if resolved == local {
+                if activePolicy.id != commitment.sessionID || activePolicy.endsAt > commitment.endsAt {
+                    syncService?.publish(activePolicy)
+                }
+                return
+            }
         }
 
+        let sameSession = activePolicy?.id == commitment.sessionID ? activePolicy : nil
         let requestedApplications: [ApplicationDescriptor]
-        if commitment.allowedApplications.isEmpty {
+        if let sameSession {
+            requestedApplications = sameSession.allowedApplications
+        } else if commitment.allowedApplications.isEmpty {
             requestedApplications = defaultBlockingEnabled ? [] : defaultAllowedApplications()
         } else {
             requestedApplications = resolvedApplications
         }
-
+        let domains = sameSession?.allowedDomains ?? commitment.allowedDomains
+        let portableApplications = sameSession?.portableAllowedApplications
+            ?? (sameSession != nil && commitment.allowedApplications.isEmpty ? nil : commitment.allowedApplications)
         let policy = FocusPolicy(
             id: commitment.sessionID,
-            intention: commitment.intention,
-            startedAt: commitment.startedAt,
+            intention: sameSession?.intention ?? commitment.intention,
+            startedAt: sameSession?.startedAt ?? commitment.startedAt,
             endsAt: commitment.endsAt,
-            allowedApplications: applicationsIncludingBrowsers(
-                requestedApplications,
-                whenAllowing: commitment.allowedDomains
-            ),
-            allowedDomains: commitment.allowedDomains
+            allowedApplications: applicationsIncludingBrowsers(requestedApplications, whenAllowing: domains),
+            allowedDomains: domains,
+            portableAllowedApplications: portableApplications
         )
 
         didAttemptRestore = true
@@ -197,10 +216,10 @@ final class FocusSessionStore: ObservableObject {
         }
 
         let currentDate = nowProvider()
+        syncService?.quarantineRestoredFocus(policy)
         activate(policy, at: currentDate)
-        if policy.endsAt > currentDate {
-            syncService?.publish(policy)
-        }
+        // Restore local enforcement immediately. The durable outbox owns uploads; blindly
+        // re-publishing a restored snapshot could resurrect a session ended on another device.
     }
 
     func recordBlockedApplication(named name: String) {
@@ -224,7 +243,8 @@ final class FocusSessionStore: ObservableObject {
             startedAt: policy.startedAt,
             endsAt: nowProvider().addingTimeInterval(duration),
             allowedApplications: policy.allowedApplications,
-            allowedDomains: policy.allowedDomains
+            allowedDomains: policy.allowedDomains,
+            portableAllowedApplications: policy.portableAllowedApplications
         )
         persist(extendedPolicy)
         activate(extendedPolicy, at: nowProvider())
@@ -235,6 +255,16 @@ final class FocusSessionStore: ObservableObject {
         guard isAwaitingSessionDecision, let policy = activePolicy else { return }
         syncService?.end(policy)
         completeSession()
+    }
+
+    private func portableState(for policy: FocusPolicy) -> FocusSyncState {
+        FocusSyncState(
+            sessionID: policy.id, intention: policy.intention, startedAt: policy.startedAt,
+            endsAt: policy.endsAt, allowedDomains: policy.allowedDomains,
+            allowedApplications: policy.portableAllowedApplications ?? policy.allowedApplications.map {
+                CrossDeviceApplication(displayName: $0.displayName, bundleIdentifier: $0.bundleIdentifier)
+            }, sourcePlatform: "macOS"
+        )
     }
 
     private func startTimer() {
@@ -299,6 +329,10 @@ final class FocusSessionStore: ObservableObject {
 
     private func completeSession() {
         let completedPolicy = activePolicy
+        if let completedPolicy {
+            defaults.set(completedPolicy.id.uuidString, forKey: Self.lastEndedSessionKey)
+            defaults.set(completedPolicy.endsAt, forKey: Self.lastEndedDateKey)
+        }
         timer?.invalidate()
         timer = nil
         websiteGuardian.stopEnforcing()

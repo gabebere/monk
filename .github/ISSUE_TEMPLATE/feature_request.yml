@@ -1,0 +1,23 @@
+name: Product or engineering proposal
+description: Propose a change with a concrete user or maintenance benefit.
+title: "[Proposal]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and affected platform
+      description: Describe the person or maintainer's need and current behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior and acceptance criteria
+      description: Keep the allowlist model, binding commitments, and local-token privacy explicit.
+    validations:
+      required: true
+  - type: textarea
+    id: implications
+    attributes:
+      label: Compatibility and operational implications
+      description: Note sync/schema, signing, distribution, or product-scope decisions required.

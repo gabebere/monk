@@ -52,7 +52,7 @@ final class ApplicationCatalog: ObservableObject {
                 seen.insert(
                     CrossDeviceApplication.stableID(
                         displayName: $0.displayName,
-                        bundleIdentifier: nil
+                        bundleIdentifier: $0.bundleIdentifier
                     )
                 ).inserted
             }
@@ -61,14 +61,14 @@ final class ApplicationCatalog: ObservableObject {
     }
 
     func setMobileApplications(_ applications: [CrossDeviceApplication]) {
-        let localNames = Set(self.applications.map {
-            CrossDeviceApplication.stableID(
-                displayName: $0.displayName,
-                bundleIdentifier: nil
-            )
-        })
         mobileApplications = applications
-            .filter { !localNames.contains($0.id) }
+            .filter {
+                $0.uniqueMatch(
+                    in: self.applications,
+                    displayName: { $0.displayName },
+                    bundleIdentifier: { $0.bundleIdentifier }
+                ) == nil
+            }
             .map(ApplicationDescriptor.init(mobileApplication:))
             .sorted {
                 $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
